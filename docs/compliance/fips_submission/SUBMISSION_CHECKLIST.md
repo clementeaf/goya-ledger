@@ -18,6 +18,7 @@
 | 8 | Reproducible Build | READY | [TBD] | `crates/pqc_crypto_module/build/reproducible_build.md` |
 | 9 | Test Coverage Report | READY | [TBD] | 1500+ tests across 12 suites; `cargo test` |
 | 10 | Operational Guidance | READY | [TBD] | `crates/pqc_crypto_module/OPERATIONAL_GUIDANCE.md` |
+| 11 | Configuration Management Plan | READY | [TBD] | `crates/pqc_crypto_module/CONFIGURATION_MANAGEMENT.md` |
 
 ## 2. Pending Artifacts
 

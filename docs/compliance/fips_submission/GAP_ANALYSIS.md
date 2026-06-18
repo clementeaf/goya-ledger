@@ -57,7 +57,7 @@ This document compares the current state of `pqc_crypto_module` against FIPS 140
 
 ### 2.4 Documentation — ALIGNED
 
-**Current state:** 9 FIPS documentation artifacts:
+**Current state:** 10 FIPS documentation artifacts:
 
 | Document | Complete |
 |----------|----------|
@@ -70,8 +70,9 @@ This document compares the current state of `pqc_crypto_module` against FIPS 140
 | Operational Guidance | Yes |
 | Boundary Definition | Yes |
 | Reproducible Build | Yes |
+| Configuration Management Plan | Yes |
 
-**Assessment:** Documentation set covers FIPS 140-3 IG requirements. Lab review will determine if revisions are needed.
+**Assessment:** Documentation set covers FIPS 140-3 IG requirements including Section 11 (life-cycle assurance). Lab review will determine if revisions are needed.
 
 ### 2.5 Approved-Mode Enforcement — ALIGNED
 
