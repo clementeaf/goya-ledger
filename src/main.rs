@@ -7,7 +7,6 @@ mod app_state;
 mod audit;
 mod billing;
 mod block_creation;
-mod blockchain;
 mod cache;
 mod chaincode;
 mod channel;
@@ -31,7 +30,6 @@ mod legal_oracle;
 mod metrics;
 mod middleware;
 mod mining;
-mod models;
 mod msp;
 mod network;
 mod network_security;
@@ -60,11 +58,9 @@ use api::routes::ApiRoutes;
 use api_legacy::config_routes;
 use app_state::AppState;
 use billing::BillingManager;
-use blockchain::Blockchain;
 use cache::BalanceCache;
 use metrics::MetricsCollector;
 use middleware::RateLimitMiddleware;
-use models::{Mempool, WalletManager};
 use network::{parse_peer_allowlist, Node};
 use staking::StakingManager;
 use std::env;
@@ -110,11 +106,6 @@ async fn async_main_inner() -> std::io::Result<()> {
     // Install the TLS CryptoProvider early, before any TLS config is built.
     // When TLS_PQC_KEM=true this enables X25519+ML-KEM-768 hybrid key exchange.
     tls::install_crypto_provider();
-
-    let difficulty = env::var("DIFFICULTY")
-        .ok()
-        .and_then(|s| s.parse::<u8>().ok())
-        .unwrap_or(1);
 
     let args: Vec<String> = env::args().collect();
     let api_port = args
@@ -195,7 +186,7 @@ async fn async_main_inner() -> std::io::Result<()> {
     let checkpoints_dir = format!("{db_name}_checkpoints");
 
     println!("🚀 Iniciando Blockchain API Server...");
-    println!("📊 Dificultad: {difficulty}");
+    println!("📊 Storage: BlockStore (legacy removed)");
     println!("🌐 Puerto API: {api_port}");
     println!("📡 Puerto P2P: {p2p_port}");
     println!("🌍 Network ID: {network_id}");
@@ -215,21 +206,6 @@ async fn async_main_inner() -> std::io::Result<()> {
         "🔍 Auto-discovery: intervalo {auto_discovery_interval}s, max conexiones {auto_discovery_max_connections}, delay inicial {auto_discovery_initial_delay}s"
     );
 
-    // Legacy Blockchain (in-memory, used by legacy handlers — will be removed)
-    let mut blockchain = Blockchain::new(difficulty);
-    blockchain.create_genesis_block();
-
-    let mut wallet_manager = WalletManager::new();
-    wallet_manager.sync_from_blockchain(&blockchain.chain);
-    println!("✅ Wallets sincronizados desde blockchain");
-    let wallet_manager_arc = Arc::new(Mutex::new(wallet_manager));
-
-    // Base de datos eliminada - ya no se usa
-
-    let blockchain_arc = Arc::new(Mutex::new(blockchain));
-    let blockchain_for_network = blockchain_arc.clone();
-
-    let mempool = Arc::new(Mutex::new(Mempool::new()));
     let balance_cache = Arc::new(BalanceCache::new());
     let billing_manager = Arc::new(BillingManager::new());
 
@@ -274,13 +250,11 @@ async fn async_main_inner() -> std::io::Result<()> {
     let node_address = SocketAddr::from(([0, 0, 0, 0], p2p_port));
     let mut node_arc = Node::new(
         node_address,
-        blockchain_for_network.clone(),
         Some(network_id.clone()),
         Some(bootstrap_nodes.clone()),
         Some(seed_nodes.clone()),
         peer_allowlist.clone(),
     );
-    node_arc.set_resources(wallet_manager_arc.clone());
     node_arc.set_contract_manager(contract_manager.clone());
     if let Some(ref checkpoint_mgr) = checkpoint_manager {
         node_arc.set_checkpoint_manager(checkpoint_mgr.clone());
@@ -316,13 +290,11 @@ async fn async_main_inner() -> std::io::Result<()> {
     // Crear segunda instancia para el servidor P2P que comparte los mismos recursos
     let mut node_for_server = Node::new(
         node_address,
-        blockchain_for_network.clone(),
         Some(network_id.clone()),
         Some(bootstrap_nodes.clone()),
         Some(seed_nodes.clone()),
         peer_allowlist.clone(),
     );
-    node_for_server.set_resources(wallet_manager_arc.clone());
     node_for_server.set_contract_manager(contract_manager.clone());
     if let Some(ref checkpoint_mgr) = checkpoint_manager {
         node_for_server.set_checkpoint_manager(checkpoint_mgr.clone());
@@ -735,10 +707,7 @@ async fn async_main_inner() -> std::io::Result<()> {
     };
 
     let app_state = AppState {
-        blockchain: blockchain_arc.clone(),
-        wallet_manager: wallet_manager_arc.clone(),
         node: Some(node_arc.clone()),
-        mempool: mempool.clone(),
         balance_cache: balance_cache.clone(),
         billing_manager: billing_manager.clone(),
         contract_manager: contract_manager.clone(),

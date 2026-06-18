@@ -1,7 +1,9 @@
 pub mod gossip;
 
 // Type alias for the gossip block sender to reduce type complexity.
-type GossipBlockTx = Option<Arc<tokio::sync::mpsc::UnboundedSender<(Block, Option<String>)>>>;
+type GossipBlockTx = Option<
+    Arc<tokio::sync::mpsc::UnboundedSender<(crate::storage::traits::Block, Option<String>)>>,
+>;
 
 // Conditional type alias for Raft node handle.
 #[cfg(feature = "raft-ordering")]
@@ -22,9 +24,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 
 // Crate modules
-use crate::blockchain::{Block, Blockchain};
 use crate::checkpoint::CheckpointManager;
-use crate::models::{Transaction, WalletManager};
 use crate::network_security::NetworkSecurityManager;
 use crate::ordering::NodeRole;
 use crate::smart_contracts::{ContractManager, SmartContract};
@@ -68,10 +68,6 @@ impl<T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static> A
 pub enum Message {
     Ping,
     Pong,
-    GetBlocks,
-    Blocks(Vec<Block>),
-    NewBlock(Block),
-    NewTransaction(Transaction),
     GetPeers,
     Peers(Vec<String>),
     Version {
@@ -192,8 +188,6 @@ pub struct Node {
     #[allow(dead_code)]
     pub address: SocketAddr,
     pub peers: Arc<Mutex<HashSet<String>>>,
-    pub blockchain: Arc<Mutex<Blockchain>>,
-    pub wallet_manager: Option<Arc<Mutex<WalletManager>>>,
     pub contract_manager: Option<Arc<RwLock<ContractManager>>>,
     pub checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
     pub transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
@@ -299,7 +293,7 @@ async fn open_peer_stream(
 /// Background task that re-gossips accepted blocks to up to `GOSSIP_FANOUT` random peers,
 /// excluding the peer that originally sent the block.
 async fn gossip_loop(
-    mut rx: tokio::sync::mpsc::UnboundedReceiver<(Block, Option<String>)>,
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<(crate::storage::traits::Block, Option<String>)>,
     peers: Arc<Mutex<HashSet<String>>>,
     tls_connector: Option<Arc<TlsConnector>>,
 ) {
@@ -323,12 +317,11 @@ async fn gossip_loop(
             .choose_multiple(&mut rand::thread_rng(), n)
             .cloned()
             .collect();
-        let msg_json = match serde_json::to_string(&Message::NewBlock(block)) {
+        let msg_json = match serde_json::to_string(&Message::OrderedBlock(block)) {
             Ok(j) => j,
             Err(_) => continue,
         };
         for addr in chosen {
-            // Retry once on failure (handles transient load)
             let mut sent = false;
             for attempt in 0..2 {
                 if let Ok(mut stream) = open_peer_stream(&addr, tls_connector.as_deref()).await {
@@ -373,7 +366,6 @@ impl Node {
      */
     pub fn new(
         address: SocketAddr,
-        blockchain: Arc<Mutex<Blockchain>>,
         network_id: Option<String>,
         bootstrap_nodes: Option<Vec<String>>,
         seed_nodes: Option<Vec<String>>,
@@ -381,7 +373,6 @@ impl Node {
     ) -> Node {
         Node::with_role(
             address,
-            blockchain,
             network_id,
             bootstrap_nodes,
             seed_nodes,
@@ -392,7 +383,6 @@ impl Node {
 
     pub fn with_role(
         address: SocketAddr,
-        blockchain: Arc<Mutex<Blockchain>>,
         network_id: Option<String>,
         bootstrap_nodes: Option<Vec<String>>,
         seed_nodes: Option<Vec<String>>,
@@ -402,8 +392,6 @@ impl Node {
         Node {
             address,
             peers: Arc::new(Mutex::new(HashSet::new())),
-            blockchain,
-            wallet_manager: None,
             contract_manager: None,
             checkpoint_manager: None,
             transaction_validator: None,
@@ -446,13 +434,6 @@ impl Node {
         self.announce_address
             .clone()
             .unwrap_or_else(|| self.address.to_string())
-    }
-
-    /**
-     * Configura el wallet manager para el nodo
-     */
-    pub fn set_resources(&mut self, wallet_manager: Arc<Mutex<WalletManager>>) {
-        self.wallet_manager = Some(wallet_manager);
     }
 
     /**
@@ -557,8 +538,6 @@ impl Node {
 
         // Clonar recursos compartidos antes del loop
         let peers = self.peers.clone();
-        let blockchain = self.blockchain.clone();
-        let wallet_manager = self.wallet_manager.clone();
         let contract_manager = self.contract_manager.clone();
         let checkpoint_manager = self.checkpoint_manager.clone();
         let transaction_validator = self.transaction_validator.clone();
@@ -584,8 +563,10 @@ impl Node {
 
         // Push-gossip channel: newly accepted blocks are sent here and forwarded
         // to GOSSIP_FANOUT random peers by the background gossip task.
-        let (gossip_tx, gossip_rx) =
-            tokio::sync::mpsc::unbounded_channel::<(Block, Option<String>)>();
+        let (gossip_tx, gossip_rx) = tokio::sync::mpsc::unbounded_channel::<(
+            crate::storage::traits::Block,
+            Option<String>,
+        )>();
         let gossip_tx = Arc::new(gossip_tx);
         self.gossip_block_tx = Some(gossip_tx.clone());
         {
@@ -609,8 +590,6 @@ impl Node {
                     }
                     println!("📡 Nueva conexión desde: {peer_addr}");
                     let peers_clone = peers.clone();
-                    let blockchain_clone = blockchain.clone();
-                    let wallet_manager_clone = wallet_manager.clone();
                     let contract_manager_clone = contract_manager.clone();
                     let checkpoint_manager_clone = checkpoint_manager.clone();
                     let transaction_validator_clone = transaction_validator.clone();
@@ -650,9 +629,6 @@ impl Node {
                             boxed,
                             peer_addr,
                             peers_clone,
-                            blockchain_clone,
-                            wallet_manager_clone,
-                            None, // block_storage removed
                             contract_manager_clone,
                             checkpoint_manager_clone,
                             transaction_validator_clone,
@@ -696,9 +672,6 @@ impl Node {
         mut stream: Box<dyn AsyncStream>,
         peer_addr: SocketAddr,
         peers: Arc<Mutex<HashSet<String>>>,
-        blockchain: Arc<Mutex<Blockchain>>,
-        wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-        _block_storage: Option<Arc<()>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
         checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
         transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
@@ -812,9 +785,6 @@ impl Node {
                 let response = Self::process_message(
                     message,
                     &peers,
-                    &blockchain,
-                    wallet_manager.clone(),
-                    None, // block_storage removed
                     contract_manager.clone(),
                     checkpoint_manager.clone(),
                     transaction_validator.clone(),
@@ -877,12 +847,9 @@ impl Node {
     pub(crate) async fn process_message(
         message: Message,
         peers: &Arc<Mutex<HashSet<String>>>,
-        blockchain: &Arc<Mutex<Blockchain>>,
-        wallet_manager: Option<Arc<Mutex<WalletManager>>>,
-        _block_storage: Option<Arc<()>>,
         contract_manager: Option<Arc<RwLock<ContractManager>>>,
-        checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
-        transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
+        _checkpoint_manager: Option<Arc<Mutex<CheckpointManager>>>,
+        _transaction_validator: Option<Arc<Mutex<TransactionValidator>>>,
         my_p2p_address: Option<String>,
         source_peer: Option<String>,
         recent_receipts: Arc<Mutex<HashMap<String, (u64, String)>>>,
@@ -891,7 +858,7 @@ impl Node {
         role: NodeRole,
         ordering_service: Option<Arc<crate::ordering::service::OrderingService>>,
         store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
-        gossip_block_tx: GossipBlockTx,
+        _gossip_block_tx: GossipBlockTx,
         membership: Option<&gossip::MembershipTable>,
         chaincode_store: Option<Arc<dyn crate::chaincode::ChaincodePackageStore>>,
         world_state: Option<Arc<dyn crate::storage::world_state::WorldState>>,
@@ -903,190 +870,6 @@ impl Node {
     ) -> Result<Option<Message>, Box<dyn std::error::Error>> {
         match message {
             Message::Ping => Ok(Some(Message::Pong)),
-
-            Message::GetBlocks => {
-                let blockchain = blockchain.lock().unwrap_or_else(|e| e.into_inner());
-                let blocks = blockchain.chain.clone();
-                Ok(Some(Message::Blocks(blocks)))
-            }
-
-            Message::Blocks(blocks) => {
-                let mut blockchain = blockchain.lock().unwrap_or_else(|e| e.into_inner());
-
-                // Resolver conflicto usando la regla de la cadena más larga
-                if blocks.len() > blockchain.chain.len() && Self::is_valid_chain(&blocks) {
-                    // Validar transacciones si tenemos wallet_manager
-                    let should_replace = if let Some(wm) = &wallet_manager {
-                        let wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                        blockchain.resolve_conflict(&blocks, &wm_guard)
-                    } else {
-                        // Sin wallet_manager, solo validar estructura
-                        blockchain.chain = blocks.clone();
-                        true
-                    };
-
-                    if should_replace {
-                        println!("✅ Blockchain sincronizada: {} bloques (reemplazada por cadena más larga)", blocks.len());
-
-                        // Sincronizar wallets desde la nueva blockchain
-                        if let Some(wm) = &wallet_manager {
-                            let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                            wm_guard.sync_from_blockchain(&blockchain.chain);
-                        }
-                    } else {
-                        println!("⚠️  Cadena recibida no pasó validación de transacciones");
-                    }
-                } else if blocks.len() == blockchain.chain.len() {
-                    // Misma longitud: verificar si hay diferencias (fork)
-                    let my_latest = blockchain.get_latest_block().hash.clone();
-                    let their_latest = blocks.last().map(|b| b.hash.clone()).unwrap_or_default();
-
-                    if my_latest != their_latest {
-                        println!(
-                            "⚠️  Fork detectado: misma longitud pero diferentes últimos bloques"
-                        );
-                        // Mantenemos nuestra cadena (regla de la cadena más larga)
-                    }
-                }
-                Ok(None)
-            }
-
-            Message::NewBlock(block) => {
-                let mut blockchain = blockchain.lock().unwrap_or_else(|e| e.into_inner());
-                let latest = blockchain.get_latest_block();
-
-                // Verificar si el bloque ya existe
-                let block_exists = blockchain.chain.iter().any(|b| b.hash == block.hash);
-                if block_exists {
-                    println!("ℹ️  Bloque ya existe en nuestra cadena");
-                    return Ok(None);
-                }
-
-                // Verificar que el bloque es el siguiente en la cadena
-                if block.previous_hash != latest.hash {
-                    // Si el índice es mayor, necesitamos sincronizar primero
-                    if block.index > latest.index {
-                        println!("📥 Bloque recibido tiene índice mayor ({} > {}), puede necesitar sincronización", 
-                            block.index, latest.index);
-                        // Guardar el bloque para agregarlo después de sincronizar
-                        // Por ahora rechazamos, pero el peer debería sincronizar cuando se conecte
-                        return Ok(None);
-                    }
-
-                    // Si el índice es igual pero el hash es diferente, hay un fork
-                    if block.index == latest.index {
-                        println!("⚠️  Fork detectado: mismo índice pero diferentes hashes");
-                        // En un fork, mantenemos nuestra cadena (regla de la cadena más larga se aplica después)
-                        return Ok(None);
-                    }
-
-                    // Si el índice es menor, el bloque es antiguo y ya debería estar en nuestra cadena
-                    // Pero puede ser que tengamos diferentes génesis, verificar si el bloque existe
-                    let block_exists_by_index =
-                        blockchain.chain.iter().any(|b| b.index == block.index);
-                    if !block_exists_by_index && block.index < latest.index {
-                        println!("⚠️  Bloque recibido es anterior pero no está en nuestra cadena (posible génesis diferente)");
-                        // Intentar encontrar el bloque en nuestra cadena por hash
-                        let block_found = blockchain.chain.iter().any(|b| b.hash == block.hash);
-                        if !block_found {
-                            println!(
-                                "💡 Bloque no encontrado, puede requerir sincronización completa"
-                            );
-                        }
-                    }
-                    return Ok(None);
-                }
-
-                // Validar el bloque
-                if !block.is_valid() {
-                    println!("⚠️  Bloque recibido no es válido");
-                    return Ok(None);
-                }
-
-                // Validar checkpoints (protección anti-51%)
-                if let Some(ref checkpoint_mgr) = checkpoint_manager {
-                    let checkpoint_manager_guard =
-                        checkpoint_mgr.lock().unwrap_or_else(|e| e.into_inner());
-                    if let Err(e) = checkpoint_manager_guard.validate_block_against_checkpoints(
-                        block.index,
-                        &block.hash,
-                        &block.previous_hash,
-                    ) {
-                        println!("🚫 Bloque rechazado por validación de checkpoint: {e}");
-                        return Ok(None);
-                    }
-                }
-
-                // Validar transacciones si tenemos wallet_manager
-                if let Some(wm) = &wallet_manager {
-                    let wallet_manager_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                    for tx in &block.transactions {
-                        if tx.from != "0" {
-                            if let Err(e) =
-                                blockchain.validate_transaction(tx, &wallet_manager_guard)
-                            {
-                                println!("⚠️  Transacción inválida en bloque recibido: {e}");
-                                return Ok(None);
-                            }
-                        }
-                    }
-                }
-
-                // Agregar el bloque
-                let block_clone = block.clone();
-                blockchain.chain.push(block_clone.clone());
-                println!(
-                    "✅ Nuevo bloque recibido y agregado: {} transacciones",
-                    block_clone.transactions.len()
-                );
-
-                // Procesar transacciones si tenemos wallet_manager
-                if let Some(wm) = &wallet_manager {
-                    let mut wallet_manager_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                    for tx in &block_clone.transactions {
-                        if tx.from == "0" {
-                            // Coinbase transaction
-                            if let Err(e) = wallet_manager_guard.process_coinbase_transaction(tx) {
-                                eprintln!("⚠️  Error procesando transacción coinbase: {e}");
-                            }
-                        } else {
-                            // Transfer transaction
-                            if let Err(e) = wallet_manager_guard.process_transaction(tx) {
-                                eprintln!("⚠️  Error procesando transacción: {e}");
-                            }
-                        }
-                    }
-                }
-
-                // Push-gossip: forward the accepted block to GOSSIP_FANOUT random peers
-                // (excluding the peer we received it from).
-                if let Some(ref tx) = gossip_block_tx {
-                    let _ = tx.send((block_clone, source_peer.clone()));
-                }
-
-                Ok(None)
-            }
-
-            Message::NewTransaction(tx) => {
-                println!(
-                    "📨 Nueva transacción recibida: {} -> {} ({} unidades)",
-                    tx.from, tx.to, tx.amount
-                );
-
-                // Validate transaction using the validation gate
-                if let Some(tv) = &transaction_validator {
-                    let mut validator = tv.lock().unwrap_or_else(|e| e.into_inner());
-                    let validation_result = validator.validate(&tx);
-
-                    if !validation_result.is_valid {
-                        let error_msg = validation_result.errors.join("; ");
-                        println!("🚫 Transacción rechazada por validador: {error_msg}");
-                        return Ok(None);
-                    }
-                }
-
-                Ok(None)
-            }
 
             Message::GetPeers => {
                 let peers = peers.lock().unwrap_or_else(|e| e.into_inner());
@@ -1104,7 +887,7 @@ impl Node {
 
             Message::Version {
                 block_count: their_count,
-                latest_hash: their_hash,
+                latest_hash: _their_hash,
                 p2p_address,
                 network_id: their_network_id,
                 ..
@@ -1124,16 +907,20 @@ impl Node {
                     let mut peers_guard = peers.lock().unwrap_or_else(|e| e.into_inner());
                     peers_guard.insert(their_p2p_addr);
                 }
-                let blockchain = blockchain.lock().unwrap_or_else(|e| e.into_inner());
-                let latest = blockchain.get_latest_block();
-                let my_count = blockchain.chain.len();
-                let my_hash = latest.hash.clone();
 
-                // Si tienen más bloques o mismo número pero diferente hash, indicar que pueden sincronizar
-                if their_count > my_count || (their_count == my_count && their_hash != my_hash) {
-                    // El peer que recibió este mensaje debería sincronizar
-                    // Por ahora solo respondemos con nuestra versión
-                }
+                let (my_count, my_hash) = if let Some(s) = &store {
+                    let h = s.get_latest_height().unwrap_or(0);
+                    let hash = s
+                        .read_block(h)
+                        .ok()
+                        .map(|b| hex::encode(b.parent_hash))
+                        .unwrap_or_default();
+                    ((h + 1) as usize, hash)
+                } else {
+                    (0, String::new())
+                };
+
+                let _ = their_count;
 
                 Ok(Some(Message::Version {
                     version: "1.0.0".to_string(),
@@ -1712,21 +1499,6 @@ impl Node {
     }
 
     /**
-     * Verifica si una cadena es válida
-     */
-    fn is_valid_chain(chain: &[Block]) -> bool {
-        for i in 1..chain.len() {
-            if chain[i].previous_hash != chain[i - 1].hash {
-                return false;
-            }
-            if !chain[i].is_valid() {
-                return false;
-            }
-        }
-        true
-    }
-
-    /**
      * Conecta a un peer
      */
     pub async fn connect_to_peer(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -1735,13 +1507,22 @@ impl Node {
         })?;
 
         let version_msg = {
-            let blockchain = self.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-            let latest = blockchain.get_latest_block();
+            let (block_count, latest_hash) = if let Some(s) = &self.store {
+                let h = s.get_latest_height().unwrap_or(0);
+                let hash = s
+                    .read_block(h)
+                    .ok()
+                    .map(|b| hex::encode(b.parent_hash))
+                    .unwrap_or_default();
+                ((h + 1) as usize, hash)
+            } else {
+                (0, String::new())
+            };
             let p2p_addr = self.p2p_address();
             Message::Version {
                 version: "1.0.0".to_string(),
-                block_count: blockchain.chain.len(),
-                latest_hash: latest.hash.clone(),
+                block_count,
+                latest_hash,
                 p2p_address: Some(p2p_addr),
                 network_id: Some(self.network_id.clone()),
             }
@@ -1772,7 +1553,7 @@ impl Node {
 
         if let Ok(Message::Version {
             block_count: their_count,
-            latest_hash: their_hash,
+            latest_hash: _their_hash,
             p2p_address,
             network_id: their_network_id,
             ..
@@ -1802,40 +1583,19 @@ impl Node {
                 println!("📡 Peer agregado en connect_to_peer: {peer_p2p_addr}");
             }
 
-            let (my_count, my_latest) = {
-                let blockchain = self.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-                let count = blockchain.chain.len();
-                let latest = blockchain.get_latest_block().hash.clone();
-                (count, latest)
-            };
+            let my_count = self
+                .store
+                .as_ref()
+                .and_then(|s| s.get_latest_height().ok())
+                .map(|h| (h + 1) as usize)
+                .unwrap_or(0);
 
-            // Sincronizar si el peer tiene más bloques
+            // State sync via StateRequest if peer has more blocks
             if their_count > my_count {
                 println!(
-                    "📥 Sincronizando blockchain desde {address} (ellos: {their_count}, nosotros: {my_count})"
+                    "📥 Requesting state sync from {address} (them: {their_count}, us: {my_count})"
                 );
-                self.request_blocks(address).await?;
-            }
-            // Si tienen el mismo número pero diferente hash
-            else if their_count == my_count && their_hash != my_latest {
-                if their_count == 1 {
-                    // Ambos tienen solo el génesis pero diferentes - sincronizar para obtener el correcto
-                    println!("⚠️  Diferentes bloques génesis detectados, sincronizando para obtener el correcto...");
-                    self.request_blocks(address).await?;
-                } else {
-                    println!(
-                        "⚠️  Fork detectado con {address}: mismo número de bloques pero diferentes hashes"
-                    );
-                    println!("   Nuestro hash: {}...", &my_latest[..16]);
-                    println!("   Su hash: {}...", &their_hash[..16]);
-                    // En caso de fork, mantenemos nuestra cadena (regla de la cadena más larga)
-                }
-            }
-            // Si tenemos más bloques, el peer debería sincronizar desde nosotros
-            else if my_count > their_count {
-                println!(
-                    "ℹ️  Tenemos más bloques que {address} (nosotros: {my_count}, ellos: {their_count})"
-                );
+                self.request_state_sync(address, my_count as u64).await?;
             }
 
             // Sincronizar contratos
@@ -2340,215 +2100,38 @@ impl Node {
      * Sincroniza con un peer específico
      */
     pub async fn sync_with_peer(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Obtener información de nuestra blockchain antes de conectar
-        let (my_count, my_latest) = {
-            let blockchain = self.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-            let latest = blockchain.get_latest_block();
-            (blockchain.chain.len(), latest.hash.clone())
-        };
-
-        let mut stream = self.open_stream(address).await.map_err(|e| {
-            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
-        })?;
-
-        // Enviar mensaje de versión para comparar
-        let p2p_addr = self.p2p_address();
-        let version_msg = Message::Version {
-            version: "1.0.0".to_string(),
-            block_count: my_count,
-            latest_hash: my_latest.clone(),
-            p2p_address: Some(p2p_addr),
-            network_id: Some(self.network_id.clone()),
-        };
-
-        let msg_json = serde_json::to_string(&version_msg)?;
-        stream.write_all(msg_json.as_bytes()).await?;
-
-        let mut buffer = [0; 4096];
-        let n = stream.read(&mut buffer).await?;
-        let response_str = String::from_utf8_lossy(&buffer[..n]);
-
-        if let Ok(Message::Version {
-            block_count: their_count,
-            latest_hash: their_hash,
-            ..
-        }) = serde_json::from_str(&response_str)
-        {
-            // Sincronizar si tienen más bloques
-            if their_count > my_count {
-                println!(
-                    "📥 Sincronizando desde {address} (ellos: {their_count}, nosotros: {my_count})"
-                );
-                return self.request_blocks(address).await;
-            }
-
-            // Si tienen el mismo número pero diferente hash
-            if their_count == my_count && their_hash != my_latest {
-                if their_count == 1 {
-                    // Ambos tienen solo el génesis pero diferentes - sincronizar para obtener el correcto
-                    println!("⚠️  Diferentes bloques génesis detectados, sincronizando para obtener el correcto...");
-                    return self.request_blocks(address).await;
-                } else {
-                    println!(
-                        "⚠️  Fork detectado con {address}: mismo número pero diferentes hashes"
-                    );
-                }
-            }
-
-            // Si tenemos más bloques, el peer debería sincronizar desde nosotros
-            if my_count > their_count {
-                println!(
-                    "ℹ️  Tenemos más bloques que {address} (nosotros: {my_count}, ellos: {their_count})"
-                );
-            }
-        }
-
-        Ok(())
+        let my_height = self
+            .store
+            .as_ref()
+            .and_then(|s| s.get_latest_height().ok())
+            .unwrap_or(0);
+        self.request_state_sync(address, my_height).await
     }
 
-    /**
-     * Solicita bloques a un peer
-     */
-    pub async fn request_blocks(&self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = self.open_stream(address).await.map_err(|e| {
-            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
-        })?;
-
-        let get_blocks_msg = Message::GetBlocks;
-        let msg_json = serde_json::to_string(&get_blocks_msg)?;
-        stream.write_all(msg_json.as_bytes()).await?;
-
-        // Use the sync buffer (default 4 MB) to handle large chains.
-        let mut buffer = vec![0u8; p2p_sync_buffer_size()];
-        let mut total_read = 0;
-        // Read until connection closes or buffer is full.
-        loop {
-            let n = stream.read(&mut buffer[total_read..]).await?;
-            if n == 0 {
-                break;
-            }
-            total_read += n;
-            // Try parsing after each read — the peer may close the
-            // connection after sending the full message.
-            if serde_json::from_slice::<Message>(&buffer[..total_read]).is_ok() {
-                break;
-            }
-        }
-        let response_str = String::from_utf8_lossy(&buffer[..total_read]);
-
-        if let Ok(Message::Blocks(blocks)) = serde_json::from_str(&response_str) {
-            let mut blockchain = self.blockchain.lock().unwrap_or_else(|e| e.into_inner());
-
-            // Si nuestra cadena está vacía o solo tiene génesis, aceptar la cadena recibida si es válida
-            if blockchain.chain.is_empty() || (blockchain.chain.len() == 1 && !blocks.is_empty()) {
-                if Self::is_valid_chain(&blocks) {
-                    let should_replace = if let Some(wm) = &self.wallet_manager {
-                        let wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                        // Si tenemos solo génesis, reemplazar completamente
-                        if blockchain.chain.len() == 1 {
-                            blockchain.chain = blocks.clone();
-                            true
-                        } else {
-                            blockchain.resolve_conflict(&blocks, &wm_guard)
-                        }
-                    } else {
-                        blockchain.chain = blocks.clone();
-                        true
-                    };
-
-                    if should_replace {
-                        println!("✅ Blockchain sincronizada: {} bloques", blocks.len());
-
-                        // Sincronizar wallets desde la nueva blockchain
-                        if let Some(wm) = &self.wallet_manager {
-                            let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                            wm_guard.sync_from_blockchain(&blockchain.chain);
-                        }
-                    }
-                }
-                return Ok(());
-            }
-
-            // Resolver conflicto usando la regla de la cadena más larga
-            if blocks.len() > blockchain.chain.len() && Self::is_valid_chain(&blocks) {
-                let should_replace = if let Some(wm) = &self.wallet_manager {
-                    let wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                    blockchain.resolve_conflict(&blocks, &wm_guard)
-                } else {
-                    blockchain.chain = blocks.clone();
-                    true
-                };
-
-                if should_replace {
-                    println!(
-                        "✅ Blockchain sincronizada: {} bloques (reemplazada por cadena más larga)",
-                        blocks.len()
-                    );
-
-                    // Sincronizar wallets desde la nueva blockchain
-                    if let Some(wm) = &self.wallet_manager {
-                        let mut wm_guard = wm.lock().unwrap_or_else(|e| e.into_inner());
-                        wm_guard.sync_from_blockchain(&blockchain.chain);
-                    }
-                } else {
-                    println!("⚠️  Cadena recibida no pasó validación de transacciones");
-                }
-            } else if blocks.len() == blockchain.chain.len() {
-                // Misma longitud: verificar si hay fork
-                let my_latest = blockchain.get_latest_block().hash.clone();
-                let their_latest = blocks.last().map(|b| b.hash.clone()).unwrap_or_default();
-
-                if my_latest != their_latest {
-                    println!("⚠️  Fork detectado durante sincronización: misma longitud pero diferentes últimos bloques");
-                }
-            } else if blocks.len() < blockchain.chain.len() {
-                println!(
-                    "ℹ️  Cadena recibida es más corta que la nuestra (ellos: {}, nosotros: {})",
-                    blocks.len(),
-                    blockchain.chain.len()
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    /**
-     * Envía un nuevo bloque a todos los peers
-     */
-    pub async fn broadcast_block(&self, block: &Block) {
-        let peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
-            peers_guard.iter().cloned().collect()
-        };
-
-        for peer_addr in peers.iter() {
-            if let Err(e) = self.send_block_to_peer(peer_addr, block).await {
-                eprintln!(
-                    "Error enviando bloque a {peer_addr}: {e} (el peer puede necesitar sincronización)"
-                );
-            }
-        }
-    }
-
-    /**
-     * Envía un bloque a un peer específico
-     */
-    async fn send_block_to_peer(
+    /// Pull-based state sync: request blocks from `from_height` via `StateRequest`.
+    async fn request_state_sync(
         &self,
         address: &str,
-        block: &Block,
+        from_height: u64,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = self.open_stream(address).await.map_err(|e| {
-            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
-        })?;
-        let msg = Message::NewBlock(block.clone());
-        let msg_json = serde_json::to_string(&msg)?;
-        stream.write_all(msg_json.as_bytes()).await?;
-
-        // Esperar un poco para que el peer procese el mensaje
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
+        let msg = Message::StateRequest { from_height };
+        let resp = self
+            .send_and_wait(address, msg, std::time::Duration::from_secs(30))
+            .await
+            .map_err(|e| -> Box<dyn std::error::Error> {
+                Box::new(std::io::Error::other(e.to_string()))
+            })?;
+        if let Message::StateResponse { blocks } = resp {
+            if let Some(s) = &self.store {
+                for block in &blocks {
+                    let _ = s.write_block(block);
+                }
+                println!(
+                    "✅ State sync from {address}: {} blocks written",
+                    blocks.len()
+                );
+            }
+        }
         Ok(())
     }
 
@@ -2577,39 +2160,6 @@ impl Node {
                 }
             }
         }
-    }
-
-    /**
-     * Envía una transacción a todos los peers
-     */
-    pub async fn broadcast_transaction(&self, tx: &Transaction) {
-        let peers: Vec<String> = {
-            let peers_guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
-            peers_guard.iter().cloned().collect()
-        };
-
-        for peer_addr in peers.iter() {
-            if let Err(e) = self.send_transaction_to_peer(peer_addr, tx).await {
-                eprintln!("Error enviando transacción a {peer_addr}: {e}");
-            }
-        }
-    }
-
-    /**
-     * Envía una transacción a un peer específico
-     */
-    async fn send_transaction_to_peer(
-        &self,
-        address: &str,
-        tx: &Transaction,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut stream = self.open_stream(address).await.map_err(|e| {
-            Box::new(std::io::Error::other(e.to_string())) as Box<dyn std::error::Error>
-        })?;
-        let msg = Message::NewTransaction(tx.clone());
-        let msg_json = serde_json::to_string(&msg)?;
-        stream.write_all(msg_json.as_bytes()).await?;
-        Ok(())
     }
 
     /**
@@ -3126,15 +2676,7 @@ mod tests {
         let key = write_temp(TEST_KEY_PEM);
         let server_config = build_server_config(cert.path(), key.path()).unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(server_config));
-        let blockchain = Arc::new(Mutex::new(crate::blockchain::Blockchain::new(4)));
-        let mut node = Node::new(
-            "127.0.0.1:9999".parse().unwrap(),
-            blockchain,
-            None,
-            None,
-            None,
-            None,
-        );
+        let mut node = Node::new("127.0.0.1:9999".parse().unwrap(), None, None, None, None);
         node.set_tls_acceptor(acceptor);
         assert!(node.tls_acceptor.is_some());
     }
@@ -3153,8 +2695,7 @@ mod tests {
 
     fn make_node(role: NodeRole) -> Node {
         let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-        let bc = Arc::new(Mutex::new(crate::blockchain::Blockchain::new(1)));
-        Node::with_role(addr, bc, None, None, None, None, role)
+        Node::with_role(addr, None, None, None, None, role)
     }
 
     #[test]
@@ -3195,7 +2736,6 @@ mod tests {
 
     type ProcessMsgArgs = (
         Arc<Mutex<HashSet<String>>>,
-        Arc<Mutex<crate::blockchain::Blockchain>>,
         Arc<Mutex<HashMap<String, (u64, String)>>>,
         Arc<Mutex<HashMap<String, (u64, usize)>>>,
     );
@@ -3203,7 +2743,6 @@ mod tests {
     fn empty_process_message_args() -> ProcessMsgArgs {
         (
             Arc::new(Mutex::new(HashSet::new())),
-            Arc::new(Mutex::new(crate::blockchain::Blockchain::new(1))),
             Arc::new(Mutex::new(HashMap::new())),
             Arc::new(Mutex::new(HashMap::new())),
         )
@@ -3214,15 +2753,12 @@ mod tests {
         let svc = Arc::new(crate::ordering::service::OrderingService::with_config(
             100, 2000,
         ));
-        let (peers, bc, receipts, rates) = empty_process_message_args();
+        let (peers, receipts, rates) = empty_process_message_args();
         let tx = make_storage_tx();
 
         Node::process_message(
             Message::SubmitTransaction(tx),
             &peers,
-            &bc,
-            None,
-            None,
             None,
             None,
             None,
@@ -3256,7 +2792,7 @@ mod tests {
         use crate::storage::MemoryStore;
 
         let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
-        let (peers, bc, receipts, rates) = empty_process_message_args();
+        let (peers, receipts, rates) = empty_process_message_args();
 
         let block = crate::storage::traits::Block {
             height: 7,
@@ -3277,9 +2813,6 @@ mod tests {
         Node::process_message(
             Message::OrderedBlock(block),
             &peers,
-            &bc,
-            None,
-            None,
             None,
             None,
             None,
@@ -3306,73 +2839,6 @@ mod tests {
 
         let saved = store.read_block(7).unwrap();
         assert_eq!(saved.height, 7);
-    }
-
-    #[tokio::test]
-    async fn new_block_sends_to_gossip_channel() {
-        use crate::blockchain::{Block, Blockchain};
-
-        // Build a fresh chain and mine block 1 on top of the genesis.
-        let bc_arc = Arc::new(Mutex::new(Blockchain::new(1)));
-        let genesis_hash = bc_arc
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get_latest_block()
-            .hash
-            .clone();
-
-        let coinbase = Blockchain::create_coinbase_transaction(
-            "miner_address_for_gossip_test_12345",
-            Some(50),
-        );
-        let mut block = Block::new(1, vec![coinbase], genesis_hash, 1);
-        block.mine(); // satisfies is_valid()
-
-        let block_hash = block.hash.clone();
-
-        let (gossip_tx, mut gossip_rx) =
-            tokio::sync::mpsc::unbounded_channel::<(Block, Option<String>)>();
-        let gossip_tx = Arc::new(gossip_tx);
-
-        let peers = Arc::new(Mutex::new(HashSet::new()));
-        let receipts = Arc::new(Mutex::new(HashMap::new()));
-        let rates = Arc::new(Mutex::new(HashMap::new()));
-
-        Node::process_message(
-            Message::NewBlock(block),
-            &peers,
-            &bc_arc,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some("127.0.0.1:9001".to_string()),
-            receipts,
-            rates,
-            None,
-            NodeRole::PeerAndOrderer,
-            None,
-            None,
-            Some(gossip_tx),
-            None,      // membership
-            None,      // chaincode_store
-            None,      // world_state
-            None,      // signing_provider
-            "default", // node_org_id
-            None,      // raft_node
-            None,      // private_data_store
-            None,      // collection_registry
-        )
-        .await
-        .unwrap();
-
-        let (gossiped_block, source) = gossip_rx
-            .try_recv()
-            .expect("gossip_tx should receive the accepted block");
-        assert_eq!(gossiped_block.hash, block_hash);
-        assert_eq!(source, Some("127.0.0.1:9001".to_string()));
     }
 
     #[test]

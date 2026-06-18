@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::time::SystemTime;
 
 /// Trait for any transaction type that can be validated.
-/// Implemented for both legacy `models::Transaction` and `storage::Transaction`.
 pub trait Validatable {
     fn id(&self) -> &str;
     fn sender(&self) -> &str;
@@ -21,30 +20,6 @@ pub trait Validatable {
     fn fee(&self) -> u64;
     fn timestamp(&self) -> u64;
     fn data(&self) -> Option<&str>;
-}
-
-impl Validatable for crate::models::Transaction {
-    fn id(&self) -> &str {
-        &self.id
-    }
-    fn sender(&self) -> &str {
-        &self.from
-    }
-    fn recipient(&self) -> &str {
-        &self.to
-    }
-    fn amount(&self) -> u64 {
-        self.amount
-    }
-    fn fee(&self) -> u64 {
-        self.fee
-    }
-    fn timestamp(&self) -> u64 {
-        self.timestamp
-    }
-    fn data(&self) -> Option<&str> {
-        self.data.as_deref()
-    }
 }
 
 impl Validatable for crate::storage::traits::Transaction {
@@ -615,7 +590,7 @@ pub struct ValidationStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::Transaction;
+    use crate::storage::traits::Transaction;
 
     fn now_secs() -> u64 {
         SystemTime::now()
@@ -624,16 +599,15 @@ mod tests {
             .as_secs()
     }
 
-    fn create_test_tx(from: &str, to: &str, amount: u64, fee: u64) -> Transaction {
+    fn create_test_tx(from: &str, to: &str, amount: u64, _fee: u64) -> Transaction {
         Transaction {
             id: format!("tx_{from}_{to}_{amount}"),
-            from: from.to_string(),
-            to: to.to_string(),
+            input_did: from.to_string(),
+            output_recipient: to.to_string(),
             amount,
-            fee,
+            block_height: 0,
             timestamp: now_secs(),
-            signature: "sig".to_string(),
-            data: None,
+            state: "pending".to_string(),
         }
     }
 
@@ -674,13 +648,12 @@ mod tests {
         let mut validator = TransactionValidator::with_defaults();
         let tx = Transaction {
             id: "tx1".to_string(),
-            from: "addr1".to_string(),
-            to: "addr2".to_string(),
+            input_did: "addr1".to_string(),
+            output_recipient: "addr2".to_string(),
             amount: 0,
-            fee: 0,
+            block_height: 0,
             timestamp: now_secs(),
-            signature: "sig".to_string(),
-            data: None,
+            state: "pending".to_string(),
         };
 
         let result = validator.validate(&tx);
@@ -711,13 +684,12 @@ mod tests {
         let mut validator = TransactionValidator::with_defaults();
         let tx = Transaction {
             id: "tx1".to_string(),
-            from: "tiny".to_string(), // Too short (4 chars < 5)
-            to: "addr2_with_valid_length_____".to_string(),
+            input_did: "tiny".to_string(), // Too short (4 chars < 5)
+            output_recipient: "addr2_with_valid_length_____".to_string(),
             amount: 100,
-            fee: 1,
+            block_height: 0,
             timestamp: now_secs(),
-            signature: "sig".to_string(),
-            data: None,
+            state: "pending".to_string(),
         };
 
         let result = validator.validate(&tx);

@@ -35,12 +35,9 @@ Blockchain node (Rust/Actix-Web 4) with HTTP API.
 - **Identity** (`src/identity/`): DID + pluggable signing (`Ed25519`, `ML-DSA-65`).
 - **API** (`src/api/`): All endpoints under `/api/v1` via `ApiRoutes::register`. Handler modules in `src/api/handlers/`. Response envelope: `ApiResponse<T>` with trace ID. ACL via `enforce_acl`. `api_legacy.rs` only provides the `config_routes` entry point.
 - **Crypto** (`crates/pqc_crypto_module/`): FIPS-oriented crate. Direct imports of `sha2`, `ed25519_dalek`, etc. in `src/` are forbidden.
+- **Network** (`src/network/`): P2P over TCP/TLS. Flow: `SubmitTransaction` → `OrderedBlock` → `StateRequest/StateResponse`. Push-gossip for block propagation.
 
 Other subsystems: bridge, governance, EVM (revm), chaincode, channels, oracles, compliance, tokenomics, intelligence, light client, audit. See `docs/architecture/`.
-
-### Legacy storage — DEPRECATED
-
-`src/blockchain.rs`, `src/block_storage.rs`, `src/models.rs` — original in-memory system. Migration path: move remaining logic to `BlockStore`-backed services, then remove.
 
 ## Key conventions
 

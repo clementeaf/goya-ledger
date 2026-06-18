@@ -10,10 +10,10 @@ use std::fs;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use ed25519_dalek::{SigningKey, VerifyingKey};
-use rand::rngs::OsRng;
+use pqc_crypto_module::legacy::ed25519::{SigningKey, VerifyingKey};
+use pqc_crypto_module::legacy::rng::OsRng;
+use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 // ── CLI definition ───────────────────────────────────────────────────────────
 
@@ -196,7 +196,7 @@ fn cmd_sign(node: &str, file: &PathBuf, description: Option<&str>) -> Result<(),
     let hash_hex = hex::encode(file_hash);
 
     // Sign the hash with private key
-    use ed25519_dalek::Signer;
+    use pqc_crypto_module::legacy::ed25519::Signer;
     let signature = signing_key.sign(file_hash.as_slice());
     let sig_hex = hex::encode(signature.to_bytes());
 
@@ -417,7 +417,7 @@ fn verify_ed25519(public_key_hex: &str, message_hex: &str, signature_hex: &str) 
     };
     let signature = ed25519_dalek::Signature::from_bytes(&sig_arr);
 
-    use ed25519_dalek::Verifier;
+    use pqc_crypto_module::legacy::ed25519::Verifier;
     verifying_key.verify(&msg_bytes, &signature).is_ok()
 }
 

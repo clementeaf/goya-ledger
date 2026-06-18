@@ -74,12 +74,13 @@ pub async fn create_wallet(
     }
 
     let (address, public_key_hex) = {
-        let mut wm = state
-            .wallet_manager
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let wallet = wm.create_wallet();
-        (wallet.address.clone(), wallet.get_public_key_hex())
+        use crate::identity::signing::SigningProvider;
+        use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
+        let provider = crate::identity::signing::SoftwareSigningProvider::generate();
+        let pub_bytes = provider.public_key();
+        let hex_key = hex::encode(&pub_bytes);
+        let addr = hex::encode(&Sha256::digest(&pub_bytes)[..20]);
+        (addr, hex_key)
     };
 
     if let Some(key) = &api_key {

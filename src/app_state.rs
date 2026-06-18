@@ -5,7 +5,6 @@ pub type StoreMap = Arc<RwLock<HashMap<String, Arc<dyn BlockStore>>>>;
 use crate::acl::AclProvider;
 use crate::airdrop::AirdropManager;
 use crate::billing::BillingManager;
-use crate::blockchain::Blockchain;
 use crate::cache::BalanceCache;
 use crate::chaincode::{ChaincodeDefinitionStore, ChaincodePackageStore};
 use crate::channel::config::ChannelConfig;
@@ -20,7 +19,6 @@ use crate::governance::proposals::ProposalStore;
 use crate::governance::voting::VoteStore;
 use crate::metrics::MetricsCollector;
 use crate::mining::MiningService;
-use crate::models::{Mempool, WalletManager};
 use crate::msp::CrlStore;
 use crate::network::Node;
 use crate::ordering::OrderingBackend;
@@ -34,10 +32,7 @@ use crate::transaction_validation::TransactionValidator;
 /// Shared application state for the HTTP API layer.
 #[derive(Clone)]
 pub struct AppState {
-    pub blockchain: Arc<Mutex<Blockchain>>,
-    pub wallet_manager: Arc<Mutex<WalletManager>>,
     pub node: Option<Arc<Node>>,
-    pub mempool: Arc<Mutex<Mempool>>,
     pub balance_cache: Arc<BalanceCache>,
     pub billing_manager: Arc<BillingManager>,
     pub contract_manager: Arc<RwLock<ContractManager>>,
@@ -123,10 +118,7 @@ impl AppState {
         store_map.insert("default".to_string(), default_store);
 
         Self {
-            blockchain: Arc::new(Mutex::new(crate::blockchain::Blockchain::new(1))),
-            wallet_manager: Arc::new(Mutex::new(WalletManager::new())),
             node: None,
-            mempool: Arc::new(Mutex::new(Mempool::new())),
             balance_cache: Arc::new(BalanceCache::new()),
             billing_manager: Arc::new(BillingManager::new()),
             contract_manager: Arc::new(RwLock::new(ContractManager::new())),

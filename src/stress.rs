@@ -1116,8 +1116,7 @@ mod tests {
     #[test]
     fn torture_oracle_system_concurrent() {
         use crate::oracle_system::OracleRegistry;
-        use hmac::{Hmac, Mac};
-        use sha2::Sha256;
+        use pqc_crypto_module::legacy::hmac::{Hmac, Mac, Sha256};
         type HmacSha256 = Hmac<Sha256>;
 
         let mut registry = OracleRegistry::new(3, 300_000);

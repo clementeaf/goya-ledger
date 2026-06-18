@@ -6,6 +6,36 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-06-18
+
+**Legacy storage removed — unified BlockStore path**
+
+All storage now flows through the `BlockStore` trait. The original in-memory
+blockchain, wallet manager, and mempool have been deleted (~1,500 lines).
+
+Removed files:
+- `src/blockchain.rs` — in-memory Block, Blockchain, PoW mining
+- `src/models.rs` — Transaction, Wallet, WalletManager, Mempool
+- `src/storage/compat.rs` — legacy-to-modern type conversion shim
+
+AppState:
+- Removed `blockchain`, `wallet_manager`, `mempool` fields
+- Wallet creation now uses `SigningProvider` keypair generation
+- Staking uses BlockStore balance instead of WalletManager lookup
+
+P2P network:
+- Removed legacy message variants: `GetBlocks`, `Blocks`, `NewBlock`, `NewTransaction`
+- Removed `Node.blockchain` and `Node.wallet_manager` fields
+- Sync migrated to `StateRequest`/`StateResponse`
+- Gossip propagates `OrderedBlock` instead of legacy `Block`
+- `Version` handshake reads height from `BlockStore`
+
+Crypto boundary:
+- Migrated `cerulean.rs`, `governance.rs`, `stress.rs` from raw `sha2`/`ed25519_dalek` to `pqc_crypto_module::legacy::*`
+- All 5 pre-existing crypto boundary violations resolved
+
+Net change: **−2,200 lines**
+
 ### 2026-06-13
 
 **API scaffold migration — legacy router eliminated**

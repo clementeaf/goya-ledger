@@ -472,8 +472,8 @@ pub async fn cast_governance_vote(
     // signature over the canonical vote payload. This proves the voter
     // controls the private key for the claimed DID.
     if let (Some(sig_hex), Some(pk_hex)) = (&body.signature, &body.public_key) {
-        use ed25519_dalek::Verifier;
-        use ed25519_dalek::{Signature, VerifyingKey};
+        use pqc_crypto_module::legacy::ed25519::Verifier;
+        use pqc_crypto_module::legacy::ed25519::{Signature, VerifyingKey};
 
         let pk_bytes = match hex::decode(pk_hex) {
             Ok(b) if b.len() == 32 => b,
@@ -527,7 +527,7 @@ pub async fn cast_governance_vote(
         }
 
         // Verify voter DID matches the public key
-        use sha2::{Digest, Sha256};
+        use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
         let hash = Sha256::digest(&pk_bytes);
         let expected_did = format!("did:cerulean:{}", hex::encode(&hash[..20]));
         if body.voter != expected_did {
@@ -547,7 +547,7 @@ pub async fn cast_governance_vote(
     //   - Cross-proposal unlinkability (different blind_id per proposal)
     // Unsigned votes (legacy/permissive mode) use the raw voter DID.
     let effective_voter = if body.signature.is_some() {
-        use sha2::{Digest, Sha256};
+        use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(id.to_le_bytes());
         hasher.update(body.voter.as_bytes());
@@ -706,7 +706,7 @@ pub async fn get_voter_history(
         let vote = vote_store.get_vote(proposal.id, voter_did);
         // Try blind voter ID (signed votes)
         let vote = vote.or_else(|| {
-            use sha2::{Digest, Sha256};
+            use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
             let mut hasher = Sha256::new();
             hasher.update(proposal.id.to_le_bytes());
             hasher.update(voter_did.as_bytes());
