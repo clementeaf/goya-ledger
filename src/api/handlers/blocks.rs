@@ -1,6 +1,7 @@
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::handlers::chain::{compute_block_hash, hex_hash};
 use crate::api::handlers::channels::{
     channel_id_from_req, enforce_channel_membership, get_channel_store,
 };
@@ -58,15 +59,31 @@ pub async fn get_block_by_index(
     }
 }
 
-/// GET /api/v1/blocks/{hash} — block by hash (legacy, not indexed in BlockStore).
+/// GET /api/v1/blocks/{hash} — block by hash (linear scan, computes SHA-256 per block).
 #[get("/{hash}")]
 pub async fn get_block_by_hash(
-    _state: web::Data<AppState>,
+    state: web::Data<AppState>,
     path: web::Path<String>,
 ) -> ApiResult<HttpResponse> {
-    let hash = path.into_inner();
+    let target_hash = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let store = get_channel_store(&state, "default")?;
+    let height = store.get_latest_height().unwrap_or(0);
+    let has_genesis = store.block_exists(0).unwrap_or(false);
+
+    if has_genesis {
+        for h in 0..=height {
+            if let Ok(block) = store.read_block(h) {
+                let hash = hex_hash(&compute_block_hash(&block));
+                if hash == target_hash {
+                    return Ok(HttpResponse::Ok().json(ApiResponse::success(block, trace_id)));
+                }
+            }
+        }
+    }
+
     Err(ApiError::NotFound {
-        resource: format!("block {hash}"),
+        resource: format!("block {target_hash}"),
     })
 }
 

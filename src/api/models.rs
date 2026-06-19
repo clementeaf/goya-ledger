@@ -110,13 +110,15 @@ pub struct ConsensusStateResponse {
 pub struct ChainVerifyResponse {
     pub valid: bool,
     pub block_count: usize,
+    /// Height of the first block that failed validation, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_invalid_height: Option<u64>,
 }
 
 /// Chain metadata (GET /chain/info)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainInfoResponse {
     pub block_count: usize,
-    pub difficulty: u8,
     pub latest_block_hash: String,
     pub is_valid: bool,
 }

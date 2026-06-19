@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-06-18
 
+**Block lookup by hash and real chain verification**
+
+- `GET /blocks/{hash}` — finds a block by its SHA-256 hash (linear scan over BlockStore)
+- `GET /chain/verify` — walks the full chain validating `parent_hash` linkage; reports `first_invalid_height` on failure
+- `GET /chain/info` — returns the real SHA-256 hash of the latest block instead of a placeholder
+- Removed fake `difficulty` field from `ChainInfoResponse` (not applicable to BFT/DPoS consensus)
+- Shared `compute_block_hash` and `hex_hash` utilities in `chain.rs` for consistent block hashing
+- All 49 API handler modules now contain real business logic (0 scaffolds remaining)
+
 **Legacy storage removed — unified BlockStore path**
 
 All storage now flows through the `BlockStore` trait. The original in-memory
