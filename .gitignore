@@ -64,6 +64,9 @@ data/
 # Claude Code project memory
 memory/
 
+# Serena MCP server
+.serena/
+
 # Environment files (secrets)
 .env
 .env.local
