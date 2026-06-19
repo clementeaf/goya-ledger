@@ -6,6 +6,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-06-19
+
+**API services one-pager**
+
+- Added `docs/commercial/ONE-PAGER-SERVICIOS-API.md` — single-page enterprise services overview (7 API capabilities, benchmarks, differentiators)
+- HTML template and PDF version included for print/email distribution
+
 ### 2026-06-18
 
 **Block lookup by hash and real chain verification**

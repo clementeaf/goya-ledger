@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+@page { size: A4; margin: 12mm 14mm; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; font-size: 8.5pt; line-height: 1.3; color: #1a1a1a; }
+.header { border-bottom: 2px solid #2563eb; padding-bottom: 4px; margin-bottom: 6px; }
+.header h1 { font-size: 16pt; font-weight: 700; color: #0f172a; }
+.header p { font-size: 9pt; color: #475569; margin-top: 2px; }
+h2 { font-size: 10pt; color: #2563eb; margin: 8px 0 3px 0; font-weight: 600; }
+p { margin: 2px 0; }
+hr { border: none; border-top: 1px solid #d1d5db; margin: 6px 0; }
+table { width: 100%; border-collapse: collapse; font-size: 7.8pt; margin: 3px 0; }
+th { background: #2563eb; color: #fff; padding: 3px 5px; text-align: left; font-weight: 600; }
+td { padding: 2.5px 5px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+tr:nth-child(even) td { background: #f8fafc; }
+ul { margin: 2px 0 2px 16px; }
+li { margin: 0; }
+strong { color: #1e3a5f; }
+.cols { display: flex; gap: 16px; }
+.cols > div { flex: 1; }
+.footer { text-align: center; color: #64748b; font-style: italic; margin-top: 6px; font-size: 8pt; }
+.cta { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 4px; padding: 5px 8px; margin-top: 6px; font-size: 8pt; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Goya Ledger — Servicios API</h1>
+  <p>Infraestructura blockchain como servicio. Una API REST, siete capacidades enterprise.</p>
+</div>
+
+<h2>El problema</h2>
+<p>Registros que se alteran. Credenciales que se falsifican. Cadenas de custodia sin trazabilidad. Modelos de IA sin auditoría. Las empresas necesitan confianza digital verificable — pero construir esa infraestructura cuesta meses y millones.</p>
+
+<hr>
+
+<h2>Servicios disponibles</h2>
+<table>
+  <tr><th>Servicio</th><th>Que resuelve</th><th>Endpoints clave</th></tr>
+  <tr><td><strong>Notarizacion</strong></td><td>Prueba de existencia inmutable de documentos</td><td><code>POST /notarize</code>, <code>GET /notarize/verify/{hash}</code></td></tr>
+  <tr><td><strong>Identidad DID</strong></td><td>Gestion de identidades descentralizadas con firma digital</td><td><code>POST /identity</code>, <code>GET /identity/{did}</code></td></tr>
+  <tr><td><strong>Credenciales</strong></td><td>Emision y verificacion de certificados infalsificables</td><td><code>POST /credentials</code>, <code>GET /credentials/verify</code></td></tr>
+  <tr><td><strong>Tokenizacion</strong></td><td>Tokens ERC-20/ERC-721 sin gestionar infraestructura</td><td><code>POST /contracts/erc20/deploy</code>, <code>POST /erc721/mint</code></td></tr>
+  <tr><td><strong>Trazabilidad</strong></td><td>Cadena de custodia multi-organizacion con canales privados</td><td><code>POST /gateway/submit</code>, <code>GET /blocks/{hash}</code></td></tr>
+  <tr><td><strong>Compliance</strong></td><td>Validacion ISO 20022 y reportes regulatorios</td><td><code>POST /compliance/validate</code>, <code>GET /audit/export</code></td></tr>
+  <tr><td><strong>Oraculos ML</strong></td><td>Inferencias verificables on-chain con disputas o pruebas ZK</td><td><code>POST /inference/submit</code>, <code>POST /inference/submit-proven</code></td></tr>
+</table>
+<p>Todos los endpoints: respuestas estandarizadas con trace ID, control de acceso (ACL) y rate limiting incluidos.</p>
+
+<hr>
+
+<div class="cols">
+<div>
+<h2>Por que elegirnos</h2>
+<ul>
+  <li><strong>Una sola integracion.</strong> API REST + JSON. Sin SDKs propietarios.</li>
+  <li><strong>Criptografia post-cuantica.</strong> ML-DSA-65 + Ed25519. NIST FIPS 204.</li>
+  <li><strong>Privacidad por diseno.</strong> Canales aislados por organizacion.</li>
+  <li><strong>Su infraestructura.</strong> On-premise o nube privada. Sin terceros.</li>
+  <li><strong>49 modulos en produccion.</strong> Cero stubs — logica real y tests.</li>
+</ul>
+</div>
+<div>
+<h2>Numeros reales</h2>
+<table>
+  <tr><th>Metrica</th><th>Valor</th></tr>
+  <tr><td>Throughput interno</td><td>18,700 TX/s</td></tr>
+  <tr><td>Latencia HTTP p50</td><td>14 ms</td></tr>
+  <tr><td>Verificacion de firma</td><td>2.7 µs</td></tr>
+  <tr><td>Memoria por nodo</td><td>~50 MB</td></tr>
+  <tr><td>Tests automatizados</td><td>1,727+</td></tr>
+  <tr><td>Pentest (40 escenarios)</td><td>0 vulnerables</td></tr>
+</table>
+</div>
+</div>
+
+<div class="cta">
+  Solicite una demo tecnica con su caso de uso. Integracion en dias, no meses.<br>
+  API docs: <code>/api/v1/openapi.json</code>
+</div>
+
+<div class="footer">Goya Ledger — Confianza digital verificable, lista para integrar.</div>
+
+</body>
+</html>
