@@ -46,7 +46,7 @@ async fn evm_deploy(
     body: web::Json<DeployRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let mut exec = evm.executor.lock().unwrap();
+    let mut exec = evm.executor.lock().unwrap_or_else(|e| e.into_inner());
 
     match exec.deploy(&body.bytecode) {
         Ok(result) => {
@@ -74,7 +74,7 @@ async fn evm_call(
     body: web::Json<CallRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let mut exec = evm.executor.lock().unwrap();
+    let mut exec = evm.executor.lock().unwrap_or_else(|e| e.into_inner());
 
     match exec.call(&body.address, &body.calldata) {
         Ok(result) => {
@@ -102,7 +102,7 @@ async fn evm_static_call(
     body: web::Json<CallRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let mut exec = evm.executor.lock().unwrap();
+    let mut exec = evm.executor.lock().unwrap_or_else(|e| e.into_inner());
 
     match exec.static_call(&body.address, &body.calldata) {
         Ok(result) => {
@@ -127,7 +127,7 @@ async fn evm_static_call(
 #[get("/evm/contracts")]
 async fn evm_list_contracts(evm: web::Data<EvmState>) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
-    let exec = evm.executor.lock().unwrap();
+    let exec = evm.executor.lock().unwrap_or_else(|e| e.into_inner());
     let contracts = exec.list_contracts();
     let resp = ApiResponse::success(contracts, trace_id);
     Ok(HttpResponse::Ok().json(resp))

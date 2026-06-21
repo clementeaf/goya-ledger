@@ -6,6 +6,37 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-06-21
+
+**Production readiness hardening**
+
+Security & resilience:
+- Replaced all `lock().unwrap()` in API handlers (oracle, evm, contact) with poison-safe `unwrap_or_else`
+- Replaced `panic!()` in `BoxedVerifier::clone` with reject-all fallback verifier
+- CORS: added `CORS_ALLOWED_ORIGINS` env var; fixed invalid `allow_any_origin + supports_credentials` combo
+- Production guards: `RUST_BC_ENV=production` now requires TLS; warns if `ACL_MODE=permissive`
+
+Rate limiting & timeouts:
+- Per-endpoint rate limiting: write-heavy endpoints (transactions, gateway, contracts) get half the baseline limits
+- Explicit HTTP timeouts via `HTTP_KEEP_ALIVE_SECS` and `HTTP_REQUEST_TIMEOUT_SECS` env vars
+- Configurable mempool capacity via `MEMPOOL_MAX_SIZE` env var (default 1000)
+
+Pagination:
+- Audit, governance proposals, and credentials list endpoints now use `PaginatedResponse` (max 100 items/page)
+
+Logging:
+- Migrated from `env_logger` to `tracing-subscriber`; `LOG_FORMAT=json` enables structured JSON output
+
+CI/CD:
+- Added GitHub Actions workflow: fmt, clippy, unit tests, crypto boundary, cargo-deny
+- Added coverage job with `cargo-llvm-cov`
+
+Documentation:
+- `docs/api/RUNBOOKS.md` — 5 operational procedures (node recovery, chain repair, performance, security, escalation)
+- `docs/api/INTEGRATION-GUIDE.md` — API-first client integration guide with curl/fetch/Python examples
+- `docs/api/PERFORMANCE-BASELINE.md` — load test procedure and SLA targets
+- Updated `docs/api/configuration-guide.md` with all new env vars and production security requirements
+
 ### 2026-06-19
 
 **API services one-pager**

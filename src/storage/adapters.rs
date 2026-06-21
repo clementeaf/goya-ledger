@@ -758,7 +758,7 @@ impl BlockStore for RocksDbBlockStore {
                 .map_err(|e| StorageError::DataCorrupted(e.to_string()))?
                 .to_string();
             let ts = if value.len() == 8 {
-                u64::from_be_bytes(value[..8].try_into().unwrap())
+                u64::from_be_bytes(value[..8].try_into().expect("guarded by len == 8 check"))
             } else {
                 0
             };

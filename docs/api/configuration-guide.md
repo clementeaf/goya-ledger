@@ -13,6 +13,11 @@ All configuration is via environment variables. No config files needed.
 | `DIFFICULTY` | `1` | Mining difficulty |
 | `NODE_ROLE` | `peerandorderer` | Node role: `peer`, `orderer`, `peerandorderer` |
 | `ORG_ID` | `default` | This node's organization ID |
+| `HTTP_KEEP_ALIVE_SECS` | `75` | HTTP keep-alive timeout (seconds) |
+| `HTTP_REQUEST_TIMEOUT_SECS` | `30` | Max time to receive a complete request (seconds) |
+| `MEMPOOL_MAX_SIZE` | `1000` | Max pending transactions in mempool |
+| `LOG_FORMAT` | *(text)* | Log output format: `json` for structured JSON, empty for human-readable text |
+| `RUST_LOG` | `info` | Log level filter (e.g. `debug`, `warn`, `rust_bc=debug,actix_web=info`) |
 
 ## Storage
 
@@ -60,6 +65,26 @@ All configuration is via environment variables. No config files needed.
 | `MIN_STAKE` | `1000` | Minimum stake amount |
 | `UNSTAKING_PERIOD` | `604800` | Unstaking cooldown (seconds, default 7 days) |
 | `SLASH_PERCENTAGE` | `5` | Slash percentage for misbehavior |
+
+## Security & CORS
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RUST_BC_ENV` | — | Set to `production` to enforce TLS and JWT secret |
+| `ACL_MODE` | `permissive` | `strict` (deny without mTLS identity) or `permissive` (log-only) |
+| `JWT_SECRET` | *(dev default)* | JWT signing secret (panics in production if unchanged) |
+| `CORS_ALLOWED_ORIGINS` | `*` | Comma-separated allowed origins (e.g. `https://app.example.com,https://admin.example.com`) |
+
+### Production Security Requirements
+
+When `RUST_BC_ENV=production`:
+
+1. **TLS is mandatory** — the server will refuse to start without `TLS_CERT_PATH` and `TLS_KEY_PATH`.
+2. **JWT_SECRET must be changed** — the default development secret causes a panic.
+3. **ACL_MODE=strict recommended** — permissive mode logs a warning in production because `X-Org-Id` and `X-Msp-Role` headers are spoofable without mTLS.
+4. **CORS wildcard discouraged** — set `CORS_ALLOWED_ORIGINS` to specific domains. Wildcard `*` logs a warning in production.
+
+mTLS (`TLS_MUTUAL=true` + `TLS_CA_CERT_PATH`) is the only supported authentication mechanism for production. JWT bearer-token middleware is reserved for future use and is not active.
 
 ## Example: Production multi-node
 

@@ -101,7 +101,23 @@ async fn async_main() -> std::io::Result<()> {
 }
 
 async fn async_main_inner() -> std::io::Result<()> {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    // Structured logging via tracing-subscriber.
+    // LOG_FORMAT=json → JSON output (production, Docker, ELK/Loki).
+    // Default        → human-readable text (development).
+    // RUST_LOG       → filter levels (e.g. RUST_LOG=debug).
+    let log_format = std::env::var("LOG_FORMAT").unwrap_or_default();
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    if log_format == "json" {
+        tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(env_filter)
+            .with_target(true)
+            .with_thread_ids(false)
+            .init();
+    } else {
+        tracing_subscriber::fmt().with_env_filter(env_filter).init();
+    }
 
     // Install the TLS CryptoProvider early, before any TLS config is built.
     // When TLS_PQC_KEM=true this enables X25519+ML-KEM-768 hybrid key exchange.
@@ -942,6 +958,15 @@ async fn async_main_inner() -> std::io::Result<()> {
     let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());
     let api_bind = format!("{bind_addr}:{api_port}");
 
+    let http_keep_alive_secs: u64 = std::env::var("HTTP_KEEP_ALIVE_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(75);
+    let http_request_timeout_secs: u64 = std::env::var("HTTP_REQUEST_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(30);
+
     // Configurar límite de tamaño para JSON (256KB por defecto, aumentamos a 1MB)
     let json_config = web::JsonConfig::default()
         .limit(1_048_576) // 1MB
@@ -959,12 +984,23 @@ async fn async_main_inner() -> std::io::Result<()> {
     let evm_state = web::Data::new(crate::api::handlers::evm::EvmState::new());
 
     let server = HttpServer::new(move || {
-        let cors = Cors::default()
-            .allow_any_origin()
-            .allow_any_method()
-            .allow_any_header()
-            .supports_credentials()
-            .max_age(3600);
+        let cors_policy = crate::api::cors::CorsPolicy::from_env();
+        let cors = if cors_policy.allowed_origins.contains(&"*".to_string()) {
+            Cors::default()
+                .allow_any_origin()
+                .allow_any_method()
+                .allow_any_header()
+                .max_age(3600)
+        } else {
+            let mut c = Cors::default();
+            for origin in &cors_policy.allowed_origins {
+                c = c.allowed_origin(origin);
+            }
+            c.allow_any_method()
+                .allow_any_header()
+                .supports_credentials()
+                .max_age(3600)
+        };
 
         let app = App::new()
             .wrap(cors)
@@ -1003,19 +1039,49 @@ async fn async_main_inner() -> std::io::Result<()> {
                 }
             }
         }
-    });
+    })
+    .keep_alive(std::time::Duration::from_secs(http_keep_alive_secs))
+    .client_request_timeout(std::time::Duration::from_secs(http_request_timeout_secs));
 
-    let api_handle = match load_tls_config_from_env() {
+    log::info!(
+        "HTTP keep-alive: {http_keep_alive_secs}s, request timeout: {http_request_timeout_secs}s"
+    );
+
+    // --- Production environment guards ---
+    let env_mode = std::env::var("RUST_BC_ENV").unwrap_or_default();
+    let acl_mode = std::env::var("ACL_MODE").unwrap_or_else(|_| "permissive".to_string());
+
+    if env_mode == "production" && acl_mode == "permissive" {
+        log::warn!(
+            "ACL_MODE=permissive in production — X-Org-Id/X-Msp-Role headers are spoofable. \
+             Set ACL_MODE=strict with mTLS for production use."
+        );
+    }
+
+    let tls_result = load_tls_config_from_env();
+
+    if env_mode == "production" {
+        match &tls_result {
+            Ok(None) => panic!(
+                "FATAL: TLS_CERT_PATH and TLS_KEY_PATH must be set in production. \
+                 Set RUST_BC_ENV=development to run without TLS."
+            ),
+            Err(e) => panic!("FATAL: TLS configuration error in production: {e}"),
+            Ok(Some(_)) => {}
+        }
+    }
+
+    let api_handle = match tls_result {
         Ok(Some(tls_config)) => {
-            println!("🔐 TLS habilitado en {api_bind}");
+            println!("TLS habilitado en {api_bind}");
             server.bind_rustls_0_23(&api_bind, tls_config)?
         }
         Ok(None) => {
-            println!("⚠️  TLS no configurado — API en texto plano en {api_bind}");
+            log::warn!("TLS no configurado — API en texto plano en {api_bind}");
             server.bind(&api_bind)?
         }
         Err(e) => {
-            eprintln!("❌ Error al cargar configuración TLS: {e}");
+            eprintln!("Error al cargar configuracion TLS: {e}");
             return Err(std::io::Error::other(e.to_string()));
         }
     }

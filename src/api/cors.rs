@@ -55,6 +55,34 @@ impl CorsPolicy {
         Self::default()
     }
 
+    /// Build CORS policy from environment variables.
+    ///
+    /// - `CORS_ALLOWED_ORIGINS`: comma-separated list of origins (default: `"*"`)
+    /// - Logs a warning in production (`RUST_BC_ENV=production`) if wildcard is used.
+    pub fn from_env() -> Self {
+        let origins: Vec<String> = std::env::var("CORS_ALLOWED_ORIGINS")
+            .map(|s| {
+                s.split(',')
+                    .map(|o| o.trim().to_string())
+                    .filter(|o| !o.is_empty())
+                    .collect()
+            })
+            .unwrap_or_else(|_| vec!["*".to_string()]);
+
+        let env_mode = std::env::var("RUST_BC_ENV").unwrap_or_default();
+        if env_mode == "production" && origins.contains(&"*".to_string()) {
+            log::warn!(
+                "CORS_ALLOWED_ORIGINS includes wildcard '*' in production. \
+                 Set explicit origins for production deployments."
+            );
+        }
+
+        Self {
+            allowed_origins: origins,
+            ..Self::default()
+        }
+    }
+
     #[allow(dead_code)]
     /// Set allowed origins
     pub fn with_origins(mut self, origins: Vec<String>) -> Self {
@@ -287,5 +315,25 @@ mod tests {
         let headers = handle_preflight_request(None, &policy);
 
         assert!(!headers.is_empty());
+    }
+
+    #[test]
+    fn test_from_env_with_specific_origins() {
+        std::env::set_var(
+            "CORS_ALLOWED_ORIGINS",
+            "https://app.example.com, https://admin.example.com",
+        );
+        let policy = CorsPolicy::from_env();
+        assert!(policy.is_origin_allowed("https://app.example.com"));
+        assert!(policy.is_origin_allowed("https://admin.example.com"));
+        assert!(!policy.is_origin_allowed("https://evil.com"));
+        std::env::remove_var("CORS_ALLOWED_ORIGINS");
+    }
+
+    #[test]
+    fn test_from_env_defaults_to_wildcard() {
+        std::env::remove_var("CORS_ALLOWED_ORIGINS");
+        let policy = CorsPolicy::from_env();
+        assert!(policy.is_origin_allowed("https://anything.com"));
     }
 }

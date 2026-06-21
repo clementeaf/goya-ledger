@@ -6,6 +6,7 @@ use actix_web::{get, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
+use crate::api::pagination::{PaginatedResponse, PaginationParams};
 use crate::app_state::AppState;
 use crate::audit::AuditAction;
 
@@ -16,10 +17,13 @@ pub struct AuditQuery {
     pub org_id: Option<String>,
     /// Filter by action type (e.g., "block_mined", "did_registered", "http_request").
     pub action: Option<AuditAction>,
+    /// Page number (1-based, default 1).
+    pub page: Option<usize>,
+    /// Items per page (default 20, max 100).
     pub limit: Option<usize>,
 }
 
-/// GET /api/v1/audit/requests — query audit log entries.
+/// GET /api/v1/audit/requests — query audit log entries (paginated).
 #[get("/audit/requests")]
 pub async fn list_audit_entries(
     state: web::Data<AppState>,
@@ -31,19 +35,36 @@ pub async fn list_audit_entries(
         resource: "audit_store".to_string(),
     })?;
 
-    let entries = store
+    let pagination = PaginationParams {
+        page: query.page,
+        limit: query.limit,
+        cursor: None,
+    };
+
+    // Fetch all matching entries then paginate in-memory.
+    let all_entries = store
         .query(
             query.from.as_deref(),
             query.to.as_deref(),
             query.org_id.as_deref(),
             query.action.as_ref(),
-            query.limit.unwrap_or(1000),
+            usize::MAX,
         )
         .map_err(|e| ApiError::StorageError {
             reason: e.to_string(),
         })?;
 
-    Ok(HttpResponse::Ok().json(ApiResponse::success(entries, trace_id)))
+    let total = all_entries.len();
+    let page: Vec<_> = all_entries
+        .into_iter()
+        .skip(pagination.offset())
+        .take(pagination.limit())
+        .collect();
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        PaginatedResponse::new(page, total, &pagination),
+        trace_id,
+    )))
 }
 
 /// GET /api/v1/audit/export — export audit log as CSV.

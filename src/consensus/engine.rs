@@ -75,10 +75,22 @@ impl crate::consensus::bft::quorum::SignatureVerifier for BoxedVerifier {
 
 impl Clone for BoxedVerifier {
     fn clone(&self) -> Self {
-        // QuorumValidator only needs Clone for creating VoteCollectors.
-        // ConsensusEngine uses validate_qc directly, which doesn't clone.
-        // This clone impl is required by the trait bound but never called here.
-        panic!("BoxedVerifier::clone not supported — use validate_qc directly")
+        // QuorumValidator requires Clone for VoteCollectors, but ConsensusEngine
+        // uses validate_qc directly and never clones.  If this path is ever
+        // reached, return a verifier that rejects all signatures so no invalid
+        // block can be accepted.
+        log::error!("BoxedVerifier::clone called — returning reject-all verifier");
+        BoxedVerifier(Box::new(RejectAllVerifier))
+    }
+}
+
+/// Fallback verifier that rejects every signature.  Used only if
+/// `BoxedVerifier` is cloned unexpectedly.
+struct RejectAllVerifier;
+
+impl crate::consensus::bft::quorum::SignatureVerifier for RejectAllVerifier {
+    fn verify(&self, _voter_id: &str, _payload: &[u8], _signature: &[u8]) -> bool {
+        false
     }
 }
 

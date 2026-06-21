@@ -14,10 +14,26 @@ pub struct TransactionPool {
 
 impl TransactionPool {
     pub fn new() -> Self {
+        let max_size = std::env::var("MEMPOOL_MAX_SIZE")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1000);
         Self {
             transactions: Vec::new(),
-            max_size: 1000,
+            max_size,
         }
+    }
+
+    /// Create a pool with a specific capacity (for testing).
+    pub fn with_max_size(max_size: usize) -> Self {
+        Self {
+            transactions: Vec::new(),
+            max_size,
+        }
+    }
+
+    pub fn max_size(&self) -> usize {
+        self.max_size
     }
 
     /// Add a transaction to the pool. Rejects duplicates and full pool.
@@ -170,6 +186,15 @@ mod tests {
         let result = pool.add_checked(sample_tx("tx2", "alice", "carol", 30), 100);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Double-spend"));
+    }
+
+    #[test]
+    fn with_custom_max_size() {
+        let mut pool = TransactionPool::with_max_size(2);
+        pool.add(sample_tx("tx1", "a", "b", 1)).unwrap();
+        pool.add(sample_tx("tx2", "a", "b", 1)).unwrap();
+        assert!(pool.add(sample_tx("tx3", "a", "b", 1)).is_err());
+        assert_eq!(pool.max_size(), 2);
     }
 
     #[test]

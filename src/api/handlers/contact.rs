@@ -43,7 +43,7 @@ impl ContactStore {
     }
 
     pub fn submit(&self, req: &ContactRequest) -> ContactEntry {
-        let mut id = self.next_id.lock().unwrap();
+        let mut id = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
         let entry = ContactEntry {
             id: *id,
             name: req.name.clone(),
@@ -53,12 +53,18 @@ impl ContactStore {
             submitted_at: chrono::Utc::now().to_rfc3339(),
         };
         *id += 1;
-        self.entries.lock().unwrap().push(entry.clone());
+        self.entries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(entry.clone());
         entry
     }
 
     pub fn list(&self) -> Vec<ContactEntry> {
-        self.entries.lock().unwrap().clone()
+        self.entries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 }
 

@@ -358,11 +358,19 @@ pub async fn submit_governance_proposal(
     }
 }
 
-/// GET /api/v1/governance/proposals
+/// Query parameters for listing governance proposals.
+#[derive(serde::Deserialize)]
+pub struct ProposalListQuery {
+    pub status: Option<String>,
+    pub page: Option<usize>,
+    pub limit: Option<usize>,
+}
+
+/// GET /api/v1/governance/proposals (paginated)
 #[get("/governance/proposals")]
 pub async fn list_governance_proposals(
     state: web::Data<AppState>,
-    query: web::Query<std::collections::HashMap<String, String>>,
+    query: web::Query<ProposalListQuery>,
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
     let store = match &state.proposal_store {
@@ -370,7 +378,7 @@ pub async fn list_governance_proposals(
         None => return Ok(HttpResponse::Ok().json(ApiResponse::<Vec<()>>::success(vec![], trace))),
     };
 
-    let proposals = if let Some(status_str) = query.get("status") {
+    let proposals = if let Some(status_str) = &query.status {
         let status = match status_str.as_str() {
             "Voting" => ProposalStatus::Voting,
             "Passed" => ProposalStatus::Passed,
@@ -390,7 +398,22 @@ pub async fn list_governance_proposals(
         store.list_all()
     };
 
-    Ok(HttpResponse::Ok().json(ApiResponse::success(proposals, trace)))
+    let pagination = crate::api::pagination::PaginationParams {
+        page: query.page,
+        limit: query.limit,
+        cursor: None,
+    };
+    let total = proposals.len();
+    let page: Vec<_> = proposals
+        .into_iter()
+        .skip(pagination.offset())
+        .take(pagination.limit())
+        .collect();
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        crate::api::pagination::PaginatedResponse::new(page, total, &pagination),
+        trace,
+    )))
 }
 
 /// GET /api/v1/governance/proposals/{id}

@@ -48,7 +48,10 @@ pub async fn get_oracle_feed(
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
     let symbol = path.into_inner();
-    let registry = state.oracle_registry.lock().unwrap();
+    let registry = state
+        .oracle_registry
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
 
     match registry.get_price(&symbol) {
         Ok(price) => {
@@ -79,7 +82,10 @@ pub async fn get_oracle_feed(
 #[get("/oracle/feeds")]
 pub async fn list_oracle_feeds(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
-    let registry = state.oracle_registry.lock().unwrap();
+    let registry = state
+        .oracle_registry
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let now = now_ms();
 
     let feeds: Vec<PriceFeedResponse> = registry
@@ -103,7 +109,10 @@ pub async fn list_oracle_feeds(state: web::Data<AppState>) -> ApiResult<HttpResp
 #[get("/oracle/nodes")]
 pub async fn list_oracle_nodes(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
-    let registry = state.oracle_registry.lock().unwrap();
+    let registry = state
+        .oracle_registry
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
 
     let nodes: Vec<_> = registry.nodes.values().cloned().collect();
     Ok(HttpResponse::Ok().json(ApiResponse::success(nodes, trace)))
@@ -113,7 +122,10 @@ pub async fn list_oracle_nodes(state: web::Data<AppState>) -> ApiResult<HttpResp
 #[get("/oracle/status")]
 pub async fn oracle_status(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
-    let registry = state.oracle_registry.lock().unwrap();
+    let registry = state
+        .oracle_registry
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let now = now_ms();
 
     let stale_count = registry

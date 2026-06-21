@@ -301,12 +301,12 @@ pub async fn store_get_credentials_by_issuer(
     Ok(HttpResponse::Ok().json(ApiResponse::success(creds, trace_id)))
 }
 
-/// GET /api/v1/store/credentials?limit=100&offset=0 — list credentials with pagination.
+/// GET /api/v1/store/credentials?page=1&limit=20 — list credentials (paginated).
 #[get("/store/credentials")]
 pub async fn store_list_credentials(
     state: web::Data<AppState>,
     req: HttpRequest,
-    query: web::Query<super::identity::PaginationQuery>,
+    query: web::Query<crate::api::pagination::PaginationParams>,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
     let _channel = channel_id_from_req(&req);
@@ -317,10 +317,16 @@ pub async fn store_list_credentials(
         .map_err(|e| ApiError::StorageError {
             reason: e.to_string(),
         })?;
-    let limit = query.limit.unwrap_or(100).min(1000);
-    let offset = query.offset.unwrap_or(0);
-    let page: Vec<_> = all.into_iter().skip(offset).take(limit).collect();
-    Ok(HttpResponse::Ok().json(ApiResponse::success(page, trace_id)))
+    let total = all.len();
+    let page: Vec<_> = all
+        .into_iter()
+        .skip(query.offset())
+        .take(query.limit())
+        .collect();
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        crate::api::pagination::PaginatedResponse::new(page, total, &query),
+        trace_id,
+    )))
 }
 
 #[cfg(test)]

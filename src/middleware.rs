@@ -114,6 +114,33 @@ impl RateLimitInfo {
 /// Maximum tracked IPs before evicting stale entries.
 const MAX_TRACKED_IPS: usize = 50_000;
 
+/// Returns adjusted rate limits for write-heavy endpoints (half the baseline).
+fn effective_limits(
+    config: &RateLimitConfig,
+    path: &str,
+    method: &actix_web::http::Method,
+) -> RateLimitConfig {
+    use actix_web::http::Method;
+    let is_write_heavy = matches!(*method, Method::POST | Method::PUT | Method::DELETE)
+        && (path.contains("/transactions")
+            || path.contains("/gateway")
+            || path.contains("/contracts")
+            || path.contains("/governance/proposals")
+            || path.contains("/chaincode")
+            || path.contains("/evm/deploy")
+            || path.contains("/mine"));
+
+    if is_write_heavy {
+        RateLimitConfig {
+            requests_per_second: (config.requests_per_second / 2).max(1),
+            requests_per_minute: (config.requests_per_minute / 2).max(1),
+            requests_per_hour: (config.requests_per_hour / 2).max(1),
+        }
+    } else {
+        config.clone()
+    }
+}
+
 pub struct RateLimitMiddleware {
     config: RateLimitConfig,
     limits: Arc<Mutex<HashMap<String, RateLimitInfo>>>,
@@ -198,9 +225,10 @@ where
             req.path()
         );
         let path = req.path().to_string();
+        let method = req.method().clone();
         let ip = RateLimitMiddleware::get_client_ip(&req);
         let limits = self.limits.clone();
-        let config = self.config.clone();
+        let config = effective_limits(&self.config, &path, &method);
         let fut = self.service.call(req);
 
         Box::pin(async move {
@@ -233,5 +261,73 @@ where
 
             fut.await
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::http::Method;
+
+    fn default_config() -> RateLimitConfig {
+        RateLimitConfig {
+            requests_per_second: 20,
+            requests_per_minute: 100,
+            requests_per_hour: 3000,
+        }
+    }
+
+    #[test]
+    fn effective_limits_read_path_gets_full_limits() {
+        let config = default_config();
+        let result = effective_limits(&config, "/api/v1/blocks", &Method::GET);
+        assert_eq!(result.requests_per_second, 20);
+        assert_eq!(result.requests_per_minute, 100);
+        assert_eq!(result.requests_per_hour, 3000);
+    }
+
+    #[test]
+    fn effective_limits_write_heavy_gets_half() {
+        let config = default_config();
+        let result = effective_limits(&config, "/api/v1/transactions", &Method::POST);
+        assert_eq!(result.requests_per_second, 10);
+        assert_eq!(result.requests_per_minute, 50);
+        assert_eq!(result.requests_per_hour, 1500);
+    }
+
+    #[test]
+    fn effective_limits_write_non_heavy_gets_full() {
+        let config = default_config();
+        let result = effective_limits(&config, "/api/v1/contact", &Method::POST);
+        assert_eq!(result.requests_per_second, 20);
+        assert_eq!(result.requests_per_minute, 100);
+        assert_eq!(result.requests_per_hour, 3000);
+    }
+
+    #[test]
+    fn effective_limits_gateway_is_write_heavy() {
+        let config = default_config();
+        let result = effective_limits(&config, "/api/v1/gateway/submit", &Method::POST);
+        assert_eq!(result.requests_per_second, 10);
+    }
+
+    #[test]
+    fn effective_limits_get_on_write_path_is_full() {
+        let config = default_config();
+        let result = effective_limits(&config, "/api/v1/transactions", &Method::GET);
+        assert_eq!(result.requests_per_second, 20);
+    }
+
+    #[test]
+    fn effective_limits_minimum_is_one() {
+        let config = RateLimitConfig {
+            requests_per_second: 1,
+            requests_per_minute: 1,
+            requests_per_hour: 1,
+        };
+        let result = effective_limits(&config, "/api/v1/transactions", &Method::POST);
+        assert_eq!(result.requests_per_second, 1);
+        assert_eq!(result.requests_per_minute, 1);
+        assert_eq!(result.requests_per_hour, 1);
     }
 }
