@@ -4,7 +4,7 @@
 //! - REST API endpoint definitions
 //! - Request/response serialization (JSON, binary)
 //! - Parameter validation and error formatting
-//! - JWT authentication and rate limiting
+//! - Rate limiting and access control (mTLS + ACL)
 //! - API versioning and backward compatibility
 
 pub mod cors;
@@ -28,38 +28,16 @@ pub struct ApiConfig {
     pub port: u16,
     pub rate_limit_per_minute: u32,
     pub max_request_size_bytes: usize,
-    /// Reserved for future JWT bearer-token middleware. Currently loaded at
-    /// startup and validated in production but **not used for request
-    /// authentication** — mTLS + ACL is the active auth mechanism.
-    pub jwt_secret: String,
 }
 
-/// Default JWT secret used only in development/test when `JWT_SECRET` is unset.
-const DEV_JWT_SECRET: &str = "change-me-in-production";
-
 impl ApiConfig {
-    /// Build config from environment. Panics if `JWT_SECRET` is missing or
-    /// matches the default value when `RUST_BC_ENV=production`.
+    /// Build config from environment.
     pub fn from_env() -> Self {
-        let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
-            log::warn!("JWT_SECRET not set — using insecure default (dev only)");
-            DEV_JWT_SECRET.to_string()
-        });
-
-        let env_mode = std::env::var("RUST_BC_ENV").unwrap_or_default();
-        if env_mode == "production" && jwt_secret == DEV_JWT_SECRET {
-            panic!(
-                "FATAL: JWT_SECRET must be set to a unique value in production. \
-                 Set RUST_BC_ENV=development to use the insecure default."
-            );
-        }
-
         Self {
             host: "127.0.0.1".to_string(),
             port: 8080,
             rate_limit_per_minute: 1000,
             max_request_size_bytes: 10 * 1024 * 1024,
-            jwt_secret,
         }
     }
 }

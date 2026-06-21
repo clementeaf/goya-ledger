@@ -78,7 +78,10 @@ impl ExternalChaincodeClient {
             state_context,
         };
 
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| ChaincodeError::Execution(format!("HTTP client error: {e}")))?;
         let resp = client
             .post(&url)
             .json(&body)

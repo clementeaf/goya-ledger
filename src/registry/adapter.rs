@@ -89,7 +89,10 @@ pub fn spawn_telemetry_poller(config: AdapterConfig, store: Arc<dyn BlockStore>)
             config.poll_interval_secs
         );
         let mut interval = time::interval(Duration::from_secs(config.poll_interval_secs));
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
 
         loop {
             interval.tick().await;

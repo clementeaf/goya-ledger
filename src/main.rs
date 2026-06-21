@@ -802,7 +802,18 @@ async fn async_main_inner() -> std::io::Result<()> {
         }),
         ordering_backend,
         world_state: Some(world_state.clone()),
-        audit_store: Some(Arc::new(crate::audit::MemoryAuditStore::new())),
+        audit_store: Some({
+            #[cfg(feature = "rocksdb-storage")]
+            if let Some(ref db) = shared_rocksdb {
+                db.clone() as Arc<dyn crate::audit::AuditStore>
+            } else {
+                Arc::new(crate::audit::MemoryAuditStore::new()) as Arc<dyn crate::audit::AuditStore>
+            }
+            #[cfg(not(feature = "rocksdb-storage"))]
+            {
+                Arc::new(crate::audit::MemoryAuditStore::new()) as Arc<dyn crate::audit::AuditStore>
+            }
+        }),
         proposal_store: Some(proposal_store),
         vote_store: Some(vote_store),
         param_registry: Some({

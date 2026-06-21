@@ -318,7 +318,9 @@ mod tests {
     }
 
     #[test]
-    fn test_from_env_with_specific_origins() {
+    fn test_from_env_parsing() {
+        // Test specific origins — set then clear to avoid polluting other tests.
+        // Run in a single test to avoid env var races with parallel test threads.
         std::env::set_var(
             "CORS_ALLOWED_ORIGINS",
             "https://app.example.com, https://admin.example.com",
@@ -327,11 +329,8 @@ mod tests {
         assert!(policy.is_origin_allowed("https://app.example.com"));
         assert!(policy.is_origin_allowed("https://admin.example.com"));
         assert!(!policy.is_origin_allowed("https://evil.com"));
-        std::env::remove_var("CORS_ALLOWED_ORIGINS");
-    }
 
-    #[test]
-    fn test_from_env_defaults_to_wildcard() {
+        // Test default (wildcard) when env var is absent.
         std::env::remove_var("CORS_ALLOWED_ORIGINS");
         let policy = CorsPolicy::from_env();
         assert!(policy.is_origin_allowed("https://anything.com"));

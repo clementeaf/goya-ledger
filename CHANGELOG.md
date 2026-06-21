@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-06-21
 
+**Residual risk elimination**
+
+- Wired audit store to RocksDB when `STORAGE_BACKEND=rocksdb` — audit entries now persist across restarts
+- Removed unused JWT_SECRET infrastructure (dead code — mTLS is the only auth mechanism)
+- Added 30s timeout to chaincode external HTTP calls, 10s to registry adapter and CouchDB client
+- Restricted `/pentest/report` and `/stress/report` endpoints to admin-only via ACL
+- Fixed flaky CORS env-var test (parallel test race condition)
+- Measured coverage baseline: 66% lines, 58% functions (unit tests only)
+
 **Production readiness hardening**
 
 Security & resilience:

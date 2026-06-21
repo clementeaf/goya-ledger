@@ -54,7 +54,7 @@ Environment variables control runtime behavior. See [`docs/api/configuration-gui
 
 Essential: `STORAGE_BACKEND`, `ACL_MODE`, `SIGNING_ALGORITHM`, `NETWORK_ID`, `API_PORT`, `P2P_PORT`.
 
-Production (`RUST_BC_ENV=production`): requires `TLS_CERT_PATH`/`TLS_KEY_PATH`, enforces `JWT_SECRET`, warns on `ACL_MODE=permissive`.
+Production (`RUST_BC_ENV=production`): requires `TLS_CERT_PATH`/`TLS_KEY_PATH`, warns on `ACL_MODE=permissive`. Audit log persists to RocksDB when `STORAGE_BACKEND=rocksdb`.
 
 Other: `CORS_ALLOWED_ORIGINS`, `LOG_FORMAT` (`json` for structured), `HTTP_REQUEST_TIMEOUT_SECS`, `MEMPOOL_MAX_SIZE`, `RATE_LIMIT_RPS/RPM/RPH`.
 

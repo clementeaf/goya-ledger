@@ -70,9 +70,8 @@ All configuration is via environment variables. No config files needed.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RUST_BC_ENV` | — | Set to `production` to enforce TLS and JWT secret |
+| `RUST_BC_ENV` | — | Set to `production` to enforce TLS |
 | `ACL_MODE` | `permissive` | `strict` (deny without mTLS identity) or `permissive` (log-only) |
-| `JWT_SECRET` | *(dev default)* | JWT signing secret (panics in production if unchanged) |
 | `CORS_ALLOWED_ORIGINS` | `*` | Comma-separated allowed origins (e.g. `https://app.example.com,https://admin.example.com`) |
 
 ### Production Security Requirements
@@ -80,11 +79,10 @@ All configuration is via environment variables. No config files needed.
 When `RUST_BC_ENV=production`:
 
 1. **TLS is mandatory** — the server will refuse to start without `TLS_CERT_PATH` and `TLS_KEY_PATH`.
-2. **JWT_SECRET must be changed** — the default development secret causes a panic.
-3. **ACL_MODE=strict recommended** — permissive mode logs a warning in production because `X-Org-Id` and `X-Msp-Role` headers are spoofable without mTLS.
-4. **CORS wildcard discouraged** — set `CORS_ALLOWED_ORIGINS` to specific domains. Wildcard `*` logs a warning in production.
+2. **ACL_MODE=strict recommended** — permissive mode logs a warning in production because `X-Org-Id` and `X-Msp-Role` headers are spoofable without mTLS.
+3. **CORS wildcard discouraged** — set `CORS_ALLOWED_ORIGINS` to specific domains. Wildcard `*` logs a warning in production.
 
-mTLS (`TLS_MUTUAL=true` + `TLS_CA_CERT_PATH`) is the only supported authentication mechanism for production. JWT bearer-token middleware is reserved for future use and is not active.
+mTLS (`TLS_MUTUAL=true` + `TLS_CA_CERT_PATH`) is the only supported authentication mechanism for production.
 
 ## Example: Production multi-node
 
