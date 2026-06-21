@@ -8,6 +8,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### 2026-06-21
 
+**Credential risk scoring, vault hardening, bridge API**
+
+Credential intelligence:
+- Extended `RiskInput` with 4 credential-specific fields: `issuer_verified`, `credential_count_by_issuer`, `credential_age_days`, `issuer_reputation`
+- Added 4 scoring rules: unverified issuer (+25), bulk issuance (+20), expired credential (+15), low reputation (+30)
+- Added `CredentialMill` pattern detection — flags DID issuers producing credentials above threshold
+
+Vault hardening:
+- Per-IP rate limiting on vault recovery (5 attempts per 5-minute window)
+- Explicit audit logging with `VaultOperation` action type and operation metadata
+- Vault secret fingerprint logged at startup for rotation verification
+- Recovery without configured secret returns proper error instead of generic 404
+
+Bridge API:
+- 5 new endpoints: `POST /bridge/transfer`, `POST /bridge/inbound`, `GET /bridge/transfer/{id}`, `GET /bridge/chains`, `GET /bridge/balances/{account}`
+- ACL-enforced (peer/Propose) for write operations
+- Validation via iterator-based pattern (no `if` statements)
+- Made `BridgeEngine::compute_message_id` public for handler use
+
 **Residual risk elimination**
 
 - Wired audit store to RocksDB when `STORAGE_BACKEND=rocksdb` — audit entries now persist across restarts

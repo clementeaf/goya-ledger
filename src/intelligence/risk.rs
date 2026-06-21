@@ -28,6 +28,20 @@ pub struct RiskInput {
     pub watchlisted: bool,
     /// Age of identity in days.
     pub identity_age_days: u32,
+
+    // ── Credential-specific fields (all optional for backward compat) ──
+    /// Whether the credential issuer is verified.
+    #[serde(default)]
+    pub issuer_verified: Option<bool>,
+    /// Number of credentials issued by the same issuer.
+    #[serde(default)]
+    pub credential_count_by_issuer: Option<u32>,
+    /// Age of the credential in days.
+    #[serde(default)]
+    pub credential_age_days: Option<u32>,
+    /// Issuer reputation score (0–100).
+    #[serde(default)]
+    pub issuer_reputation: Option<u32>,
 }
 
 /// Result of risk evaluation.
@@ -179,6 +193,56 @@ impl RiskEngine {
             }
         }
 
+        // ── Credential-specific rules (functional composition) ──────────
+
+        input
+            .issuer_verified
+            .filter(|&verified| !verified)
+            .inspect(|_| {
+                score += 25;
+                factors.push(RiskFactor {
+                    rule: "unverified_issuer".into(),
+                    points: 25,
+                    detail: "Credential issuer is not verified".into(),
+                });
+            });
+
+        input
+            .credential_count_by_issuer
+            .filter(|&count| count > 10)
+            .inspect(|&count| {
+                score += 20;
+                factors.push(RiskFactor {
+                    rule: "bulk_issuance".into(),
+                    points: 20,
+                    detail: format!("Issuer has {count} credentials (threshold: 10)"),
+                });
+            });
+
+        input
+            .credential_age_days
+            .filter(|&age| age > 365)
+            .inspect(|&age| {
+                score += 15;
+                factors.push(RiskFactor {
+                    rule: "credential_expired".into(),
+                    points: 15,
+                    detail: format!("Credential is {age} days old (threshold: 365)"),
+                });
+            });
+
+        input
+            .issuer_reputation
+            .filter(|&rep| rep < 30)
+            .inspect(|&rep| {
+                score += 30;
+                factors.push(RiskFactor {
+                    rule: "low_issuer_reputation".into(),
+                    points: 30,
+                    detail: format!("Issuer reputation {rep}/100 (threshold: 30)"),
+                });
+            });
+
         let (med, high, crit) = self.config.thresholds;
         let level = if score >= crit {
             RiskLevel::Critical
@@ -220,6 +284,10 @@ mod tests {
             kyc_verified: true,
             watchlisted: false,
             identity_age_days: 365,
+            issuer_verified: None,
+            credential_count_by_issuer: None,
+            credential_age_days: None,
+            issuer_reputation: None,
         }
     }
 
@@ -324,6 +392,124 @@ mod tests {
         input.watchlisted = true;
         let r = engine.evaluate(&input);
         assert!(r.recommendation.contains("Block"));
+    }
+
+    // ── Credential-specific rule tests ──────────────────────────────
+
+    #[test]
+    fn unverified_issuer_adds_25_points() {
+        let engine = RiskEngine::with_defaults();
+        let mut input = clean_input();
+        input.issuer_verified = Some(false);
+        let result = engine.evaluate(&input);
+        assert!(result.factors.iter().any(|f| f.rule == "unverified_issuer"));
+        assert_eq!(
+            result
+                .factors
+                .iter()
+                .find(|f| f.rule == "unverified_issuer")
+                .unwrap()
+                .points,
+            25
+        );
+    }
+
+    #[test]
+    fn verified_issuer_adds_no_points() {
+        let engine = RiskEngine::with_defaults();
+        let mut input = clean_input();
+        input.issuer_verified = Some(true);
+        let result = engine.evaluate(&input);
+        assert!(!result.factors.iter().any(|f| f.rule == "unverified_issuer"));
+    }
+
+    #[test]
+    fn bulk_issuance_adds_20_points() {
+        let engine = RiskEngine::with_defaults();
+        let mut input = clean_input();
+        input.credential_count_by_issuer = Some(15);
+        let result = engine.evaluate(&input);
+        assert!(result.factors.iter().any(|f| f.rule == "bulk_issuance"));
+        assert_eq!(
+            result
+                .factors
+                .iter()
+                .find(|f| f.rule == "bulk_issuance")
+                .unwrap()
+                .points,
+            20
+        );
+    }
+
+    #[test]
+    fn credential_expired_adds_15_points() {
+        let engine = RiskEngine::with_defaults();
+        let mut input = clean_input();
+        input.credential_age_days = Some(500);
+        let result = engine.evaluate(&input);
+        assert!(result
+            .factors
+            .iter()
+            .any(|f| f.rule == "credential_expired"));
+        assert_eq!(
+            result
+                .factors
+                .iter()
+                .find(|f| f.rule == "credential_expired")
+                .unwrap()
+                .points,
+            15
+        );
+    }
+
+    #[test]
+    fn low_issuer_reputation_adds_30_points() {
+        let engine = RiskEngine::with_defaults();
+        let mut input = clean_input();
+        input.issuer_reputation = Some(10);
+        let result = engine.evaluate(&input);
+        assert!(result
+            .factors
+            .iter()
+            .any(|f| f.rule == "low_issuer_reputation"));
+        assert_eq!(
+            result
+                .factors
+                .iter()
+                .find(|f| f.rule == "low_issuer_reputation")
+                .unwrap()
+                .points,
+            30
+        );
+    }
+
+    #[test]
+    fn credential_fields_none_skips_rules() {
+        let engine = RiskEngine::with_defaults();
+        let result = engine.evaluate(&clean_input());
+        let credential_rules = [
+            "unverified_issuer",
+            "bulk_issuance",
+            "credential_expired",
+            "low_issuer_reputation",
+        ];
+        assert!(result
+            .factors
+            .iter()
+            .all(|f| !credential_rules.contains(&f.rule.as_str())));
+    }
+
+    #[test]
+    fn combined_credential_risk_reaches_critical() {
+        let engine = RiskEngine::with_defaults();
+        let mut input = clean_input();
+        input.issuer_verified = Some(false); // +25
+        input.credential_count_by_issuer = Some(50); // +20
+        input.issuer_reputation = Some(5); // +30
+        input.credential_age_days = Some(730); // +15
+        let result = engine.evaluate(&input);
+        assert_eq!(result.score, 90);
+        assert_eq!(result.level, RiskLevel::Critical);
     }
 
     #[test]

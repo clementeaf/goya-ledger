@@ -56,7 +56,11 @@ Essential: `STORAGE_BACKEND`, `ACL_MODE`, `SIGNING_ALGORITHM`, `NETWORK_ID`, `AP
 
 Production (`RUST_BC_ENV=production`): requires `TLS_CERT_PATH`/`TLS_KEY_PATH`, warns on `ACL_MODE=permissive`. Audit log persists to RocksDB when `STORAGE_BACKEND=rocksdb`.
 
-Other: `CORS_ALLOWED_ORIGINS`, `LOG_FORMAT` (`json` for structured), `HTTP_REQUEST_TIMEOUT_SECS`, `MEMPOOL_MAX_SIZE`, `RATE_LIMIT_RPS/RPM/RPH`.
+Other: `CORS_ALLOWED_ORIGINS`, `LOG_FORMAT` (`json` for structured), `HTTP_REQUEST_TIMEOUT_SECS`, `MEMPOOL_MAX_SIZE`, `RATE_LIMIT_RPS/RPM/RPH`, `VAULT_RECOVERY_SECRET`.
+
+## Bridge
+
+Cross-chain transfers via `src/bridge/`. API endpoints under `/api/v1/bridge/`. Engine in `AppState.bridge_engine`. Escrow lifecycle: lock → release (outbound), verify proof → mint (inbound). Merkle proof verification via SHA-256.
 
 ## Deployment
 

@@ -47,6 +47,8 @@ pub enum AuditAction {
     ProposalSubmitted,
     /// A vote was cast on a proposal.
     ProposalVoted,
+    /// A vault operation (store, get, recover).
+    VaultOperation,
 }
 
 impl std::fmt::Display for AuditAction {

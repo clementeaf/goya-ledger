@@ -38,6 +38,12 @@ pub enum PatternType {
     RoundTrip { a: String, b: String, amount: u64 },
     /// Account inactive for a long period, then sudden activity.
     DormantActivation { identity: String, dormant_days: u64 },
+    /// Issuer producing credentials at abnormal volume (credential mill).
+    CredentialMill {
+        issuer: String,
+        count: usize,
+        window_hours: u64,
+    },
 }
 
 /// A detected pattern with metadata.
@@ -60,6 +66,8 @@ pub struct PatternEngine {
     pub structuring_min_count: usize,
     /// Dormancy: days of inactivity before activation is suspicious.
     pub dormancy_days: u64,
+    /// Credential mill: max issuances from a single DID issuer before flagging.
+    pub credential_mill_threshold: usize,
 }
 
 impl Default for PatternEngine {
@@ -71,6 +79,7 @@ impl Default for PatternEngine {
             structuring_margin_pct: 10,
             structuring_min_count: 3,
             dormancy_days: 90,
+            credential_mill_threshold: 10,
         }
     }
 }
@@ -88,6 +97,7 @@ impl PatternEngine {
         results.extend(self.detect_structuring(transactions));
         results.extend(self.detect_round_trips(transactions));
         results.extend(self.detect_dormant_activation(transactions));
+        results.extend(self.detect_credential_mill(transactions));
 
         results
     }
@@ -197,6 +207,33 @@ impl PatternEngine {
         }
 
         results
+    }
+
+    /// Detect credential mills — DID issuers producing credentials at abnormal volume.
+    ///
+    /// Only considers transactions where the sender is a DID (`did:` prefix).
+    /// Groups by issuer and flags those exceeding `credential_mill_threshold`.
+    fn detect_credential_mill(&self, txs: &[TxRecord]) -> Vec<DetectedPattern> {
+        txs.iter()
+            .filter(|tx| tx.from.starts_with("did:"))
+            .fold(HashMap::<&str, Vec<&TxRecord>>::new(), |mut acc, tx| {
+                acc.entry(tx.from.as_str()).or_default().push(tx);
+                acc
+            })
+            .into_iter()
+            .filter(|(_, issuer_txs)| issuer_txs.len() > self.credential_mill_threshold)
+            .map(|(issuer, issuer_txs)| DetectedPattern {
+                pattern: PatternType::CredentialMill {
+                    issuer: issuer.to_string(),
+                    count: issuer_txs.len(),
+                    window_hours: 24,
+                },
+                confidence: (issuer_txs.len() as f64 / self.credential_mill_threshold as f64)
+                    .min(1.0),
+                tx_ids: issuer_txs.iter().map(|t| t.tx_id.clone()).collect(),
+                detected_at: issuer_txs.iter().map(|t| t.timestamp).max().unwrap_or(0),
+            })
+            .collect()
     }
 
     /// Detect dormant account activation.
@@ -340,6 +377,70 @@ mod tests {
         assert!(results
             .iter()
             .any(|r| matches!(r.pattern, PatternType::DormantActivation { .. })));
+    }
+
+    // ── Credential mill tests ──────────────────────────────────────
+
+    #[test]
+    fn detects_credential_mill_high_volume_issuer() {
+        let mut engine = PatternEngine::new();
+        engine.credential_mill_threshold = 3;
+
+        let txs: Vec<TxRecord> = (0..5)
+            .map(|i| {
+                tx(
+                    &format!("c{i}"),
+                    "did:goya:university",
+                    &format!("student{i}"),
+                    1,
+                    100 + i,
+                )
+            })
+            .collect();
+
+        let results = engine.analyze(&txs);
+        assert!(results.iter().any(
+            |r| matches!(r.pattern, PatternType::CredentialMill { ref issuer, count, .. }
+                if issuer == "did:goya:university" && count == 5)
+        ));
+    }
+
+    #[test]
+    fn credential_mill_below_threshold_not_flagged() {
+        let mut engine = PatternEngine::new();
+        engine.credential_mill_threshold = 10;
+
+        let txs: Vec<TxRecord> = (0..5)
+            .map(|i| {
+                tx(
+                    &format!("c{i}"),
+                    "did:goya:university",
+                    &format!("student{i}"),
+                    1,
+                    100 + i,
+                )
+            })
+            .collect();
+
+        let results = engine.analyze(&txs);
+        assert!(!results
+            .iter()
+            .any(|r| matches!(r.pattern, PatternType::CredentialMill { .. })));
+    }
+
+    #[test]
+    fn credential_mill_ignores_non_did_senders() {
+        let mut engine = PatternEngine::new();
+        engine.credential_mill_threshold = 2;
+
+        let txs: Vec<TxRecord> = (0..10)
+            .map(|i| tx(&format!("c{i}"), "alice", &format!("bob{i}"), 1, 100 + i))
+            .collect();
+
+        let results = engine.analyze(&txs);
+        assert!(!results
+            .iter()
+            .any(|r| matches!(r.pattern, PatternType::CredentialMill { .. })));
     }
 
     #[test]

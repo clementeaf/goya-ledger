@@ -191,6 +191,10 @@ pub fn stress_risk(ops: u64) -> ModuleStressResult {
         kyc_verified: true,
         watchlisted: false,
         identity_age_days: 100,
+        issuer_verified: None,
+        credential_count_by_issuer: None,
+        credential_age_days: None,
+        issuer_reputation: None,
     };
 
     let mut latencies = Vec::with_capacity(ops as usize);

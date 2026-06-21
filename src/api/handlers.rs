@@ -6,6 +6,7 @@ pub mod alias;
 pub mod audit;
 pub mod billing;
 pub mod blocks;
+pub mod bridge;
 pub mod chain;
 pub mod chaincode;
 pub mod channels;

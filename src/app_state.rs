@@ -101,6 +101,10 @@ pub struct AppState {
     /// HMAC secret for vault recovery blind indexing (NIST SP 800-185).
     /// Recovery is disabled when this is `None`.
     pub vault_recovery_secret: Option<Vec<u8>>,
+    /// Per-IP rate limiter for vault recovery attempts.
+    pub vault_rate_limiter: Arc<crate::api::handlers::vault::RecoveryRateLimiter>,
+    /// Cross-chain bridge engine.
+    pub bridge_engine: Arc<crate::bridge::protocol::BridgeEngine>,
     /// Pluggable proof verifier for zkML inference claims.
     pub proof_verifier: Arc<dyn crate::inference::proof::ProofVerifier>,
 }
@@ -164,6 +168,8 @@ impl AppState {
                 crate::transaction::mempool::TransactionPool::new(),
             )),
             vault_recovery_secret: None,
+            vault_rate_limiter: Arc::new(crate::api::handlers::vault::RecoveryRateLimiter::new()),
+            bridge_engine: Arc::new(crate::bridge::protocol::BridgeEngine::new()),
             proof_verifier: Arc::new(crate::inference::proof::MultiVerifier::new()),
         }
     }

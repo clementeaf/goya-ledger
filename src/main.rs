@@ -7,6 +7,7 @@ mod app_state;
 mod audit;
 mod billing;
 mod block_creation;
+mod bridge;
 mod cache;
 mod chaincode;
 mod channel;
@@ -852,8 +853,22 @@ async fn async_main_inner() -> std::io::Result<()> {
             .ok()
             .filter(|s| !s.is_empty())
             .map(|s| hex::decode(s.as_str()).unwrap_or_else(|_| s.into_bytes())),
+        vault_rate_limiter: Arc::new(crate::api::handlers::vault::RecoveryRateLimiter::new()),
+        bridge_engine: Arc::new(crate::bridge::protocol::BridgeEngine::new()),
         proof_verifier: Arc::new(inference::proof::MultiVerifier::new()),
     };
+
+    // Log vault recovery secret fingerprint for rotation verification.
+    app_state.vault_recovery_secret.as_ref().inspect(|secret| {
+        pqc_crypto_module::api::sha3_256(secret)
+            .inspect(|hash| {
+                log::info!(
+                    "Vault recovery secret fingerprint: {}...",
+                    &hash.to_hex()[..16]
+                );
+            })
+            .ok();
+    });
 
     // Telemetry adapter: polls external APIs and ingests into Asset Registry.
     // Activated by TELEMETRY_SOURCE_URL env var.

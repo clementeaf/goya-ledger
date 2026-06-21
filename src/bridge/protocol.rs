@@ -230,7 +230,12 @@ impl BridgeEngine {
         *seq
     }
 
-    fn compute_message_id(sender: &str, recipient: &str, amount: u64, sequence: u64) -> MessageId {
+    pub fn compute_message_id(
+        sender: &str,
+        recipient: &str,
+        amount: u64,
+        sequence: u64,
+    ) -> MessageId {
         use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(sender.as_bytes());

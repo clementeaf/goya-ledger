@@ -13,6 +13,86 @@ use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+const MAX_RECOVERY_ATTEMPTS: u32 = 5;
+const RECOVERY_WINDOW: Duration = Duration::from_secs(300);
+
+/// Per-IP rate limiter for vault recovery attempts (brute-force protection).
+pub struct RecoveryRateLimiter {
+    attempts: Mutex<HashMap<String, (u32, Instant)>>,
+}
+
+impl RecoveryRateLimiter {
+    pub fn new() -> Self {
+        Self {
+            attempts: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Record an attempt from `ip`. Returns `false` when the limit is exceeded.
+    pub fn check(&self, ip: &str) -> bool {
+        let mut map = self.attempts.lock().unwrap_or_else(|e| e.into_inner());
+        let now = Instant::now();
+        match map.get_mut(ip) {
+            Some((count, window_start)) => {
+                match now.duration_since(*window_start) > RECOVERY_WINDOW {
+                    true => {
+                        *count = 1;
+                        *window_start = now;
+                        true
+                    }
+                    false => match *count >= MAX_RECOVERY_ATTEMPTS {
+                        true => false,
+                        false => {
+                            *count += 1;
+                            true
+                        }
+                    },
+                }
+            }
+            None => {
+                map.insert(ip.to_string(), (1, now));
+                true
+            }
+        }
+    }
+}
+
+impl Default for RecoveryRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Fire-and-forget vault audit entry.
+fn emit_vault_audit(state: &AppState, operation: &str, did: &str, trace: &str, req: &HttpRequest) {
+    state.audit_store.as_ref().inspect(|store| {
+        let entry = crate::audit::AuditEntry {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            action: crate::audit::AuditAction::VaultOperation,
+            method: req.method().to_string(),
+            path: req.path().to_string(),
+            org_id: req
+                .headers()
+                .get("X-Org-Id")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string(),
+            source_ip: req
+                .peer_addr()
+                .map(|a| a.ip().to_string())
+                .unwrap_or_default(),
+            status_code: 200,
+            trace_id: trace.to_string(),
+            duration_ms: 0,
+            metadata: Some(serde_json::json!({ "operation": operation, "did": did }).to_string()),
+        };
+        store.append(&entry).ok();
+    });
+}
 
 fn err_dto(msg: &str) -> ErrorDto {
     ErrorDto {
@@ -94,6 +174,8 @@ pub async fn vault_store(
         // If VAULT_RECOVERY_SECRET is not set, silently ignore recovery_key
     }
 
+    emit_vault_audit(&state, "store", &body.did, &trace, &req);
+
     Ok(HttpResponse::Ok().json(ApiResponse::success(
         serde_json::json!({ "did": body.did }),
         trace,
@@ -117,15 +199,18 @@ pub async fn vault_get(
     let store = get_channel_store(&state, channel)?;
 
     match store.read_vault(&did) {
-        Ok(encrypted_wallet) => Ok(HttpResponse::Ok().json(ApiResponse::success(
-            serde_json::json!({
-                "did": did,
-                "encrypted_wallet": encrypted_wallet,
-            }),
-            trace,
-        ))),
+        Ok(encrypted_wallet) => {
+            emit_vault_audit(&state, "get", &did, &trace, &req);
+            Ok(HttpResponse::Ok().json(ApiResponse::success(
+                serde_json::json!({
+                    "did": did,
+                    "encrypted_wallet": encrypted_wallet,
+                }),
+                trace,
+            )))
+        }
         Err(_) => Ok(HttpResponse::NotFound().json(ApiResponse::<()>::error(
-            err_dto(&format!("vault entry not found: {did}")),
+            err_dto("vault entry not found"),
             404,
         ))),
     }
@@ -140,26 +225,40 @@ pub async fn vault_recover(
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
 
-    // Require VAULT_RECOVERY_SECRET
-    let secret = match state.vault_recovery_secret {
-        Some(ref s) => s,
-        None => {
-            return Ok(HttpResponse::NotFound().json(ApiResponse::<()>::error(
-                err_dto("vault recovery is not enabled on this node"),
-                404,
-            )));
-        }
-    };
-
-    // Validate recovery_key format: exactly 64 hex chars (32 bytes)
-    if body.recovery_key.len() != 64 || hex::decode(&body.recovery_key).is_err() {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto("recovery_key must be exactly 64 hex characters (32 bytes)"),
-            400,
-        )));
+    // Rate limit recovery attempts per IP
+    let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_default();
+    match state.vault_rate_limiter.check(&ip) {
+        true => {}
+        false => return Err(crate::api::errors::ApiError::RateLimited),
     }
 
-    let recovery_key_bytes = hex::decode(&body.recovery_key).unwrap_or_default();
+    // Require VAULT_RECOVERY_SECRET
+    let secret = state.vault_recovery_secret.as_ref().ok_or_else(|| {
+        crate::api::errors::ApiError::InternalError {
+            reason: "vault recovery not configured".into(),
+        }
+    })?;
+
+    // Validate recovery_key format: exactly 64 hex chars (32 bytes)
+    let recovery_key_bytes = hex::decode(&body.recovery_key).map_err(|_| {
+        crate::api::errors::ApiError::ValidationError {
+            field: "recovery_key".into(),
+            reason: "recovery_key must be exactly 64 hex characters (32 bytes)".into(),
+        }
+    })?;
+    match recovery_key_bytes.len() {
+        32 => {}
+        _ => {
+            return Err(crate::api::errors::ApiError::ValidationError {
+                field: "recovery_key".into(),
+                reason: "recovery_key must be exactly 64 hex characters (32 bytes)".into(),
+            });
+        }
+    }
+
     let idx = blind_index(secret, &recovery_key_bytes).map_err(|e| {
         crate::api::errors::ApiError::StorageError {
             reason: e.to_string(),
@@ -182,13 +281,16 @@ pub async fn vault_recover(
 
     // Fetch the encrypted wallet by DID
     match store.read_vault(&did) {
-        Ok(encrypted_wallet) => Ok(HttpResponse::Ok().json(ApiResponse::success(
-            serde_json::json!({
-                "did": did,
-                "encrypted_wallet": encrypted_wallet,
-            }),
-            trace,
-        ))),
+        Ok(encrypted_wallet) => {
+            emit_vault_audit(&state, "recover", &did, &trace, &req);
+            Ok(HttpResponse::Ok().json(ApiResponse::success(
+                serde_json::json!({
+                    "did": did,
+                    "encrypted_wallet": encrypted_wallet,
+                }),
+                trace,
+            )))
+        }
         Err(_) => Ok(HttpResponse::NotFound().json(ApiResponse::<()>::error(
             err_dto("vault entry not found for recovered DID"),
             404,
@@ -213,5 +315,30 @@ mod tests {
         let a = blind_index(b"secret1", b"recovery").unwrap();
         let b = blind_index(b"secret2", b"recovery").unwrap();
         assert_ne!(a, b);
+    }
+
+    #[test]
+    fn recovery_rate_limiter_allows_under_threshold() {
+        let limiter = RecoveryRateLimiter::new();
+        (0..MAX_RECOVERY_ATTEMPTS).for_each(|_| assert!(limiter.check("10.0.0.1")));
+    }
+
+    #[test]
+    fn recovery_rate_limiter_blocks_after_threshold() {
+        let limiter = RecoveryRateLimiter::new();
+        (0..MAX_RECOVERY_ATTEMPTS).for_each(|_| {
+            let _ = limiter.check("10.0.0.2");
+        });
+        assert!(!limiter.check("10.0.0.2"));
+    }
+
+    #[test]
+    fn recovery_rate_limiter_independent_per_ip() {
+        let limiter = RecoveryRateLimiter::new();
+        (0..MAX_RECOVERY_ATTEMPTS).for_each(|_| {
+            let _ = limiter.check("10.0.0.3");
+        });
+        assert!(limiter.check("10.0.0.4")); // Different IP still allowed
+        assert!(!limiter.check("10.0.0.3")); // Original IP blocked
     }
 }

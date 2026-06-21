@@ -3,7 +3,7 @@ use actix_web::{web, Scope};
 #[cfg(feature = "evm")]
 use crate::api::handlers::evm;
 use crate::api::handlers::{
-    acl, airdrop, alias, audit, billing, blocks, chain, chaincode, channels, compliance,
+    acl, airdrop, alias, audit, billing, blocks, bridge, chain, chaincode, channels, compliance,
     compliance_auto, contact, contracts, credentials, discovery, events, forensic, gateway,
     governance, governance_entities, identity, inference, intelligence, interop, invitations,
     legal_oracle, msp, network, notarize, oracle, organizations, pentest, pin, private_data,
@@ -213,6 +213,12 @@ impl ApiRoutes {
         cfg.service(vault::vault_store)
             .service(vault::vault_get)
             .service(vault::vault_recover);
+        // Bridge (cross-chain transfers)
+        cfg.service(bridge::initiate_transfer)
+            .service(bridge::process_inbound)
+            .service(bridge::get_transfer_status)
+            .service(bridge::list_chains)
+            .service(bridge::get_balances);
         // Inference (Optimistic ML Oracle)
         cfg.service(inference::submit_inference)
             .service(inference::submit_proven)
