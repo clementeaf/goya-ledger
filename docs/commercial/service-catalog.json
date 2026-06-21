@@ -1,0 +1,328 @@
+{
+  "services": [
+    {
+      "slug": "notarization",
+      "name": "Notarizacion Digital",
+      "tagline": "Prueba de existencia inmutable para cualquier documento",
+      "icon": "shield-check",
+      "tiers": ["starter", "business", "enterprise"],
+      "endpoints": [
+        { "method": "POST", "path": "/api/v1/notarize", "description": "Registrar hash de documento" },
+        { "method": "GET", "path": "/api/v1/notarize/verify/{hash}", "description": "Verificar existencia por hash" },
+        { "method": "GET", "path": "/api/v1/notarize/{id}", "description": "Obtener notarizacion por ID" },
+        { "method": "GET", "path": "/api/v1/notarize", "description": "Listar notarizaciones" }
+      ],
+      "use_cases": [
+        "Propiedad intelectual y patentes",
+        "Contratos y acuerdos legales",
+        "Cadena de custodia forense",
+        "Certificacion de titulos academicos",
+        "Registros notariales digitales"
+      ],
+      "features": [
+        "Registro de hash con firma Ed25519 o ML-DSA-65",
+        "Verificacion instantanea por hash",
+        "Timestamp inmutable en bloque",
+        "Metadata asociada",
+        "Deteccion de duplicados"
+      ]
+    },
+    {
+      "slug": "identity",
+      "name": "Identidad Descentralizada",
+      "tagline": "Identidades W3C DID con credenciales verificables",
+      "icon": "fingerprint",
+      "tiers": ["starter", "business", "enterprise"],
+      "endpoints": [
+        { "method": "POST", "path": "/api/v1/identity", "description": "Crear identidad DID" },
+        { "method": "GET", "path": "/api/v1/identity/{did}", "description": "Resolver identidad" },
+        { "method": "GET", "path": "/api/v1/identity", "description": "Listar identidades" },
+        { "method": "POST", "path": "/api/v1/store/credential", "description": "Almacenar credencial" },
+        { "method": "GET", "path": "/api/v1/store/credential/{id}", "description": "Obtener credencial" },
+        { "method": "GET", "path": "/api/v1/store/credentials", "description": "Listar credenciales" },
+        { "method": "GET", "path": "/api/v1/credentials/issuer/{did}", "description": "Credenciales por emisor" },
+        { "method": "POST", "path": "/api/v1/zkp/prove", "description": "Generar ZK proof" },
+        { "method": "POST", "path": "/api/v1/zkp/verify", "description": "Verificar ZK proof" }
+      ],
+      "use_cases": [
+        "Titulos universitarios verificables",
+        "Certificaciones profesionales",
+        "Licencias y permisos",
+        "Onboarding KYC/AML",
+        "Identidad digital soberana"
+      ],
+      "features": [
+        "Estandar W3C DID",
+        "Verifiable Credentials (VC Data Model 2.0)",
+        "ZK proofs para divulgacion selectiva",
+        "Alias con revocacion de 15 dias",
+        "Interoperabilidad JSON-LD"
+      ]
+    },
+    {
+      "slug": "governance",
+      "name": "Gobernanza On-Chain",
+      "tagline": "Votacion transparente y trazable en blockchain",
+      "icon": "vote",
+      "tiers": ["business", "enterprise"],
+      "endpoints": [
+        { "method": "POST", "path": "/api/v1/governance/proposals", "description": "Crear propuesta" },
+        { "method": "GET", "path": "/api/v1/governance/proposals", "description": "Listar propuestas" },
+        { "method": "GET", "path": "/api/v1/governance/proposals/{id}", "description": "Obtener propuesta" },
+        { "method": "POST", "path": "/api/v1/governance/proposals/{id}/vote", "description": "Votar" },
+        { "method": "POST", "path": "/api/v1/governance/proposals/{id}/delegate", "description": "Delegar voto" },
+        { "method": "POST", "path": "/api/v1/governance/proposals/{id}/veto", "description": "Vetar" },
+        { "method": "POST", "path": "/api/v1/governance/proposals/{id}/tally", "description": "Contar votos" },
+        { "method": "POST", "path": "/api/v1/governance/proposals/{id}/close", "description": "Cerrar propuesta" }
+      ],
+      "use_cases": [
+        "Juntas directivas y asambleas",
+        "Votaciones corporativas",
+        "Cooperativas y DAOs",
+        "Presupuestos participativos",
+        "Elecciones de representantes"
+      ],
+      "features": [
+        "Propuestas con deposito y timelock",
+        "Votacion delegada (DPoS)",
+        "Voto ciego para privacidad",
+        "Veto y cancelacion",
+        "Entidades: scopes, asambleas, sesiones, actas"
+      ]
+    },
+    {
+      "slug": "assets",
+      "name": "Registro de Activos y Tokenizacion",
+      "tagline": "Registro on-chain con trazabilidad completa",
+      "icon": "cube",
+      "tiers": ["business", "enterprise"],
+      "endpoints": [
+        { "method": "POST", "path": "/api/v1/registry/assets", "description": "Registrar activo" },
+        { "method": "GET", "path": "/api/v1/registry/assets", "description": "Listar activos" },
+        { "method": "GET", "path": "/api/v1/registry/assets/{id}", "description": "Obtener activo" },
+        { "method": "GET", "path": "/api/v1/registry/assets/{id}/events", "description": "Historial" },
+        { "method": "POST", "path": "/api/v1/tokenization/mint", "description": "Crear token" },
+        { "method": "POST", "path": "/api/v1/tokenization/transfer", "description": "Transferir" },
+        { "method": "POST", "path": "/api/v1/tokenization/burn", "description": "Destruir token" },
+        { "method": "POST", "path": "/api/v1/compliance/check", "description": "Verificar compliance" }
+      ],
+      "use_cases": [
+        "Bienes raices tokenizados",
+        "Arte y coleccionables",
+        "Commodities",
+        "Instrumentos financieros",
+        "Inventario y supply chain"
+      ],
+      "features": [
+        "Registro con metadata extensible",
+        "Historial de eventos inmutable",
+        "Tokenizacion RWA",
+        "Compliance: ISO 4217, ISO 20022, ERC-3643",
+        "Motor de reglas configurable"
+      ]
+    },
+    {
+      "slug": "contracts",
+      "name": "Smart Contracts",
+      "tagline": "Dos motores: WebAssembly y EVM",
+      "icon": "code",
+      "tiers": ["enterprise"],
+      "endpoints": [
+        { "method": "POST", "path": "/api/v1/chaincode/install", "description": "Instalar chaincode Wasm" },
+        { "method": "POST", "path": "/api/v1/chaincode/invoke", "description": "Invocar funcion" },
+        { "method": "POST", "path": "/api/v1/chaincode/query", "description": "Consultar estado" },
+        { "method": "POST", "path": "/api/v1/evm/deploy", "description": "Desplegar Solidity" },
+        { "method": "POST", "path": "/api/v1/evm/call", "description": "Ejecutar (mutante)" },
+        { "method": "POST", "path": "/api/v1/evm/static-call", "description": "Consultar (lectura)" },
+        { "method": "GET", "path": "/api/v1/evm/contracts", "description": "Listar contratos" }
+      ],
+      "use_cases": [
+        "Supply chain automatizado",
+        "Acuerdos multilaterales",
+        "Escrow y pagos condicionados",
+        "Programas de lealtad",
+        "Automatizacion empresarial"
+      ],
+      "features": [
+        "Chaincode Rust/WebAssembly con SDK",
+        "Compatibilidad EVM (Solidity)",
+        "Politicas de endoso multi-org",
+        "Ciclo de vida: install, instantiate, upgrade",
+        "ERC-20 y ERC-721 preconfigurados"
+      ]
+    },
+    {
+      "slug": "network",
+      "name": "Red Multi-Organizacion",
+      "tagline": "Infraestructura permisionada para consorcios",
+      "icon": "network",
+      "tiers": ["enterprise"],
+      "endpoints": [
+        { "method": "POST", "path": "/api/v1/channels", "description": "Crear canal" },
+        { "method": "GET", "path": "/api/v1/channels", "description": "Listar canales" },
+        { "method": "POST", "path": "/api/v1/organizations", "description": "Registrar organizacion" },
+        { "method": "GET", "path": "/api/v1/organizations", "description": "Listar organizaciones" },
+        { "method": "POST", "path": "/api/v1/gateway/submit", "description": "Transaccion via gateway" },
+        { "method": "GET", "path": "/api/v1/network/peers", "description": "Listar peers" }
+      ],
+      "use_cases": [
+        "Consorcios empresariales",
+        "Supply chain multi-empresa",
+        "Redes inter-bancarias",
+        "Salud inter-institucional",
+        "Registros publicos compartidos"
+      ],
+      "features": [
+        "Canales privados",
+        "Datos privados con P2P selectivo",
+        "ACL por rol y organizacion",
+        "Raft ordering tolerante a fallas",
+        "mTLS entre nodos",
+        "Gateway endorse-order-commit"
+      ]
+    },
+    {
+      "slug": "audit",
+      "name": "Auditoria y Compliance",
+      "tagline": "Trazabilidad completa para reguladores",
+      "icon": "clipboard-check",
+      "tiers": ["starter", "business", "enterprise"],
+      "endpoints": [
+        { "method": "GET", "path": "/api/v1/audit/requests", "description": "Consultar audit log" },
+        { "method": "GET", "path": "/api/v1/audit/export", "description": "Exportar CSV" },
+        { "method": "GET", "path": "/api/v1/chain/verify", "description": "Verificar integridad" },
+        { "method": "POST", "path": "/api/v1/intelligence/risk", "description": "Evaluar riesgo" },
+        { "method": "POST", "path": "/api/v1/intelligence/anomaly", "description": "Detectar anomalias" },
+        { "method": "POST", "path": "/api/v1/intelligence/patterns", "description": "Detectar patrones" }
+      ],
+      "use_cases": [
+        "Auditorias regulatorias",
+        "FIPS compliance",
+        "Deteccion de fraude en credenciales",
+        "Monitoreo AML/KYC",
+        "Due diligence automatizado"
+      ],
+      "features": [
+        "Audit trail persistente en RocksDB",
+        "Exportacion CSV",
+        "11 reglas de riesgo (AML + credenciales)",
+        "5 patrones de deteccion",
+        "Anomalias estadisticas (z-score)",
+        "Timeline forense"
+      ]
+    },
+    {
+      "slug": "vault",
+      "name": "Vault de Secretos",
+      "tagline": "Almacenamiento seguro con recuperacion ciega",
+      "icon": "lock",
+      "tiers": ["business", "enterprise"],
+      "endpoints": [
+        { "method": "POST", "path": "/api/v1/vault/store", "description": "Almacenar wallet" },
+        { "method": "GET", "path": "/api/v1/vault/{did}", "description": "Recuperar por DID" },
+        { "method": "POST", "path": "/api/v1/vault/recover", "description": "Recuperar via recovery key" }
+      ],
+      "use_cases": [
+        "Backup de wallets de estudiantes",
+        "Custodia de claves",
+        "Recuperacion sin intermediarios",
+        "Metadata sensible"
+      ],
+      "features": [
+        "Encriptacion del lado del cliente",
+        "Blind indexing HMAC-SHA3-256",
+        "Rate limiting anti-brute-force",
+        "Audit logging por operacion",
+        "Fingerprint de rotacion"
+      ]
+    },
+    {
+      "slug": "bridge",
+      "name": "Bridge Cross-Chain",
+      "tagline": "Transferencias cross-chain con verificacion Merkle",
+      "icon": "arrow-right-left",
+      "tiers": ["enterprise"],
+      "endpoints": [
+        { "method": "POST", "path": "/api/v1/bridge/transfer", "description": "Transferencia outbound" },
+        { "method": "POST", "path": "/api/v1/bridge/inbound", "description": "Mensaje inbound" },
+        { "method": "GET", "path": "/api/v1/bridge/transfer/{id}", "description": "Estado transferencia" },
+        { "method": "GET", "path": "/api/v1/bridge/chains", "description": "Cadenas registradas" },
+        { "method": "GET", "path": "/api/v1/bridge/balances/{account}", "description": "Balances wrapped" }
+      ],
+      "use_cases": [
+        "Credenciales inter-institucionales",
+        "Transferencia de activos entre redes",
+        "Interoperabilidad Ethereum/Cosmos",
+        "Wrapped tokens cross-chain"
+      ],
+      "features": [
+        "Escrow lock-mint-burn-release",
+        "Merkle proof SHA-256",
+        "Proteccion contra replay",
+        "Registro de cadenas externas",
+        "Balances wrapped por cuenta"
+      ]
+    }
+  ],
+  "tiers": [
+    {
+      "slug": "starter",
+      "name": "Starter",
+      "sla": "99.5%",
+      "support_response": "24 horas",
+      "services": ["notarization", "identity", "audit"],
+      "rate_limits": {
+        "requests_per_minute": 100,
+        "requests_per_second": 20,
+        "requests_per_hour": 3000
+      }
+    },
+    {
+      "slug": "business",
+      "name": "Business",
+      "sla": "99.5%",
+      "support_response": "4 horas (critico)",
+      "services": ["notarization", "identity", "audit", "governance", "assets", "vault"],
+      "rate_limits": {
+        "requests_per_minute": 500,
+        "requests_per_second": 50,
+        "requests_per_hour": 15000
+      }
+    },
+    {
+      "slug": "enterprise",
+      "name": "Enterprise",
+      "sla": "99.9%",
+      "support_response": "2 horas",
+      "services": ["notarization", "identity", "audit", "governance", "assets", "vault", "contracts", "network", "bridge"],
+      "rate_limits": {
+        "requests_per_minute": "configurable",
+        "requests_per_second": "configurable",
+        "requests_per_hour": "configurable"
+      }
+    }
+  ],
+  "api": {
+    "base_url": "/api/v1",
+    "auth": "mTLS",
+    "format": "JSON",
+    "pagination": {
+      "default_limit": 20,
+      "max_limit": 100,
+      "params": ["page", "limit"]
+    },
+    "error_codes": [
+      { "http": 400, "code": "VALIDATION_ERROR", "description": "Request invalido" },
+      { "http": 401, "code": "UNAUTHORIZED", "description": "Sin identidad mTLS" },
+      { "http": 403, "code": "FORBIDDEN", "description": "Permisos insuficientes" },
+      { "http": 404, "code": "NOT_FOUND", "description": "Recurso no existe" },
+      { "http": 409, "code": "CONFLICT", "description": "Recurso duplicado" },
+      { "http": 429, "code": "RATE_LIMITED", "description": "Limite excedido" },
+      { "http": 500, "code": "INTERNAL_ERROR", "description": "Error del servidor" }
+    ],
+    "health_endpoint": "/api/v1/health",
+    "openapi_endpoint": "/api/v1/openapi.json",
+    "swagger_endpoint": "/swagger",
+    "metrics_endpoint": "/metrics"
+  }
+}
