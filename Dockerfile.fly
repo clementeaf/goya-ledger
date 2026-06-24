@@ -39,6 +39,8 @@ RUN apt-get update && apt-get install -y ca-certificates libssl3 curl \
 
 COPY --from=builder /usr/local/bin/rust-bc /usr/local/bin/rust-bc
 
+RUN mkdir -p /data/blocks
+
 ENV API_PORT=8080 \
     RUST_LOG=info
 

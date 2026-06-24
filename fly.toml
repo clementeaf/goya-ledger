@@ -5,12 +5,17 @@ primary_region = "iad"
   dockerfile = "Dockerfile.fly"
 
 [env]
-  STORAGE_BACKEND = "memory"
+  STORAGE_BACKEND = "rocksdb"
+  STORAGE_PATH = "/data/blocks"
   ACL_MODE = "permissive"
   LOG_FORMAT = "json"
   RUST_LOG = "info"
   API_PORT = "8080"
   BIND_ADDR = "0.0.0.0"
+
+[mounts]
+  source = "goya_data"
+  destination = "/data"
 
 [http_service]
   internal_port = 8080
