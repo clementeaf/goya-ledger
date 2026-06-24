@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GOYA-ledger</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>GOYA-ledger</h1>
+    <div id="status-bar">
+      <span id="status-dot" class="dot offline"></span>
+      <span id="status-text">Connecting...</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Identity -->
+    <section class="card" id="identity-section">
+      <h2>Identidad DID</h2>
+      <button id="btn-create-id">Crear Identidad</button>
+      <div id="identity-list" class="result-area"></div>
+    </section>
+
+    <!-- Notarize -->
+    <section class="card" id="notarize-section">
+      <h2>Notarizar Documento</h2>
+      <div class="drop-zone" id="drop-zone">
+        <p>Arrastra un archivo aqui o haz click</p>
+        <input type="file" id="file-input" hidden>
+      </div>
+      <div id="notarize-result" class="result-area"></div>
+    </section>
+
+    <!-- Verify -->
+    <section class="card" id="verify-section">
+      <h2>Verificar Hash</h2>
+      <div class="input-row">
+        <input type="text" id="verify-hash" placeholder="SHA-256 hash">
+        <button id="btn-verify">Verificar</button>
+      </div>
+      <div id="verify-result" class="result-area"></div>
+    </section>
+
+    <!-- Node Status -->
+    <section class="card" id="status-section">
+      <h2>Estado del Nodo</h2>
+      <div id="node-status" class="result-area">
+        <p>Cargando...</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="main.js"></script>
+</body>
+</html>

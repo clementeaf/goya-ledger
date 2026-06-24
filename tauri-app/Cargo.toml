@@ -1,0 +1,25 @@
+[package]
+name = "goya-ledger-app"
+version = "0.1.0"
+edition = "2021"
+description = "GOYA-ledger light client desktop app"
+
+[dependencies]
+tauri = { version = "2", features = ["devtools"] }
+tauri-build = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+chrono = { version = "0.4", features = ["serde"] }
+sha2 = "0.10"
+hex = "0.4"
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+rand = "0.8"
+rust-bc = { path = "..", default-features = false, features = ["evm"] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dev-dependencies]
+tempfile = "3.8"

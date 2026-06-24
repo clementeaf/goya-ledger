@@ -322,12 +322,79 @@ impl ApiRoutes {
     }
 }
 
+/// Light client routes — Starter tier only.
+///
+/// Exposes: notarization, identity, credentials, audit, chain info,
+/// ZKP, health, version, and openapi. Everything else is excluded.
+pub struct LightRoutes;
+
+impl LightRoutes {
+    /// Full configuration for light mode: metrics + restricted `/api/v1` scope.
+    pub fn configure(cfg: &mut web::ServiceConfig) {
+        ApiRoutes::configure_metrics(cfg);
+        cfg.service(Self::register(web::scope("/api/v1")));
+    }
+
+    /// Register only Starter-tier routes into an `/api/v1` scope.
+    pub fn register(scope: Scope) -> Scope {
+        scope
+            .service(Self::chain_routes())
+            .service(Self::credentials_routes())
+            .configure(Self::register_starter_handlers)
+    }
+
+    fn register_starter_handlers(cfg: &mut web::ServiceConfig) {
+        // Identity (DID management)
+        cfg.service(identity::store_write_identity)
+            .service(identity::store_list_identities)
+            .service(identity::store_get_identity);
+        // Credentials (VCs)
+        cfg.service(credentials::store_write_credential)
+            .service(credentials::store_list_credentials)
+            .service(credentials::store_get_credential)
+            .service(credentials::store_get_credentials_by_subject)
+            .service(credentials::store_get_credentials_by_issuer);
+        // Notarization (Proof of Existence)
+        cfg.service(notarize::submit_notarization)
+            .service(notarize::verify_notarization)
+            .service(notarize::get_notarization)
+            .service(notarize::list_notarizations);
+        // Audit trail
+        cfg.service(audit::list_audit_entries)
+            .service(audit::export_audit_csv);
+        // ZKP (selective disclosure)
+        cfg.service(zkp::prove_zkp).service(zkp::verify_zkp);
+        // W3C interop
+        cfg.service(interop::resolve_did);
+        // Alias
+        cfg.service(alias::alias_register)
+            .service(alias::alias_resolve)
+            .service(alias::alias_by_did)
+            .service(alias::alias_revoke);
+        // Utilities (health, version, openapi)
+        cfg.route("/health", web::get().to(utilities::health_check))
+            .route("/version", web::get().to(utilities::get_version))
+            .route("/openapi.json", web::get().to(utilities::get_openapi));
+    }
+
+    fn chain_routes() -> Scope {
+        web::scope("/chain")
+            .service(chain::verify_chain)
+            .service(chain::get_blockchain_info)
+    }
+
+    fn credentials_routes() -> Scope {
+        web::scope("/credentials").service(interop::get_credential_as_vc)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::ApiRoutes;
+    use super::*;
 
     #[test]
-    fn test_routes_structure() {
+    fn routes_structs_are_zst() {
         assert_eq!(std::mem::size_of::<ApiRoutes>(), 0);
+        assert_eq!(std::mem::size_of::<LightRoutes>(), 0);
     }
 }

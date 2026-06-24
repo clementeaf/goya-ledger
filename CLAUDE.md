@@ -37,7 +37,10 @@ Blockchain node (Rust/Actix-Web 4) with HTTP API.
 - **Crypto** (`crates/pqc_crypto_module/`): FIPS-oriented crate. Direct imports of `sha2`, `ed25519_dalek`, etc. in `src/` are forbidden.
 - **Network** (`src/network/`): P2P over TCP/TLS. Flow: `SubmitTransaction` → `OrderedBlock` → `StateRequest/StateResponse`. Push-gossip for block propagation.
 
-Other subsystems: bridge, governance, EVM (revm), chaincode, channels, oracles, compliance, tokenomics, intelligence, light client, audit. See `docs/architecture/`.
+- **Light Client** (`src/light_client/`): `NodeMode` (Full/Light) selects routes at startup. `SeedProxy` forwards to remote node. `LocalIdentityStore` persists DIDs as JSON. Activated via `NODE_MODE=light`.
+- **Desktop App** (`tauri-app/`): Tauri v2 macOS app wrapping the light client. Commands in `src/commands.rs`, frontend in `frontend/`.
+
+Other subsystems: bridge, governance, EVM (revm), chaincode, channels, oracles, compliance, tokenomics, intelligence, audit. See `docs/architecture/`.
 
 ## Key conventions
 
@@ -56,11 +59,21 @@ Essential: `STORAGE_BACKEND`, `ACL_MODE`, `SIGNING_ALGORITHM`, `NETWORK_ID`, `AP
 
 Production (`RUST_BC_ENV=production`): requires `TLS_CERT_PATH`/`TLS_KEY_PATH`, warns on `ACL_MODE=permissive`. Audit log persists to RocksDB when `STORAGE_BACKEND=rocksdb`.
 
+Light client: `NODE_MODE` (`full`/`light`), `SEED_NODE_URL`, `GOYA_DATA_DIR` (default `~/.goya/`).
+
 Other: `CORS_ALLOWED_ORIGINS`, `LOG_FORMAT` (`json` for structured), `HTTP_REQUEST_TIMEOUT_SECS`, `MEMPOOL_MAX_SIZE`, `RATE_LIMIT_RPS/RPM/RPH`, `VAULT_RECOVERY_SECRET`.
 
 ## Bridge
 
 Cross-chain transfers via `src/bridge/`. API endpoints under `/api/v1/bridge/`. Engine in `AppState.bridge_engine`. Escrow lifecycle: lock → release (outbound), verify proof → mint (inbound). Merkle proof verification via SHA-256.
+
+## Desktop App
+
+```bash
+cd tauri-app && cargo tauri dev      # Dev mode with hot reload
+cd tauri-app && cargo tauri build    # Build .app and .dmg
+cargo test -p goya-ledger-app        # Run app tests
+```
 
 ## Deployment
 

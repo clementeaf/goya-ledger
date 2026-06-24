@@ -6,6 +6,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### 2026-06-24
+
+**Light client mode and desktop app (GOYA-ledger for Mac)**
+
+Light client:
+- `NodeMode` enum (`Full`/`Light`) via `NODE_MODE` env var — pattern-matched at startup to select routes
+- `LightRoutes`: Starter-tier only (notarize, identity, credentials, audit, chain, ZKP, alias, health)
+- `SeedProxy`: HTTP client forwarding requests to a remote full node via `SEED_NODE_URL`
+- `LocalIdentityStore`: JSON-file persistence for DIDs and keypairs (`~/.goya/identities.json`)
+
+Desktop app (`tauri-app/`):
+- Tauri v2 macOS app — 4.5MB `.dmg` bundle
+- Commands: create identity, list identities, notarize document, verify hash, node status
+- Vanilla HTML/JS/CSS frontend with drag-and-drop notarization
+- Connects to seed node at `https://goya-node.fly.dev` by default
+
+Deployment:
+- Seed node deployed on Fly.io (`goya-node.fly.dev`, Ashburn region)
+- `Dockerfile.fly` for lightweight build (no wasm/raft)
+- `fly.toml` with auto-stop/start and HTTPS
+
 ### 2026-06-21
 
 **Credential risk scoring, vault hardening, bridge API**

@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/pqc_crypto_module", "tools/acvp_dry_run"]
+members = [".", "crates/pqc_crypto_module", "tools/acvp_dry_run", "tauri-app"]
 
 [package]
 name = "rust-bc"

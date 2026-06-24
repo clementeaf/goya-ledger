@@ -55,7 +55,7 @@ use actix_cors::Cors;
 use actix_web::middleware::Compress;
 use actix_web::{web, App, HttpServer};
 use airdrop::AirdropManager;
-use api::routes::ApiRoutes;
+use api::routes::{ApiRoutes, LightRoutes};
 use api_legacy::config_routes;
 use app_state::AppState;
 use billing::BillingManager;
@@ -63,6 +63,7 @@ use cache::BalanceCache;
 use metrics::MetricsCollector;
 use middleware::RateLimitMiddleware;
 use network::{parse_peer_allowlist, Node};
+use rust_bc::light_client::mode::NodeMode;
 use staking::StakingManager;
 use std::env;
 use std::net::SocketAddr;
@@ -983,6 +984,8 @@ async fn async_main_inner() -> std::io::Result<()> {
 
     let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());
     let api_bind = format!("{bind_addr}:{api_port}");
+    let node_mode = NodeMode::from_env();
+    log::info!("Node mode: {node_mode}");
 
     let http_keep_alive_secs: u64 = std::env::var("HTTP_KEEP_ALIVE_SECS")
         .ok()
@@ -1046,8 +1049,15 @@ async fn async_main_inner() -> std::io::Result<()> {
                 log::debug!("[JSON] Deserialization error on {}: {err:?}", _req.path());
                 actix_web::error::ErrorBadRequest(format!("JSON error: {err}"))
             }))
-            .configure(config_routes)
-            .configure(ApiRoutes::configure_metrics)
+            .configure(|cfg: &mut web::ServiceConfig| {
+                match node_mode {
+                    NodeMode::Full => {
+                        config_routes(cfg);
+                        ApiRoutes::configure_metrics(cfg);
+                    }
+                    NodeMode::Light => LightRoutes::configure(cfg),
+                }
+            })
     })
     .on_connect(|conn, ext| {
         // Extract peer certificates from mTLS handshake into connection extensions.

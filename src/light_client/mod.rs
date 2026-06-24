@@ -6,3 +6,6 @@
 
 pub mod client;
 pub mod header;
+pub mod local_store;
+pub mod mode;
+pub mod proxy;

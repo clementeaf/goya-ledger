@@ -1,0 +1,99 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod commands;
+
+use commands::{CommandError, IdentityInfo, NodeStatus, NotarizeResult};
+use rust_bc::light_client::local_store::LocalIdentityStore;
+use rust_bc::light_client::proxy::SeedProxy;
+use std::sync::Mutex;
+
+/// App state shared across Tauri commands.
+struct AppState {
+    store: LocalIdentityStore,
+    proxy: SeedProxy,
+}
+
+// ── Tauri command wrappers ──
+// Each wraps the testable fn from commands.rs with Tauri state extraction.
+
+#[tauri::command]
+fn cmd_create_identity(
+    state: tauri::State<'_, Mutex<AppState>>,
+    algorithm: String,
+) -> Result<IdentityInfo, CommandError> {
+    let s = state.lock().unwrap_or_else(|e| e.into_inner());
+    commands::create_identity(&s.store, &algorithm)
+}
+
+#[tauri::command]
+fn cmd_list_identities(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<Vec<IdentityInfo>, CommandError> {
+    let s = state.lock().unwrap_or_else(|e| e.into_inner());
+    commands::list_identities(&s.store)
+}
+
+#[tauri::command]
+fn cmd_hash_document(data: Vec<u8>) -> String {
+    commands::hash_document(&data)
+}
+
+#[tauri::command]
+async fn cmd_notarize(
+    state: tauri::State<'_, Mutex<AppState>>,
+    file_name: String,
+    file_bytes: Vec<u8>,
+) -> Result<NotarizeResult, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::notarize_document(&proxy, &file_name, &file_bytes).await
+}
+
+#[tauri::command]
+async fn cmd_verify_notarization(
+    state: tauri::State<'_, Mutex<AppState>>,
+    hash: String,
+) -> Result<serde_json::Value, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::verify_notarization(&proxy, &hash).await
+}
+
+#[tauri::command]
+async fn cmd_node_status(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<NodeStatus, CommandError> {
+    let (proxy, store_path) = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        (s.proxy.clone(), s.store.path().to_path_buf())
+    };
+    let store = LocalIdentityStore::open(store_path);
+    commands::get_node_status(&proxy, &store).await
+}
+
+fn main() {
+    let seed_url =
+        std::env::var("SEED_NODE_URL").unwrap_or_else(|_| "https://goya-node.fly.dev".to_string());
+
+    let store = LocalIdentityStore::from_env();
+    let proxy = SeedProxy::new(seed_url);
+
+    let app_state = Mutex::new(AppState { store, proxy });
+
+    tauri::Builder::default()
+        .manage(app_state)
+        .invoke_handler(tauri::generate_handler![
+            cmd_create_identity,
+            cmd_list_identities,
+            cmd_hash_document,
+            cmd_notarize,
+            cmd_verify_notarization,
+            cmd_node_status,
+        ])
+        .run(tauri::generate_context!())
+        .expect("failed to run GOYA-ledger app");
+}
