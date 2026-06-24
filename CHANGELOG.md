@@ -6,36 +6,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
-### 2026-06-24
+## [0.1.0] — 2026-06-24
 
 **Light client mode and desktop app (GOYA-ledger for Mac)**
 
-Light client:
-- `NodeMode` enum (`Full`/`Light`) via `NODE_MODE` env var — pattern-matched at startup to select routes
-- `LightRoutes`: Starter-tier only (notarize, identity, credentials, audit, chain, ZKP, alias, health)
-- `SeedProxy`: HTTP client forwarding requests to a remote full node via `SEED_NODE_URL`
-- `LocalIdentityStore`: JSON-file persistence for DIDs and keypairs (`~/.goya/identities.json`)
+### Added
 
-Desktop app (`tauri-app/`):
-- Tauri v2 macOS app — 4.5MB `.dmg` bundle
-- Commands: create identity, list identities, notarize document, verify hash, node status
-- Vanilla HTML/JS/CSS frontend with drag-and-drop notarization and password-protected identity creation
-- Connects to seed node at `https://goya-node.fly.dev` by default
+- `NodeMode` enum (`Full`/`Light`) via `NODE_MODE` env var
+- `LightRoutes`: Starter-tier endpoints (notarize, identity, credentials, audit, chain, ZKP, alias, health)
+- `SeedProxy`: forwards requests to a remote full node via `SEED_NODE_URL`
+- `LocalIdentityStore`: JSON-file persistence for DIDs (`~/.goya/identities.json`)
+- Tauri v2 macOS desktop app (4.5MB `.dmg`, Apple Silicon)
+- Password-encrypted private keys (Argon2id + AES-256-GCM)
+- Drag-and-drop document notarization
+- Seed node on Fly.io (`goya-node.fly.dev`) with RocksDB persistent volume
 
-Security:
-- Private key encryption: Argon2id key derivation + AES-256-GCM before storage (OWASP minimum params)
-- `unlock_identity` command decrypts stored key for signing operations
-- Storage format: `salt:nonce:ciphertext` (hex-encoded), no schema change
-- Enforced crypto boundary: `tauri-app` uses `pqc_crypto_module::legacy::legacy_sha256` instead of direct `sha2` import
+### Fixed
 
-Fixes:
-- Replaced deprecated `std::env::home_dir()` with `dirs::home_dir()` in `LocalIdentityStore`
-- Fly.io seed node now persists data via RocksDB + volume mount (`goya_data` → `/data`)
+- Replaced deprecated `std::env::home_dir()` with `dirs::home_dir()`
+- Removed flaky env-mutating tests (parallel race condition)
 
-Deployment:
-- Seed node deployed on Fly.io (`goya-node.fly.dev`, Ashburn region)
-- `Dockerfile.fly` for lightweight build with RocksDB storage
-- `fly.toml` with auto-stop/start, HTTPS, and persistent volume
+### Changed
+
+- Enforced crypto boundary in `tauri-app` (SHA-256 via `pqc_crypto_module`)
+- Fly.io storage switched from memory to RocksDB with persistent volume
 
 ### 2026-06-21
 
