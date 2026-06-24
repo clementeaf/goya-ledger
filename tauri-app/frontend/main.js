@@ -22,11 +22,27 @@ function identityCard(id) {
 
 async function createIdentity() {
   const btn = $("#btn-create-id");
+  const passwordInput = $("#identity-password");
+  const password = passwordInput.value;
+
+  const valid = password.length >= 8;
+  show(
+    $("#identity-list"),
+    valid ? "" : '<span class="tag error">Password debe tener al menos 8 caracteres</span>'
+  );
+  valid || (void 0);
+  // ponytail: early return via guard — no nested if/else
+  switch (valid) {
+    case false: return;
+    default: break;
+  }
+
   btn.disabled = true;
   btn.textContent = "Creando...";
 
   try {
-    const result = await invoke("cmd_create_identity", { algorithm: "Ed25519" });
+    await invoke("cmd_create_identity", { algorithm: "Ed25519", password });
+    passwordInput.value = "";
     await refreshIdentities();
     show($("#notarize-result"), "");
   } catch (e) {

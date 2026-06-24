@@ -9,6 +9,8 @@ use rust_bc::light_client::proxy::SeedProxy;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use crate::key_crypto;
+
 /// Shared error type for all commands.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommandError {
@@ -31,6 +33,14 @@ impl From<rust_bc::light_client::proxy::ProxyError> for CommandError {
 
 impl From<rust_bc::light_client::local_store::LocalStoreError> for CommandError {
     fn from(e: rust_bc::light_client::local_store::LocalStoreError) -> Self {
+        Self {
+            message: e.to_string(),
+        }
+    }
+}
+
+impl From<key_crypto::KeyCryptoError> for CommandError {
+    fn from(e: key_crypto::KeyCryptoError) -> Self {
         Self {
             message: e.to_string(),
         }
@@ -64,19 +74,22 @@ pub struct NodeStatus {
 
 // ── Commands ──
 
-/// Create a new DID identity and persist locally.
+/// Create a new DID identity, encrypt private key with password, persist locally.
 pub fn create_identity(
     store: &LocalIdentityStore,
     algorithm: &str,
+    password: &str,
 ) -> Result<IdentityInfo, CommandError> {
     let keypair = generate_keypair(algorithm);
     let did = format!("did:goya:{}", &keypair.public_key_hex[..16]);
     let now = Utc::now().to_rfc3339();
 
+    let encrypted = key_crypto::encrypt_key(&keypair.private_key_raw, password)?;
+
     let stored = StoredIdentity {
         did: did.clone(),
         public_key_hex: keypair.public_key_hex.clone(),
-        private_key_enc: keypair.private_key_enc,
+        private_key_enc: encrypted,
         algorithm: algorithm.to_string(),
         created_at: now.clone(),
     };
@@ -88,6 +101,24 @@ pub fn create_identity(
         algorithm: algorithm.to_string(),
         created_at: now,
     })
+}
+
+/// Decrypt and return the private key for a stored identity.
+pub fn unlock_identity(
+    store: &LocalIdentityStore,
+    did: &str,
+    password: &str,
+) -> Result<String, CommandError> {
+    store
+        .get(did)?
+        .ok_or_else(|| CommandError {
+            message: format!("identity not found: {did}"),
+        })
+        .and_then(|identity| {
+            key_crypto::decrypt_key(&identity.private_key_enc, password)
+                .map(hex::encode)
+                .map_err(CommandError::from)
+        })
 }
 
 /// List all locally stored identities.
@@ -129,20 +160,17 @@ pub async fn notarize_document(
         }
     });
 
-    let resp = proxy
+    proxy
         .post_raw("/api/v1/notarize", body.to_string().as_bytes())
-        .await;
-
-    match resp {
-        Ok(_) => Ok(NotarizeResult {
+        .await
+        .map(|_| NotarizeResult {
             hash,
             timestamp: now,
             status: "registered".to_string(),
-        }),
-        Err(e) => Err(CommandError {
+        })
+        .map_err(|e| CommandError {
             message: format!("notarization failed: {e}"),
-        }),
-    }
+        })
 }
 
 /// Verify a hash exists on the seed node.
@@ -187,33 +215,32 @@ pub async fn get_node_status(
 
 struct KeypairOutput {
     public_key_hex: String,
-    private_key_enc: String,
+    private_key_raw: Vec<u8>,
 }
 
 fn generate_keypair(algorithm: &str) -> KeypairOutput {
-    match algorithm {
-        "Ed25519" | "ed25519" => {
-            use ed25519_dalek::SigningKey;
-            use rand::rngs::OsRng;
+    match algorithm.to_lowercase().as_str() {
+        "ed25519" => generate_ed25519(),
+        _ => generate_ed25519(),
+    }
+}
 
-            let signing_key = SigningKey::generate(&mut OsRng);
-            let public_key = signing_key.verifying_key();
-            KeypairOutput {
-                public_key_hex: hex::encode(public_key.as_bytes()),
-                // ponytail: store raw hex for now; add client-side encryption when Tauri app has password flow.
-                private_key_enc: hex::encode(signing_key.to_bytes()),
-            }
-        }
-        _ => {
-            // Default to Ed25519 for unknown algorithms
-            generate_keypair("Ed25519")
-        }
+fn generate_ed25519() -> KeypairOutput {
+    use ed25519_dalek::SigningKey;
+    use rand::rngs::OsRng;
+
+    let signing_key = SigningKey::generate(&mut OsRng);
+    KeypairOutput {
+        public_key_hex: hex::encode(signing_key.verifying_key().as_bytes()),
+        private_key_raw: signing_key.to_bytes().to_vec(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TEST_PASSWORD: &str = "test-passphrase-2026";
 
     fn temp_store() -> (tempfile::TempDir, LocalIdentityStore) {
         let dir = tempfile::tempdir().unwrap();
@@ -222,35 +249,91 @@ mod tests {
     }
 
     #[test]
-    fn create_identity_persists_and_returns() {
+    fn create_identity_encrypts_private_key() {
         let (_dir, store) = temp_store();
-        let result = create_identity(&store, "Ed25519").unwrap();
+        let info = create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
 
-        assert!(result.did.starts_with("did:goya:"));
-        assert!(!result.public_key_hex.is_empty());
-        assert_eq!(result.algorithm, "Ed25519");
-        assert_eq!(store.count().unwrap(), 1);
+        assert!(info.did.starts_with("did:goya:"));
+        assert_eq!(info.algorithm, "Ed25519");
+
+        // Stored value must be encrypted (salt:nonce:ciphertext), not raw hex.
+        let stored = store.get(&info.did).unwrap().unwrap();
+        let parts: Vec<&str> = stored.private_key_enc.splitn(3, ':').collect();
+        assert_eq!(
+            parts.len(),
+            3,
+            "encrypted format must be salt:nonce:ciphertext"
+        );
     }
 
     #[test]
-    fn create_multiple_identities() {
+    fn unlock_identity_returns_valid_ed25519_key() {
+        let (_dir, store) = temp_store();
+        let info = create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
+
+        let private_hex = unlock_identity(&store, &info.did, TEST_PASSWORD).unwrap();
+        assert_eq!(
+            private_hex.len(),
+            64,
+            "Ed25519 private key = 32 bytes = 64 hex chars"
+        );
+    }
+
+    #[test]
+    fn unlock_with_wrong_password_fails() {
+        let (_dir, store) = temp_store();
+        let info = create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
+
+        let result = unlock_identity(&store, &info.did, "wrong-password");
+        assert!(result.is_err());
+        assert!(
+            result.unwrap_err().message.contains("wrong password"),
+            "error must mention wrong password"
+        );
+    }
+
+    #[test]
+    fn unlock_missing_identity_fails() {
+        let (_dir, store) = temp_store();
+        let result = unlock_identity(&store, "did:goya:nonexistent", TEST_PASSWORD);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message.contains("not found"));
+    }
+
+    #[test]
+    fn create_multiple_identities_unique_dids() {
         let (_dir, store) = temp_store();
 
         let ids: Vec<IdentityInfo> = (0..3)
-            .map(|_| create_identity(&store, "Ed25519").unwrap())
+            .map(|_| create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap())
             .collect();
 
         assert_eq!(store.count().unwrap(), 3);
-        // All DIDs unique
         let unique_dids: std::collections::HashSet<_> = ids.iter().map(|i| &i.did).collect();
         assert_eq!(unique_dids.len(), 3);
+    }
+
+    #[test]
+    fn each_identity_has_unique_encryption() {
+        let (_dir, store) = temp_store();
+
+        let infos: Vec<IdentityInfo> = (0..2)
+            .map(|_| create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap())
+            .collect();
+
+        let enc_values: Vec<String> = infos
+            .iter()
+            .map(|info| store.get(&info.did).unwrap().unwrap().private_key_enc)
+            .collect();
+
+        assert_ne!(enc_values[0], enc_values[1]);
     }
 
     #[test]
     fn list_identities_returns_all() {
         let (_dir, store) = temp_store();
         (0..3).for_each(|_| {
-            create_identity(&store, "Ed25519").unwrap();
+            create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
         });
 
         let list = list_identities(&store).unwrap();
@@ -273,7 +356,7 @@ mod tests {
         let hash1 = hash_document(data);
         let hash2 = hash_document(data);
         assert_eq!(hash1, hash2);
-        assert_eq!(hash1.len(), 64); // SHA-256 hex = 64 chars
+        assert_eq!(hash1.len(), 64);
     }
 
     #[test]
@@ -286,8 +369,8 @@ mod tests {
     #[test]
     fn generate_keypair_ed25519_valid() {
         let kp = generate_keypair("Ed25519");
-        assert_eq!(kp.public_key_hex.len(), 64); // 32 bytes = 64 hex
-        assert_eq!(kp.private_key_enc.len(), 64);
+        assert_eq!(kp.public_key_hex.len(), 64);
+        assert_eq!(kp.private_key_raw.len(), 32);
     }
 
     #[test]
@@ -301,14 +384,15 @@ mod tests {
     fn unknown_algorithm_falls_back_to_ed25519() {
         let kp = generate_keypair("unknown_algo");
         assert_eq!(kp.public_key_hex.len(), 64);
+        assert_eq!(kp.private_key_raw.len(), 32);
     }
 
     #[tokio::test]
     async fn node_status_offline_seed() {
         let (_dir, store) = temp_store();
-        create_identity(&store, "Ed25519").unwrap();
+        create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
 
-        let proxy = SeedProxy::new("http://localhost:1".into()); // unreachable
+        let proxy = SeedProxy::new("http://localhost:1".into());
         let status = get_node_status(&proxy, &store).await.unwrap();
 
         assert!(!status.connected);

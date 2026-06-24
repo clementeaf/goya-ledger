@@ -16,6 +16,9 @@ sha2 = "0.10"
 hex = "0.4"
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 rand = "0.8"
+argon2 = "0.5"
+aes-gcm = "0.10"
+thiserror = "1"
 rust-bc = { path = "..", default-features = false, features = ["evm"] }
 
 [build-dependencies]

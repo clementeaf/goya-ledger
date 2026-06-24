@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod key_crypto;
 
 use commands::{CommandError, IdentityInfo, NodeStatus, NotarizeResult};
 use rust_bc::light_client::local_store::LocalIdentityStore;
@@ -20,9 +21,20 @@ struct AppState {
 fn cmd_create_identity(
     state: tauri::State<'_, Mutex<AppState>>,
     algorithm: String,
+    password: String,
 ) -> Result<IdentityInfo, CommandError> {
     let s = state.lock().unwrap_or_else(|e| e.into_inner());
-    commands::create_identity(&s.store, &algorithm)
+    commands::create_identity(&s.store, &algorithm, &password)
+}
+
+#[tauri::command]
+fn cmd_unlock_identity(
+    state: tauri::State<'_, Mutex<AppState>>,
+    did: String,
+    password: String,
+) -> Result<String, CommandError> {
+    let s = state.lock().unwrap_or_else(|e| e.into_inner());
+    commands::unlock_identity(&s.store, &did, &password)
 }
 
 #[tauri::command]
@@ -88,6 +100,7 @@ fn main() {
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             cmd_create_identity,
+            cmd_unlock_identity,
             cmd_list_identities,
             cmd_hash_document,
             cmd_notarize,
