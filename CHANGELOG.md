@@ -19,13 +19,23 @@ Light client:
 Desktop app (`tauri-app/`):
 - Tauri v2 macOS app — 4.5MB `.dmg` bundle
 - Commands: create identity, list identities, notarize document, verify hash, node status
-- Vanilla HTML/JS/CSS frontend with drag-and-drop notarization
+- Vanilla HTML/JS/CSS frontend with drag-and-drop notarization and password-protected identity creation
 - Connects to seed node at `https://goya-node.fly.dev` by default
+
+Security:
+- Private key encryption: Argon2id key derivation + AES-256-GCM before storage (OWASP minimum params)
+- `unlock_identity` command decrypts stored key for signing operations
+- Storage format: `salt:nonce:ciphertext` (hex-encoded), no schema change
+- Enforced crypto boundary: `tauri-app` uses `pqc_crypto_module::legacy::legacy_sha256` instead of direct `sha2` import
+
+Fixes:
+- Replaced deprecated `std::env::home_dir()` with `dirs::home_dir()` in `LocalIdentityStore`
+- Fly.io seed node now persists data via RocksDB + volume mount (`goya_data` → `/data`)
 
 Deployment:
 - Seed node deployed on Fly.io (`goya-node.fly.dev`, Ashburn region)
-- `Dockerfile.fly` for lightweight build (no wasm/raft)
-- `fly.toml` with auto-stop/start and HTTPS
+- `Dockerfile.fly` for lightweight build with RocksDB storage
+- `fly.toml` with auto-stop/start, HTTPS, and persistent volume
 
 ### 2026-06-21
 
