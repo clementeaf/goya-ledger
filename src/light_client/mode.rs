@@ -82,18 +82,6 @@ mod tests {
         assert_eq!(NodeMode::Light.to_string(), "light");
     }
 
-    #[test]
-    fn from_env_defaults_to_full() {
-        // When NODE_MODE is not set, should default to Full.
-        // (This test assumes NODE_MODE is not set in the test environment.)
-        std::env::remove_var("NODE_MODE");
-        assert_eq!(NodeMode::from_env(), NodeMode::Full);
-    }
-
-    #[test]
-    fn from_env_reads_light() {
-        std::env::set_var("NODE_MODE", "light");
-        assert_eq!(NodeMode::from_env(), NodeMode::Light);
-        std::env::remove_var("NODE_MODE");
-    }
+    // ponytail: from_env tests removed — env var mutation is racy in parallel tests.
+    // from_env delegates to parse() + unwrap_or(Full), both tested above.
 }

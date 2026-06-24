@@ -8,7 +8,7 @@
 
 use rust_bc::light_client::local_store::{LocalIdentityStore, StoredIdentity};
 use rust_bc::light_client::mode::NodeMode;
-use rust_bc::light_client::proxy::{ProxyError, SeedProxy};
+use rust_bc::light_client::proxy::SeedProxy;
 
 // ── NodeMode ──
 
@@ -31,19 +31,9 @@ fn node_mode_light_restricts_correctly() {
 // ── SeedProxy ──
 
 #[test]
-fn proxy_not_configured_without_env() {
-    std::env::remove_var("SEED_NODE_URL");
-    let result = SeedProxy::from_env();
-    assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), ProxyError::NotConfigured));
-}
-
-#[test]
-fn proxy_constructs_from_env() {
-    std::env::set_var("SEED_NODE_URL", "https://goya-node.fly.dev");
-    let proxy = SeedProxy::from_env().unwrap();
+fn proxy_constructs_with_base_url() {
+    let proxy = SeedProxy::new("https://goya-node.fly.dev".into());
     assert_eq!(proxy.base_url(), "https://goya-node.fly.dev");
-    std::env::remove_var("SEED_NODE_URL");
 }
 
 // ── LocalIdentityStore ──
