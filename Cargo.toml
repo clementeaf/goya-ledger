@@ -37,6 +37,7 @@ clap = { version = "4.4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "ansi"] }
 thiserror = "1.0"
+dirs = "6"
 time = { version = "0.3", features = ["std"] }
 rcgen = "0.13"
 rustls = "0.23"

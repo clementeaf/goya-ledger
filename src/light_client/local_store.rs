@@ -112,9 +112,7 @@ impl LocalIdentityStore {
 
 /// Platform-appropriate data directory: `~/.goya/` on Unix, `%APPDATA%/goya/` on Windows.
 fn dirs_path() -> Option<PathBuf> {
-    // ponytail: home_dir is deprecated but fine here; upgrade to `dirs` crate if needed.
-    #[allow(deprecated)]
-    std::env::home_dir().map(|h| h.join(".goya"))
+    dirs::home_dir().map(|h| h.join(".goya"))
 }
 
 #[cfg(test)]
