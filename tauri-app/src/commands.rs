@@ -7,7 +7,6 @@ use chrono::Utc;
 use rust_bc::light_client::local_store::{LocalIdentityStore, StoredIdentity};
 use rust_bc::light_client::proxy::SeedProxy;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 use crate::key_crypto;
 
@@ -138,9 +137,9 @@ pub fn list_identities(store: &LocalIdentityStore) -> Result<Vec<IdentityInfo>, 
 
 /// Hash a document (bytes) and return the SHA-256 hex digest.
 pub fn hash_document(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hex::encode(hasher.finalize())
+    let hash = pqc_crypto_module::legacy::legacy_sha256(data)
+        .expect("SHA-256 hashing cannot fail for valid input");
+    hex::encode(hash)
 }
 
 /// Submit a notarization to the seed node.
