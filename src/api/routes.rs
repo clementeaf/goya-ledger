@@ -281,6 +281,8 @@ impl ApiRoutes {
             .service(network::connect_peer)
             .service(network::sync_blockchain)
             .service(network::mine_block);
+        // Accounts (wallet-compatible balance + nonce)
+        cfg.service(wallets::get_account);
         // Wallets (balance, creation, tx history)
         cfg.service(wallets::get_wallet_balance)
             .service(wallets::create_wallet)

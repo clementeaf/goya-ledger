@@ -1,6 +1,7 @@
-//! Wallet endpoints — balance, creation, and transaction history.
+//! Wallet and account endpoints — balance, nonce, creation, and transaction history.
 //!
 //! Endpoints:
+//! - GET  /accounts/{address}             — get account balance + nonce (wallet-compatible)
 //! - GET  /wallets/{address}              — get wallet balance
 //! - POST /wallets/create                 — create a new wallet
 //! - GET  /wallets/{address}/transactions — get wallet transactions
@@ -17,6 +18,43 @@ pub(crate) fn store_balance(state: &AppState, address: &str) -> u64 {
         }
     }
     0
+}
+
+/// Derive nonce (outbound transaction count) for an address.
+pub(crate) fn store_nonce(state: &AppState, address: &str) -> u64 {
+    if let Ok(store_map) = state.store.read() {
+        if let Some(store) = store_map.get("default") {
+            return store
+                .transactions_for_address(address)
+                .unwrap_or_default()
+                .iter()
+                .filter(|tx| tx.input_did == address)
+                .count() as u64;
+        }
+    }
+    0
+}
+
+/// GET /api/v1/accounts/{address}
+///
+/// Wallet-compatible endpoint returning balance and nonce.
+#[get("/accounts/{address}")]
+pub async fn get_account(
+    state: web::Data<AppState>,
+    address: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let balance = store_balance(&state, &address);
+    let nonce = store_nonce(&state, &address);
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        serde_json::json!({
+            "address": address.as_str(),
+            "balance": balance,
+            "nonce": nonce,
+        }),
+        trace,
+    )))
 }
 
 /// GET /api/v1/wallets/{address}

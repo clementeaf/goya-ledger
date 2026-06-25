@@ -108,7 +108,11 @@ mod tests {
 
     #[test]
     fn new_trims_trailing_slash() {
-        let proxy = SeedProxy::new("https://goya-node.fly.dev/".trim_end_matches('/').to_string());
+        let proxy = SeedProxy::new(
+            "https://goya-node.fly.dev/"
+                .trim_end_matches('/')
+                .to_string(),
+        );
         assert_eq!(proxy.base_url(), "https://goya-node.fly.dev");
     }
 }

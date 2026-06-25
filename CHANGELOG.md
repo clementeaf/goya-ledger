@@ -6,6 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### Added
+
+- `GET /api/v1/accounts/{address}` — wallet-compatible endpoint returning balance and nonce
+- `store_nonce` helper deriving outbound transaction count per address
+
 ## [0.1.0] — 2026-06-24
 
 **Light client mode and desktop app (GOYA-ledger for Mac)**
