@@ -123,14 +123,19 @@ pub async fn create_transaction(
 
     // Add to transaction pool with double-spend protection
     {
-        let balance = if let Ok(store_map) = state.store.read() {
-            if let Some(store) = store_map.get("default") {
-                store.calculate_balance(&tx.input_did).unwrap_or(0)
-            } else {
-                0
+        // Coinbase (from="0") has unlimited supply — skip balance check
+        let balance = match req.from.as_str() {
+            "0" => u64::MAX,
+            _ => {
+                if let Ok(store_map) = state.store.read() {
+                    store_map
+                        .get("default")
+                        .and_then(|s| s.calculate_balance(&tx.input_did).ok())
+                        .unwrap_or(0)
+                } else {
+                    0
+                }
             }
-        } else {
-            0
         };
 
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());

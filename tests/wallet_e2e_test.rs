@@ -226,6 +226,39 @@ async fn wallet_payload_without_signature_rejected() {
     );
 }
 
+/// Coinbase (from="0") funds an account without balance check.
+#[actix_web::test]
+async fn coinbase_funds_account() {
+    setup_env();
+
+    let store = Arc::new(MemoryStore::new());
+    let state = make_state(store);
+    let app = test::init_service(
+        App::new()
+            .app_data(web::Data::new(state))
+            .configure(ApiRoutes::configure),
+    )
+    .await;
+
+    let recipient = "deadbeef01234567890abcdef01234567890abcd";
+
+    // Coinbase mint — no signature required, no balance check
+    let req = test::TestRequest::post()
+        .uri("/api/v1/transactions")
+        .set_json(serde_json::json!({
+            "from": "0",
+            "to": recipient,
+            "amount": 1000
+        }))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 201, "coinbase tx must be accepted");
+
+    let body: serde_json::Value = test::read_body_json(resp).await;
+    assert_eq!(body["data"]["output_recipient"], recipient);
+    assert_eq!(body["data"]["amount"], 1000);
+}
+
 /// Wallet payload with wrong nonce is rejected.
 #[actix_web::test]
 async fn wallet_payload_with_stale_nonce_rejected() {
