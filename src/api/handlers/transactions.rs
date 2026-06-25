@@ -60,6 +60,19 @@ pub async fn create_transaction(
         state: "pending".to_string(),
     };
 
+    // Nonce replay protection for non-coinbase transactions
+    if req.from != "0" {
+        if let Some(provided_nonce) = req.nonce {
+            let expected = super::wallets::store_nonce(&state, &req.from);
+            if provided_nonce != expected {
+                return Err(ApiError::ValidationError {
+                    field: "nonce".to_string(),
+                    reason: format!("nonce mismatch: expected {expected}, got {provided_nonce}"),
+                });
+            }
+        }
+    }
+
     // Require client signature for non-coinbase transactions
     if req.from != "0" {
         match &req.signature {

@@ -8,6 +8,8 @@ pub struct CreateTransactionRequest {
     pub to: String,
     pub amount: u64,
     #[serde(default)]
+    pub nonce: Option<u64>,
+    #[serde(default)]
     pub fee: Option<u64>,
     pub data: Option<String>,
     #[serde(default)]

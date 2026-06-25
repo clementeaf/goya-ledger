@@ -10,6 +10,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 - `GET /api/v1/accounts/{address}` — wallet-compatible endpoint returning balance and nonce
 - `store_nonce` helper deriving outbound transaction count per address
+- Nonce field on `CreateTransactionRequest` with replay protection validation
 
 ## [0.1.0] — 2026-06-24
 
