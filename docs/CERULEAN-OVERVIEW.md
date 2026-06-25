@@ -44,7 +44,7 @@ Cerulean Ledger es una plataforma de tecnología de registro distribuido (DLT) d
 ## Módulos principales
 
 ### Identidad Digital
-Registro de identidades soberanas (DID). Personas e instituciones obtienen una identidad digital que les permite firmar documentos con validez legal. El sistema genera internamente un identificador `did:cerulean:` — el usuario solo ve su nombre.
+Registro de identidades soberanas (DID). Personas e instituciones obtienen una identidad digital que les permite firmar documentos con validez legal. El sistema genera internamente un identificador `did:goya:` — el usuario solo ve su nombre.
 
 ### Documentos y Credenciales
 Emisión, almacenamiento y verificación de documentos firmados electrónicamente. Cada documento queda sellado con firma ML-DSA-65 y hash SHA-256 en la blockchain. Verificable por cualquier nodo de la red.

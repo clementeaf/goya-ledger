@@ -49,7 +49,7 @@ Criptografia:
   ML-KEM-768 (FIPS 203) — key encapsulation para TLS hibrido
 
 Identidad:
-  did:cerulean: con rotacion de llaves
+  did:goya: con rotacion de llaves
   Verifiable Credentials W3C con firma del emisor
 
 Financiero:
@@ -117,7 +117,7 @@ No se requiere reemplazar ni modificar sus sistemas actuales. Cerulean se acopla
 ```bash
 # Emitir credencial desde ERP
 curl POST /api/v1/store/credentials \
-  -d '{"issuer_did":"did:cerulean:su-org", "subject_did":"...", ...}'
+  -d '{"issuer_did":"did:goya:su-org", "subject_did":"...", ...}'
 
 # Consultar precios de oracle (datos de mercado en tiempo real)
 curl GET /api/v1/oracle/feeds

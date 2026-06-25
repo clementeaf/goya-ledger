@@ -63,7 +63,7 @@ Documento de referencia para reportes. Cada capacidad es independiente, reutiliz
 
 **Garantía:** Cada participante controla su propia identidad. Nadie más puede revocarla o falsificarla.
 
-- Formato `did:cerulean:identificador`
+- Formato `did:goya:identificador`
 - Credenciales verificables emitidas entre DIDs
 - Verificación criptográfica en milisegundos
 - PIN (Argon2id) para autenticación simple de usuarios finales

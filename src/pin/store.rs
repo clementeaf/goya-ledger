@@ -83,8 +83,8 @@ mod tests {
         let pin = Pin::generate(4).unwrap();
         let hash = pin.hash().unwrap();
 
-        store.set("did:cerulean:alice", &hash).unwrap();
-        assert!(store.verify("did:cerulean:alice", pin.as_str()).is_ok());
+        store.set("did:goya:alice", &hash).unwrap();
+        assert!(store.verify("did:goya:alice", pin.as_str()).is_ok());
     }
 
     #[test]
@@ -93,8 +93,8 @@ mod tests {
         let pin = Pin::generate(6).unwrap();
         let hash = pin.hash().unwrap();
 
-        store.set("did:cerulean:bob", &hash).unwrap();
-        let result = store.verify("did:cerulean:bob", "000000");
+        store.set("did:goya:bob", &hash).unwrap();
+        let result = store.verify("did:goya:bob", "000000");
         if pin.as_str() != "000000" {
             assert!(result.is_err());
         }
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn verify_unknown_did_fails() {
         let store = MemoryPinStore::new();
-        let result = store.verify("did:cerulean:unknown", "1234");
+        let result = store.verify("did:goya:unknown", "1234");
         assert!(result.is_err());
     }
 
@@ -113,32 +113,26 @@ mod tests {
         let pin1 = Pin::generate(4).unwrap();
         let pin2 = Pin::generate(4).unwrap();
 
-        store
-            .set("did:cerulean:carol", &pin1.hash().unwrap())
-            .unwrap();
-        store
-            .set("did:cerulean:carol", &pin2.hash().unwrap())
-            .unwrap();
+        store.set("did:goya:carol", &pin1.hash().unwrap()).unwrap();
+        store.set("did:goya:carol", &pin2.hash().unwrap()).unwrap();
 
-        assert!(store.verify("did:cerulean:carol", pin2.as_str()).is_ok());
+        assert!(store.verify("did:goya:carol", pin2.as_str()).is_ok());
     }
 
     #[test]
     fn remove_pin() {
         let store = MemoryPinStore::new();
         let pin = Pin::generate(4).unwrap();
-        store
-            .set("did:cerulean:dave", &pin.hash().unwrap())
-            .unwrap();
+        store.set("did:goya:dave", &pin.hash().unwrap()).unwrap();
 
-        assert!(store.remove("did:cerulean:dave").unwrap());
-        assert!(!store.remove("did:cerulean:dave").unwrap());
-        assert!(store.verify("did:cerulean:dave", pin.as_str()).is_err());
+        assert!(store.remove("did:goya:dave").unwrap());
+        assert!(!store.remove("did:goya:dave").unwrap());
+        assert!(store.verify("did:goya:dave", pin.as_str()).is_err());
     }
 
     #[test]
     fn get_hash_returns_none_for_unknown() {
         let store = MemoryPinStore::new();
-        assert!(store.get_hash("did:cerulean:nobody").unwrap().is_none());
+        assert!(store.get_hash("did:goya:nobody").unwrap().is_none());
     }
 }

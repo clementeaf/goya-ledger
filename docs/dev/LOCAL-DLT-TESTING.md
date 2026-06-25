@@ -59,8 +59,8 @@ Content-Type: application/json
   "chaincode_id": "notarize",
   "transaction": {
     "id": "<uuid>",
-    "input_did": "did:cerulean:<firmante>",
-    "output_recipient": "did:cerulean:<propietario>",
+    "input_did": "did:goya:<firmante>",
+    "output_recipient": "did:goya:<propietario>",
     "amount": 0
   }
 }
@@ -117,7 +117,7 @@ Ejemplo con curl:
 curl -s https://<ngrok-url>/api/v1/gateway/submit \
   -H "Content-Type: application/json" \
   -H "ngrok-skip-browser-warning: true" \
-  -d '{"chaincode_id":"notarize","transaction":{"id":"hash-xxx","input_did":"did:cerulean:signer","output_recipient":"did:cerulean:owner","amount":0}}'
+  -d '{"chaincode_id":"notarize","transaction":{"id":"hash-xxx","input_did":"did:goya:signer","output_recipient":"did:goya:owner","amount":0}}'
 ```
 
 En el HTTP client de la app externa, agregar el header a todas las requests al nodo Cerulean.

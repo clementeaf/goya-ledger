@@ -28,7 +28,7 @@ Nodes:
 ```bash
 curl -s -X POST http://localhost:9600/api/v1/gateway/submit \
   -H "Content-Type: application/json" \
-  -d '{"chaincode_id":"notarize","transaction":{"id":"my-tx-001","input_did":"did:cerulean:alice","output_recipient":"did:cerulean:bob","amount":0}}'
+  -d '{"chaincode_id":"notarize","transaction":{"id":"my-tx-001","input_did":"did:goya:alice","output_recipient":"did:goya:bob","amount":0}}'
 ```
 
 Expected:

@@ -56,7 +56,7 @@ export default function () {
   let ok;
 
   // ── Step 1: Create institution ─────────────────────────────────────────
-  const instDid = `did:cerulean:e2e-inst-${uid}`;
+  const instDid = `did:goya:e2e-inst-${uid}`;
   const now = Math.floor(Date.now() / 1000);
 
   ok = group('1-create-institution', () => {
@@ -73,7 +73,7 @@ export default function () {
   sleep(0.1);
 
   // ── Step 2: Create person ──────────────────────────────────────────────
-  const personDid = `did:cerulean:e2e-person-${uid}`;
+  const personDid = `did:goya:e2e-person-${uid}`;
 
   ok = group('2-create-person', () => {
     const res = http.post(`${API}/store/identities`, JSON.stringify({

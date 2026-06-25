@@ -180,7 +180,7 @@ fn p2p_identity_and_credentials_cross_check() {
     // Create issuer DID
     let issuer = post_json(
         &node1.api_url("/store/identities"),
-        serde_json::json!({"did": "did:cerulean:issuer-test", "status": "active", "created_at": now, "updated_at": now}),
+        serde_json::json!({"did": "did:goya:issuer-test", "status": "active", "created_at": now, "updated_at": now}),
     );
     assert_eq!(
         issuer["status"], "Success",
@@ -190,7 +190,7 @@ fn p2p_identity_and_credentials_cross_check() {
     // Create subject DID
     let subject = post_json(
         &node1.api_url("/store/identities"),
-        serde_json::json!({"did": "did:cerulean:subject-test", "status": "active", "created_at": now, "updated_at": now}),
+        serde_json::json!({"did": "did:goya:subject-test", "status": "active", "created_at": now, "updated_at": now}),
     );
     assert_eq!(
         subject["status"], "Success",
@@ -200,8 +200,8 @@ fn p2p_identity_and_credentials_cross_check() {
         &node1.api_url("/store/credentials"),
         serde_json::json!({
             "id": "cred-p2p-test",
-            "issuer_did": "did:cerulean:issuer-test",
-            "subject_did": "did:cerulean:subject-test",
+            "issuer_did": "did:goya:issuer-test",
+            "subject_did": "did:goya:subject-test",
             "cred_type": "Test Certificate",
             "issued_at": now,
             "expires_at": 0
@@ -212,6 +212,6 @@ fn p2p_identity_and_credentials_cross_check() {
     // Verify credential
     let verify = get_json(&node1.api_url("/store/credentials/cred-p2p-test"));
     assert_eq!(verify["status"], "Success");
-    assert_eq!(verify["data"]["issuer_did"], "did:cerulean:issuer-test");
-    assert_eq!(verify["data"]["subject_did"], "did:cerulean:subject-test");
+    assert_eq!(verify["data"]["issuer_did"], "did:goya:issuer-test");
+    assert_eq!(verify["data"]["subject_did"], "did:goya:subject-test");
 }

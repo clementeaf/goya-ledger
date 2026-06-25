@@ -34,7 +34,7 @@ echo ""
 echo "--- 2. Submit tx: $TX_ID ---"
 curl -s -X POST "$NODE1/api/v1/gateway/submit" \
   -H "$HEADER" \
-  -d "{\"chaincode_id\":\"notarize\",\"transaction\":{\"id\":\"$TX_ID\",\"input_did\":\"did:cerulean:alice\",\"output_recipient\":\"did:cerulean:bob\",\"amount\":0}}" | python3 -m json.tool
+  -d "{\"chaincode_id\":\"notarize\",\"transaction\":{\"id\":\"$TX_ID\",\"input_did\":\"did:goya:alice\",\"output_recipient\":\"did:goya:bob\",\"amount\":0}}" | python3 -m json.tool
 echo ""
 
 # 3. Verify tx exists before restart

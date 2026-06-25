@@ -30,7 +30,7 @@ echo ""
 echo "--- 1. Submit tx to node1 ---"
 SUBMIT=$(curl -s -X POST "$NODE1/api/v1/gateway/submit" \
   -H "$HEADER" -H "$NGROK_HEADER" \
-  -d "{\"chaincode_id\":\"notarize\",\"transaction\":{\"id\":\"$TX_ID\",\"input_did\":\"did:cerulean:alice\",\"output_recipient\":\"did:cerulean:bob\",\"amount\":0}}")
+  -d "{\"chaincode_id\":\"notarize\",\"transaction\":{\"id\":\"$TX_ID\",\"input_did\":\"did:goya:alice\",\"output_recipient\":\"did:goya:bob\",\"amount\":0}}")
 echo "$SUBMIT" | python3 -m json.tool
 BLOCK_HEIGHT=$(echo "$SUBMIT" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['block_height'])")
 echo ""

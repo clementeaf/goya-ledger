@@ -130,7 +130,7 @@ function testCreateIdentity() {
   const slug = `k6-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const now = Math.floor(Date.now() / 1000);
   const payload = JSON.stringify({
-    did: `did:cerulean:${slug}`,
+    did: `did:goya:${slug}`,
     created_at: now,
     updated_at: now,
     status: 'active',
@@ -286,7 +286,7 @@ function testIssueCredential() {
   // Create issuer identity first, then credential
   const slug = `k6-issuer-${__VU}-${__ITER}-${Date.now()}`;
   const now = Math.floor(Date.now() / 1000);
-  const issuerDid = `did:cerulean:${slug}`;
+  const issuerDid = `did:goya:${slug}`;
 
   // Register issuer
   http.post(`${API}/store/identities`, JSON.stringify({
@@ -297,7 +297,7 @@ function testIssueCredential() {
   const credPayload = JSON.stringify({
     id: `k6-cred-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     issuer_did: issuerDid,
-    subject_did: `did:cerulean:k6-subject-${__VU}`,
+    subject_did: `did:goya:k6-subject-${__VU}`,
     cred_type: 'LoadTestCredential',
     issued_at: now,
     expires_at: 0,

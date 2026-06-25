@@ -336,7 +336,7 @@ mod tests {
                 "2026-04-07T10:02:00Z",
                 "org1",
                 AuditAction::DidRegistered,
-                "did:cerulean:abc",
+                "did:goya:abc",
             ))
             .unwrap();
 

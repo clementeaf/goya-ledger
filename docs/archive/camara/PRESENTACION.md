@@ -61,7 +61,7 @@ Cliente ──► Gateway ──► Endorsers (simulan)
 | **Consenso** | Raft (crash fault) + BFT (byzantine fault), seleccionable |
 | **Privacidad** | Channels multi-ledger + private data collections con TTL |
 | **Smart contracts** | WebAssembly (Rust SDK) + EVM (Solidity) + externos (HTTP) |
-| **Identidad** | DID (`did:cerulean:`) + credenciales verificables + X.509 MSP |
+| **Identidad** | DID (`did:goya:`) + credenciales verificables + X.509 MSP |
 | **Criptografía** | Ed25519 + ML-DSA-65 (FIPS 204), migración gradual sin flag day |
 | **Persistencia** | RocksDB con column families, índices secundarios |
 | **Ejecución** | Paralela con wave scheduling (56K TPS medidos) |

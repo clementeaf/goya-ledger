@@ -61,7 +61,7 @@ pub struct ValuationUpdate {
     pub valuation: u64,
     /// Currency code.
     pub currency: String,
-    /// Source of the valuation (e.g., "oracle:market", "appraiser:did:cerulean:xyz").
+    /// Source of the valuation (e.g., "oracle:market", "appraiser:did:goya:xyz").
     pub source: String,
     pub timestamp: u64,
 }
@@ -75,8 +75,8 @@ mod tests {
         let token = AssetToken {
             id: "tok-1".into(),
             asset_id: "asset-1".into(),
-            issuer_did: "did:cerulean:scania-credit".into(),
-            holder_did: "did:cerulean:fleet-owner".into(),
+            issuer_did: "did:goya:scania-credit".into(),
+            holder_did: "did:goya:fleet-owner".into(),
             valuation: 15_000_000_00, // $150,000.00 in centavos
             currency: "ARS".into(),
             collateral_status: CollateralStatus::Free,

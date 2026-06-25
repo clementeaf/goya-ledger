@@ -155,7 +155,7 @@ mod tests {
     fn acl_denied_roundtrip() {
         let event = BlockEvent::AclDenied {
             resource: "/api/v1/blocks".into(),
-            identity: "did:cerulean:abc".into(),
+            identity: "did:goya:abc".into(),
             reason: "missing X-Org-Id".into(),
         };
         assert_eq!(roundtrip(&event), event);

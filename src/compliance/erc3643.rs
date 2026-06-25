@@ -359,14 +359,14 @@ mod tests {
         vec![
             IdentityClaim {
                 claim_type: ClaimType::IdentityVerified,
-                issuer_did: "did:cerulean:kyc-provider".into(),
+                issuer_did: "did:goya:kyc-provider".into(),
                 issued_at: 1000,
                 expires_at: Some(999_999),
                 country: None,
             },
             IdentityClaim {
                 claim_type: ClaimType::CountryVerified,
-                issuer_did: "did:cerulean:kyc-provider".into(),
+                issuer_did: "did:goya:kyc-provider".into(),
                 issued_at: 1000,
                 expires_at: None,
                 country: Some(country.into()),
@@ -375,11 +375,11 @@ mod tests {
     }
 
     fn setup() -> (SecurityToken, IdentityRegistry, ComplianceModule) {
-        let token = SecurityToken::new("Test Bond", "TBOND", "did:cerulean:issuer", 1_000_000);
+        let token = SecurityToken::new("Test Bond", "TBOND", "did:goya:issuer", 1_000_000);
         let registry = IdentityRegistry::new();
-        registry.register("did:cerulean:issuer", kyc_claim("CL"));
-        registry.register("did:cerulean:alice", kyc_claim("CL"));
-        registry.register("did:cerulean:bob", kyc_claim("AR"));
+        registry.register("did:goya:issuer", kyc_claim("CL"));
+        registry.register("did:goya:alice", kyc_claim("CL"));
+        registry.register("did:goya:bob", kyc_claim("AR"));
 
         let compliance = ComplianceModule::new(vec![
             ComplianceRule::RequireClaim(ClaimType::IdentityVerified),
@@ -396,15 +396,15 @@ mod tests {
         let (mut token, registry, compliance) = setup();
         // Issuer sends to alice
         let result = token.transfer(
-            "did:cerulean:issuer",
-            "did:cerulean:alice",
+            "did:goya:issuer",
+            "did:goya:alice",
             1000,
             &compliance,
             &registry,
             2000,
         );
         assert_eq!(result, ComplianceResult::Allowed);
-        assert_eq!(token.balance_of("did:cerulean:alice"), 1000);
+        assert_eq!(token.balance_of("did:goya:alice"), 1000);
     }
 
     #[test]
@@ -412,8 +412,8 @@ mod tests {
         let (mut token, registry, compliance) = setup();
         // Charlie not registered
         let result = token.transfer(
-            "did:cerulean:issuer",
-            "did:cerulean:charlie",
+            "did:goya:issuer",
+            "did:goya:charlie",
             1000,
             &compliance,
             &registry,
@@ -425,10 +425,10 @@ mod tests {
     #[test]
     fn transfer_denied_frozen_sender() {
         let (mut token, registry, compliance) = setup();
-        registry.freeze("did:cerulean:issuer");
+        registry.freeze("did:goya:issuer");
         let result = token.transfer(
-            "did:cerulean:issuer",
-            "did:cerulean:alice",
+            "did:goya:issuer",
+            "did:goya:alice",
             1000,
             &compliance,
             &registry,
@@ -440,10 +440,10 @@ mod tests {
     #[test]
     fn transfer_denied_disallowed_country() {
         let (mut token, registry, compliance) = setup();
-        registry.register("did:cerulean:dave", kyc_claim("US")); // US not in allowed list
+        registry.register("did:goya:dave", kyc_claim("US")); // US not in allowed list
         let result = token.transfer(
-            "did:cerulean:issuer",
-            "did:cerulean:dave",
+            "did:goya:issuer",
+            "did:goya:dave",
             1000,
             &compliance,
             &registry,
@@ -457,8 +457,8 @@ mod tests {
         let (mut token, registry, compliance) = setup();
         // Try to send 600K (60%) — max is 50%
         let result = token.transfer(
-            "did:cerulean:issuer",
-            "did:cerulean:alice",
+            "did:goya:issuer",
+            "did:goya:alice",
             600_000,
             &compliance,
             &registry,
@@ -471,8 +471,8 @@ mod tests {
     fn transfer_denied_insufficient_balance() {
         let (mut token, registry, compliance) = setup();
         let result = token.transfer(
-            "did:cerulean:alice",
-            "did:cerulean:bob",
+            "did:goya:alice",
+            "did:goya:bob",
             1000,
             &compliance,
             &registry,
@@ -488,26 +488,16 @@ mod tests {
     fn force_transfer_by_issuer() {
         let (mut token, _, _) = setup();
         token
-            .force_transfer(
-                "did:cerulean:issuer",
-                "did:cerulean:issuer",
-                "did:cerulean:alice",
-                500,
-            )
+            .force_transfer("did:goya:issuer", "did:goya:issuer", "did:goya:alice", 500)
             .unwrap();
-        assert_eq!(token.balance_of("did:cerulean:alice"), 500);
+        assert_eq!(token.balance_of("did:goya:alice"), 500);
     }
 
     #[test]
     fn force_transfer_denied_non_issuer() {
         let (mut token, _, _) = setup();
         let err = token
-            .force_transfer(
-                "did:cerulean:alice",
-                "did:cerulean:issuer",
-                "did:cerulean:alice",
-                500,
-            )
+            .force_transfer("did:goya:alice", "did:goya:issuer", "did:goya:alice", 500)
             .unwrap_err();
         assert!(err.contains("only issuer"));
     }
@@ -516,9 +506,9 @@ mod tests {
     fn mint_by_issuer() {
         let (mut token, _, _) = setup();
         token
-            .mint("did:cerulean:issuer", "did:cerulean:alice", 5000)
+            .mint("did:goya:issuer", "did:goya:alice", 5000)
             .unwrap();
-        assert_eq!(token.balance_of("did:cerulean:alice"), 5000);
+        assert_eq!(token.balance_of("did:goya:alice"), 5000);
         assert_eq!(token.total_supply, 1_005_000);
     }
 
@@ -526,47 +516,43 @@ mod tests {
     fn mint_denied_non_issuer() {
         let (mut token, _, _) = setup();
         assert!(token
-            .mint("did:cerulean:alice", "did:cerulean:alice", 5000)
+            .mint("did:goya:alice", "did:goya:alice", 5000)
             .is_err());
     }
 
     #[test]
     fn burn_reduces_supply() {
         let (mut token, _, _) = setup();
-        token.burn("did:cerulean:issuer", 1000).unwrap();
+        token.burn("did:goya:issuer", 1000).unwrap();
         assert_eq!(token.total_supply, 999_000);
     }
 
     #[test]
     fn freeze_and_unfreeze() {
         let registry = IdentityRegistry::new();
-        registry.register("did:cerulean:alice", vec![]);
-        assert!(!registry.is_frozen("did:cerulean:alice"));
-        registry.freeze("did:cerulean:alice");
-        assert!(registry.is_frozen("did:cerulean:alice"));
-        registry.unfreeze("did:cerulean:alice");
-        assert!(!registry.is_frozen("did:cerulean:alice"));
+        registry.register("did:goya:alice", vec![]);
+        assert!(!registry.is_frozen("did:goya:alice"));
+        registry.freeze("did:goya:alice");
+        assert!(registry.is_frozen("did:goya:alice"));
+        registry.unfreeze("did:goya:alice");
+        assert!(!registry.is_frozen("did:goya:alice"));
     }
 
     #[test]
     fn expired_claim_rejected() {
         let registry = IdentityRegistry::new();
         registry.register(
-            "did:cerulean:expired",
+            "did:goya:expired",
             vec![IdentityClaim {
                 claim_type: ClaimType::IdentityVerified,
-                issuer_did: "did:cerulean:kyc".into(),
+                issuer_did: "did:goya:kyc".into(),
                 issued_at: 100,
                 expires_at: Some(500),
                 country: None,
             }],
         );
-        assert!(!registry.has_valid_claim(
-            "did:cerulean:expired",
-            ClaimType::IdentityVerified,
-            1000
-        ));
-        assert!(registry.has_valid_claim("did:cerulean:expired", ClaimType::IdentityVerified, 400));
+        assert!(!registry.has_valid_claim("did:goya:expired", ClaimType::IdentityVerified, 1000));
+        assert!(registry.has_valid_claim("did:goya:expired", ClaimType::IdentityVerified, 400));
     }
 
     #[test]
@@ -574,8 +560,8 @@ mod tests {
         let (mut token, registry, compliance) = setup();
         assert_eq!(token.holder_count(), 1); // only issuer
         token.transfer(
-            "did:cerulean:issuer",
-            "did:cerulean:alice",
+            "did:goya:issuer",
+            "did:goya:alice",
             100,
             &compliance,
             &registry,
@@ -586,7 +572,7 @@ mod tests {
 
     #[test]
     fn security_token_serde_roundtrip() {
-        let token = SecurityToken::new("Bond", "BND", "did:cerulean:issuer", 1000);
+        let token = SecurityToken::new("Bond", "BND", "did:goya:issuer", 1000);
         let json = serde_json::to_string(&token).unwrap();
         let restored: SecurityToken = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.symbol, "BND");

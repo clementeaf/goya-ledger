@@ -42,7 +42,7 @@ cerulean-voto (voting app)          |                        |
      encrypted_alias = AES-256-GCM(key=wallet_key, plaintext=alias)
 5. Publish event:
      ALIAS_REGISTER {
-       did: "did:cerulean:<address>",
+       did: "did:goya:<address>",
        commitment: hex(commitment),
        salt: hex(salt),
        encrypted_alias: hex(encrypted_alias),
@@ -81,7 +81,7 @@ alias_registry:
 2. Publishes event:
      ALIAS_LOOKUP {
        blind_hash: hex(blind_hash),
-       requester_did: "did:cerulean:<address>",
+       requester_did: "did:goya:<address>",
        signature: Ed25519_sign(blind_hash, private_key)
      }
 3. Node checks all commitments:

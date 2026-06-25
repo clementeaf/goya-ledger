@@ -13,6 +13,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - Nonce field on `CreateTransactionRequest` with replay protection validation
 - Coinbase transactions (`from: "0"`) exempt from balance check for test funding
 
+### Changed
+
+- DID scheme renamed from `did:cerulean:` to `did:goya:` across all code, tests, scripts, and docs
+
 ## [0.1.0] — 2026-06-24
 
 **Light client mode and desktop app (GOYA-ledger for Mac)**
@@ -464,7 +468,7 @@ UI/UX overhaul:
 
 Wallet integration (cerulean-wallet WASM):
 - Ed25519 wallet generation via WASM (Argon2id + AES-256-GCM, same crypto as CLI)
-- DID derived from public key: `did:cerulean:{sha256(pk)[0..20]}`
+- DID derived from public key: `did:goya:{sha256(pk)[0..20]}`
 - Vote signing with passphrase-protected private key
 - Backend verifies Ed25519 signature + DID-to-pubkey binding before accepting vote
 
@@ -474,7 +478,7 @@ Vote secrecy:
 - Unsigned votes (legacy/permissive) unchanged
 
 Acta blockchain anchoring:
-- SHA-256 hash stored as `did:cerulean:acta:{folio}` on session close
+- SHA-256 hash stored as `did:goya:acta:{folio}` on session close
 - Acta UI shows trace_id and anchoring status
 
 Voter registry:
@@ -891,7 +895,7 @@ Tests: 1,532 passed, 0 failures.
 - Results: compact cards with tally bars and stats
 - All pages: `h-screen` layout with internal scroll, no page-level scrolling
 - Borders softened (`border-neutral-100`), shadows removed, padding reduced
-- `did:cerulean:` prefix hidden from all user-facing inputs — DIDs generated internally
+- `did:goya:` prefix hidden from all user-facing inputs — DIDs generated internally
 - "Deposito" / "Garantia" field removed from elections (hardcoded internally)
 - "Peso del voto" removed — 1 person = 1 vote
 

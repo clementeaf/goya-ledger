@@ -136,7 +136,7 @@ fn cmd_init(node: &str, name: &str, org: &str) -> Result<(), String> {
 
     let secret_hex = hex::encode(signing_key.to_bytes());
     let public_hex = hex::encode(verifying_key.to_bytes());
-    let did = format!("did:cerulean:{}", &public_hex[..16]);
+    let did = format!("did:goya:{}", &public_hex[..16]);
 
     // Register DID on the node (IdentityRecord struct)
     let client = http_client();
@@ -214,7 +214,7 @@ fn cmd_sign(node: &str, file: &PathBuf, description: Option<&str>) -> Result<(),
     let body = serde_json::json!({
         "id": cred_id,
         "issuer_did": wallet.did,
-        "subject_did": format!("did:cerulean:doc:{}", &hash_hex[..16]),
+        "subject_did": format!("did:goya:doc:{}", &hash_hex[..16]),
         "cred_type": "DigitalSignature",
         "issued_at": now_ts,
         "expires_at": 0,

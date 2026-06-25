@@ -174,9 +174,9 @@ async fn poll_and_ingest(
         // Upsert asset
         let asset = Asset {
             id: asset_id.clone(),
-            did: format!("did:cerulean:asset:{asset_id}"),
+            did: format!("did:goya:asset:{asset_id}"),
             asset_type: config.asset_type.clone(),
-            owner_did: format!("did:cerulean:{owner}"),
+            owner_did: format!("did:goya:{owner}"),
             label,
             metadata: item.clone(),
             status: AssetStatus::Active,
@@ -193,7 +193,7 @@ async fn poll_and_ingest(
             data: item.clone(),
             occurred_at: now,
             recorded_at: now,
-            source_did: format!("did:cerulean:adapter:{}", config.asset_type),
+            source_did: format!("did:goya:adapter:{}", config.asset_type),
             signature: String::new(),
         };
         let _ = store.write_asset_event(&event);

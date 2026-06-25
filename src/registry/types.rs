@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 pub struct Asset {
     /// Unique identifier (e.g., "asset-001").
     pub id: String,
-    /// Decentralized identifier (e.g., "did:cerulean:asset:VIN123").
+    /// Decentralized identifier (e.g., "did:goya:asset:VIN123").
     pub did: String,
     /// Asset category (e.g., "vehicle", "equipment", "machinery").
     pub asset_type: String,
@@ -102,9 +102,9 @@ mod tests {
     fn asset_serializes() {
         let asset = Asset {
             id: "a1".into(),
-            did: "did:cerulean:asset:VIN123".into(),
+            did: "did:goya:asset:VIN123".into(),
             asset_type: "vehicle".into(),
-            owner_did: "did:cerulean:org1".into(),
+            owner_did: "did:goya:org1".into(),
             label: "Scania R450".into(),
             metadata: serde_json::json!({"vin": "VIN123", "year": 2024}),
             status: AssetStatus::Active,
@@ -125,7 +125,7 @@ mod tests {
             data: serde_json::json!({"km": 150000, "fuel_l": 45.2}),
             occurred_at: 1700000000,
             recorded_at: 1700000001,
-            source_did: "did:cerulean:myscania".into(),
+            source_did: "did:goya:myscania".into(),
             signature: String::new(),
         };
         let json = serde_json::to_string(&event).unwrap();

@@ -463,7 +463,7 @@ pub fn stress_identity(ops: u64) -> ModuleStressResult {
     for i in 0..ops {
         let op_start = Instant::now();
 
-        let did = format!("did:cerulean:stress-{i}");
+        let did = format!("did:goya:stress-{i}");
         let record = IdentityRecord {
             did: did.clone(),
             created_at: 1000 + i,
@@ -512,7 +512,7 @@ pub fn stress_credential(ops: u64) -> ModuleStressResult {
     let store = MemoryStore::new();
 
     // Pre-register issuer DID
-    let issuer_did = "did:cerulean:issuer-stress";
+    let issuer_did = "did:goya:issuer-stress";
     store
         .write_identity(&IdentityRecord {
             did: issuer_did.into(),
@@ -533,7 +533,7 @@ pub fn stress_credential(ops: u64) -> ModuleStressResult {
         let cred = Credential {
             id: cred_id.clone(),
             issuer_did: issuer_did.into(),
-            subject_did: format!("did:cerulean:subject-{i}"),
+            subject_did: format!("did:goya:subject-{i}"),
             cred_type: "VerifiableCredential".into(),
             issued_at: 1000 + i,
             expires_at: 9_999_999,
@@ -743,7 +743,7 @@ mod tests {
                 std::thread::spawn(move || {
                     let mut errors = 0u64;
                     for i in 0..25_000u64 {
-                        let did = format!("did:cerulean:t{t}-{i}");
+                        let did = format!("did:goya:t{t}-{i}");
                         let rec = IdentityRecord {
                             did: did.clone(),
                             created_at: i,
@@ -772,7 +772,7 @@ mod tests {
         let mut integrity_errors = 0u64;
         for t in 0..64u64 {
             for i in (0..25_000u64).step_by(100) {
-                let did = format!("did:cerulean:t{t}-{i}");
+                let did = format!("did:goya:t{t}-{i}");
                 match store.read_identity(&did) {
                     Ok(rec) => {
                         if rec.did != did || rec.created_at != i {
@@ -799,7 +799,7 @@ mod tests {
         // Pre-register issuer
         store
             .write_identity(&IdentityRecord {
-                did: "did:cerulean:torture-issuer".into(),
+                did: "did:goya:torture-issuer".into(),
                 created_at: 0,
                 updated_at: 0,
                 status: "active".into(),
@@ -814,8 +814,8 @@ mod tests {
                     for i in 0..25_000u64 {
                         let cred = Credential {
                             id: format!("cred-t{t}-{i}"),
-                            issuer_did: "did:cerulean:torture-issuer".into(),
-                            subject_did: format!("did:cerulean:subj-{i}"),
+                            issuer_did: "did:goya:torture-issuer".into(),
+                            subject_did: format!("did:goya:subj-{i}"),
                             cred_type: "TortureTest".into(),
                             issued_at: i,
                             expires_at: 0,
@@ -849,7 +849,7 @@ mod tests {
                 let id = format!("cred-t{t}-{i}");
                 match store.read_credential(&id) {
                     Ok(c) => {
-                        if c.id != id || c.issuer_did != "did:cerulean:torture-issuer" {
+                        if c.id != id || c.issuer_did != "did:goya:torture-issuer" {
                             integrity_errors += 1;
                         }
                     }
@@ -1048,7 +1048,7 @@ mod tests {
                 std::thread::spawn(move || {
                     for i in 0..10_000u64 {
                         let rec = IdentityRecord {
-                            did: format!("did:cerulean:mix-id-t{t}-{i}"),
+                            did: format!("did:goya:mix-id-t{t}-{i}"),
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),
@@ -1069,8 +1069,8 @@ mod tests {
                 for i in 0..10_000u64 {
                     let cred = Credential {
                         id: format!("mix-cred-t{t}-{i}"),
-                        issuer_did: "did:cerulean:mix-issuer".into(),
-                        subject_did: format!("did:cerulean:mix-subj-{i}"),
+                        issuer_did: "did:goya:mix-issuer".into(),
+                        subject_did: format!("did:goya:mix-subj-{i}"),
                         cred_type: "MixedTest".into(),
                         issued_at: i,
                         expires_at: 0,
@@ -1453,7 +1453,7 @@ mod tests {
                 std::thread::spawn(move || {
                     let mut errors = 0u64;
                     for i in 0..10_000u64 {
-                        let did = format!("did:cerulean:rocks-t{t}-{i}");
+                        let did = format!("did:goya:rocks-t{t}-{i}");
                         let rec = IdentityRecord {
                             did: did.clone(),
                             created_at: i,
@@ -1479,8 +1479,8 @@ mod tests {
         );
 
         // Verify data survives (read after all writes)
-        assert!(store.read_identity("did:cerulean:rocks-t0-0").is_ok());
-        assert!(store.read_identity("did:cerulean:rocks-t15-9999").is_ok());
+        assert!(store.read_identity("did:goya:rocks-t0-0").is_ok());
+        assert!(store.read_identity("did:goya:rocks-t15-9999").is_ok());
     }
 
     /// RocksDB: 16 threads × 10,000 credential writes+reads = 160K disk ops
@@ -1495,7 +1495,7 @@ mod tests {
         // Pre-register issuer
         store
             .write_identity(&IdentityRecord {
-                did: "did:cerulean:rocks-issuer".into(),
+                did: "did:goya:rocks-issuer".into(),
                 created_at: 0,
                 updated_at: 0,
                 status: "active".into(),
@@ -1511,8 +1511,8 @@ mod tests {
                         let id = format!("rocks-cred-t{t}-{i}");
                         let cred = Credential {
                             id: id.clone(),
-                            issuer_did: "did:cerulean:rocks-issuer".into(),
-                            subject_did: format!("did:cerulean:rocks-subj-{i}"),
+                            issuer_did: "did:goya:rocks-issuer".into(),
+                            subject_did: format!("did:goya:rocks-subj-{i}"),
                             cred_type: "RocksTest".into(),
                             issued_at: i,
                             expires_at: 0,
@@ -1614,7 +1614,7 @@ mod tests {
                 std::thread::spawn(move || {
                     for i in 0..5_000u64 {
                         let rec = IdentityRecord {
-                            did: format!("did:cerulean:rmix-t{t}-{i}"),
+                            did: format!("did:goya:rmix-t{t}-{i}"),
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),
@@ -1635,8 +1635,8 @@ mod tests {
                 for i in 0..5_000u64 {
                     let cred = Credential {
                         id: format!("rmix-cred-t{t}-{i}"),
-                        issuer_did: "did:cerulean:rmix-issuer".into(),
-                        subject_did: format!("did:cerulean:rmix-subj-{i}"),
+                        issuer_did: "did:goya:rmix-issuer".into(),
+                        subject_did: format!("did:goya:rmix-subj-{i}"),
                         cred_type: "RocksMixed".into(),
                         issued_at: i,
                         expires_at: 0,

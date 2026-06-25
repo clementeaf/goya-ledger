@@ -21,7 +21,7 @@ fn identity_then_credential_produces_audit_trail() {
 
     // 1. Create identity
     let identity = IdentityRecord {
-        did: "did:cerulean:alice".to_string(),
+        did: "did:goya:alice".to_string(),
         created_at: 1000,
         updated_at: 1000,
         status: "active".to_string(),
@@ -31,14 +31,14 @@ fn identity_then_credential_produces_audit_trail() {
         audit.as_ref(),
         AuditAction::DidRegistered,
         "org1",
-        Some("did=did:cerulean:alice".to_string()),
+        Some("did=did:goya:alice".to_string()),
     );
 
     // 2. Issue credential for that identity
     let credential = Credential {
         id: "cred-1".to_string(),
-        issuer_did: "did:cerulean:university".to_string(),
-        subject_did: "did:cerulean:alice".to_string(),
+        issuer_did: "did:goya:university".to_string(),
+        subject_did: "did:goya:alice".to_string(),
         cred_type: "Diploma".to_string(),
         issued_at: 1001,
         expires_at: 0,
@@ -56,13 +56,11 @@ fn identity_then_credential_produces_audit_trail() {
     );
 
     // 3. Verify: identity exists
-    let read_id = store.read_identity("did:cerulean:alice").unwrap();
+    let read_id = store.read_identity("did:goya:alice").unwrap();
     assert_eq!(read_id.status, "active");
 
     // 4. Verify: credential linked to identity
-    let creds = store
-        .credentials_by_subject_did("did:cerulean:alice")
-        .unwrap();
+    let creds = store.credentials_by_subject_did("did:goya:alice").unwrap();
     assert_eq!(creds.len(), 1);
     assert_eq!(creds[0].cred_type, "Diploma");
 
@@ -192,8 +190,8 @@ fn credential_to_zkp_range_proof_end_to_end() {
     // 1. Store credential with age claim
     let credential = Credential {
         id: "cred-age".to_string(),
-        issuer_did: "did:cerulean:gov".to_string(),
-        subject_did: "did:cerulean:bob".to_string(),
+        issuer_did: "did:goya:gov".to_string(),
+        subject_did: "did:goya:bob".to_string(),
         cred_type: "AgeVerification".to_string(),
         issued_at: 1000,
         expires_at: 0,
@@ -223,8 +221,8 @@ fn credential_revocation_invalidates_validity_proof() {
     // 1. Store active credential
     let mut credential = Credential {
         id: "cred-rev".to_string(),
-        issuer_did: "did:cerulean:issuer".to_string(),
-        subject_did: "did:cerulean:holder".to_string(),
+        issuer_did: "did:goya:issuer".to_string(),
+        subject_did: "did:goya:holder".to_string(),
         cred_type: "License".to_string(),
         issued_at: 1000,
         expires_at: 0,
@@ -277,7 +275,7 @@ fn audit_events_filterable_by_org() {
         &audit,
         AuditAction::DidRegistered,
         "org1",
-        Some("did=did:cerulean:a".to_string()),
+        Some("did=did:goya:a".to_string()),
     );
 
     // Org2 actions

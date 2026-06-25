@@ -104,7 +104,7 @@ Quién ve qué.
 | Private data collections | Datos compartidos solo entre partes autorizadas, con TTL | Producción |
 | ACL (deny-by-default) | Control de acceso por recurso, denegación por defecto | Producción |
 | MSP (roles) | Admin, Peer, Client — extraídos de certificado X.509 | Producción |
-| DID (identidad) | Identificadores descentralizados `did:cerulean:` | Producción |
+| DID (identidad) | Identificadores descentralizados `did:goya:` | Producción |
 | Credenciales verificables | Emisión y verificación criptográfica de certificados | Producción |
 | PIN | Generación CSPRNG + verificación Argon2id para autenticación simple | Producción |
 

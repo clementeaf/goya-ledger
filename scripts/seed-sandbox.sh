@@ -108,9 +108,9 @@ fi
 
 echo -e "${CYAN}6. Identities${NC}"
 for did_slug in universidad-chile registro-civil servicio-salud banco-central alice-persona bob-empresa carlos-auditor; do
-    resp=$(post "$API/store/identities" -d "{\"did\":\"did:cerulean:$did_slug\",\"created_at\":$NOW,\"updated_at\":$NOW,\"status\":\"active\"}")
+    resp=$(post "$API/store/identities" -d "{\"did\":\"did:goya:$did_slug\",\"created_at\":$NOW,\"updated_at\":$NOW,\"status\":\"active\"}")
     if [ -n "$resp" ]; then
-        ok "did:cerulean:$did_slug"
+        ok "did:goya:$did_slug"
         COUNTS_IDS=$((COUNTS_IDS + 1))
     else
         skip "$did_slug"
@@ -123,7 +123,7 @@ echo -e "${CYAN}7. Documents & credentials${NC}"
 
 seed_cred() {
     local id="$1" issuer="$2" subject="$3" ctype="$4" claims="$5" expires="${6:-0}"
-    resp=$(post "$API/store/credentials" -d "{\"id\":\"$id\",\"issuer_did\":\"did:cerulean:$issuer\",\"subject_did\":\"did:cerulean:$subject\",\"cred_type\":\"$ctype\",\"issued_at\":$NOW,\"expires_at\":$expires,\"claims\":$claims,\"status\":\"active\"}")
+    resp=$(post "$API/store/credentials" -d "{\"id\":\"$id\",\"issuer_did\":\"did:goya:$issuer\",\"subject_did\":\"did:goya:$subject\",\"cred_type\":\"$ctype\",\"issued_at\":$NOW,\"expires_at\":$expires,\"claims\":$claims,\"status\":\"active\"}")
     if [ -n "$resp" ]; then
         ok "$ctype ($id)"
         COUNTS_CREDS=$((COUNTS_CREDS + 1))

@@ -43,7 +43,7 @@ for i in $(seq 1 $SEED_IDENTITIES); do
         -X POST "$NODE/api/v1/store/identities" \
         -H "Content-Type: application/json" \
         -H "X-Org-Id: stress" -H "X-Msp-Role: client" \
-        -d "{\"did\":\"did:cerulean:s-$i\",\"created_at\":$(date +%s),\"updated_at\":$(date +%s),\"status\":\"active\"}" 2>/dev/null)
+        -d "{\"did\":\"did:goya:s-$i\",\"created_at\":$(date +%s),\"updated_at\":$(date +%s),\"status\":\"active\"}" 2>/dev/null)
     if [[ "$code" -lt 200 || "$code" -gt 201 ]]; then
         seed_errors=$((seed_errors + 1))
     fi
@@ -92,7 +92,7 @@ for level_idx in "${!LEVELS[@]}"; do
                 -X POST "$NODE/api/v1/store/credentials" \
                 -H "Content-Type: application/json" \
                 -H "X-Org-Id: stress" -H "X-Msp-Role: client" \
-                -d "{\"id\":\"$cred_id\",\"issuer_did\":\"did:cerulean:s-$did_num\",\"subject_did\":\"did:cerulean:doc:$hash\",\"cred_type\":\"DigitalSignature\",\"issued_at\":$ts,\"expires_at\":0,\"revoked_at\":null}" 2>/dev/null || echo "000")
+                -d "{\"id\":\"$cred_id\",\"issuer_did\":\"did:goya:s-$did_num\",\"subject_did\":\"did:goya:doc:$hash\",\"cred_type\":\"DigitalSignature\",\"issued_at\":$ts,\"expires_at\":0,\"revoked_at\":null}" 2>/dev/null || echo "000")
             t1=$(now_ms)
             echo "$((t1 - t0)) $code" >> "$TMPDIR/results.txt"
         ) &
