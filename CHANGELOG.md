@@ -16,6 +16,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 ### Changed
 
 - DID scheme renamed from `did:cerulean:` to `did:goya:` across all code, tests, scripts, and docs
+- Desktop app now targets Windows (NSIS + MSI) in addition to macOS (DMG)
+- Local identity store uses `%APPDATA%\goya\` on Windows instead of `~/.goya/`
+- Generated platform icons (ICO, ICNS, PNG variants) from source PNG via `cargo tauri icon`
+- Added `release-desktop.yml` CI workflow: builds macOS (ARM + Intel) and Windows (x64), publishes draft release on tag push
 
 ## [0.1.0] — 2026-06-24
 

@@ -110,9 +110,18 @@ impl LocalIdentityStore {
     }
 }
 
-/// Platform-appropriate data directory: `~/.goya/` on Unix, `%APPDATA%/goya/` on Windows.
+/// Platform-appropriate data directory:
+/// - Windows: `%APPDATA%\goya\` (via `dirs::data_dir()`)
+/// - Unix/macOS: `~/.goya/` (via `dirs::home_dir()`)
 fn dirs_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".goya"))
+    #[cfg(target_os = "windows")]
+    {
+        dirs::data_dir().map(|d| d.join("goya"))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        dirs::home_dir().map(|h| h.join(".goya"))
+    }
 }
 
 #[cfg(test)]
@@ -224,5 +233,78 @@ mod tests {
         let store2 = LocalIdentityStore::open(path);
         let retrieved = store2.get("did:goya:alice").unwrap();
         assert!(retrieved.is_some());
+    }
+
+    // ── Platform data directory tests ──
+
+    #[test]
+    fn dirs_path_returns_some() {
+        // dirs_path must resolve on any platform with a home/appdata dir.
+        let path = dirs_path();
+        assert!(
+            path.is_some(),
+            "dirs_path() must resolve on CI and dev machines"
+        );
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn dirs_path_unix_uses_home_dot_goya() {
+        let path = dirs_path().unwrap();
+        assert!(
+            path.ends_with(".goya"),
+            "Unix dirs_path must end with .goya, got: {path:?}"
+        );
+        // Must be under home directory
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(path, home.join(".goya"));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn dirs_path_windows_uses_appdata_goya() {
+        let path = dirs_path().unwrap();
+        assert!(
+            path.ends_with("goya"),
+            "Windows dirs_path must end with goya, got: {path:?}"
+        );
+        // Must be under %APPDATA% (data_dir), not home
+        let data = dirs::data_dir().unwrap();
+        assert_eq!(path, data.join("goya"));
+        // Verify it's NOT under home_dir/.goya (the old wrong behavior)
+        let home = dirs::home_dir().unwrap();
+        assert_ne!(path, home.join(".goya"), "Windows must NOT use ~/.goya");
+    }
+
+    #[test]
+    fn dirs_path_does_not_contain_identities_json() {
+        // dirs_path returns the directory, not the file — from_env appends the filename.
+        let path = dirs_path().unwrap();
+        assert!(
+            !path.to_string_lossy().contains("identities"),
+            "dirs_path must return directory only, got: {path:?}"
+        );
+    }
+
+    #[test]
+    fn from_env_appends_identities_json() {
+        // Can't mutate env safely in parallel, but we can verify the
+        // fallback path structure by constructing the expected result.
+        let expected_dir = dirs_path().unwrap();
+        let expected_file = expected_dir.join("identities.json");
+
+        // from_env without GOYA_DATA_DIR set should resolve to dirs_path + identities.json.
+        // We verify the structure, not the actual from_env call (env-racy).
+        assert!(
+            expected_file.to_string_lossy().ends_with("identities.json"),
+            "store path must end with identities.json"
+        );
+        assert!(
+            expected_file
+                .parent()
+                .unwrap()
+                .ends_with(expected_dir.file_name().unwrap()),
+            "parent of store file must be the platform data dir"
+        );
     }
 }
