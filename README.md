@@ -1,81 +1,79 @@
-# Cerulean Ledger
+# GOYA Ledger
 
-[![CI](https://github.com/clementeaf/cerulean-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/clementeaf/cerulean-ledger/actions/workflows/ci.yml)
+[![CI](https://github.com/clementeaf/goya-ledger/actions/workflows/ci.yml/badge.svg)](https://github.com/clementeaf/goya-ledger/actions/workflows/ci.yml)
 
-A permissioned blockchain platform built in Rust with post-quantum cryptography.
+Blockchain platform with post-quantum cryptography. Create digital identities, notarize documents, and verify proofs — all from a desktop app.
 
-Follows the Hyperledger Fabric architecture (execute-order-validate) with channels, private data collections, endorsement policies, BFT/DPoS consensus, and WebAssembly smart contracts.
+## Download
 
-## Quick start
+| Platform | Download |
+|----------|----------|
+| macOS (Apple Silicon) | [GOYA-ledger_0.2.0_aarch64.dmg](https://github.com/clementeaf/goya-ledger/releases/tag/v0.2.0) |
+| Windows | Coming soon |
+
+## What can you do?
+
+### 1. Create a digital identity
+Generate a `did:goya:` decentralized identity with Ed25519 signing. Your private key is encrypted locally with Argon2id + AES-256-GCM — it never leaves your machine.
+
+### 2. Notarize documents
+Drag and drop any file. The app computes its SHA-256 hash locally, signs it with your identity, and registers the proof on the GOYA blockchain. The document itself is never uploaded.
+
+### 3. Verify document proofs
+Paste a hash to check if it was notarized — get timestamp, signer, and block height.
+
+## How it works
+
+```
+Your Mac                           GOYA Network
+┌──────────────┐                  ┌──────────────┐
+│ Desktop App  │───HTTPS/TLS────▶│  Seed Node   │
+│              │                  │  (Fly.io)    │
+│ • Identity   │                  │              │
+│ • Notarize   │                  │ • Consensus  │
+│ • Verify     │                  │ • Storage    │
+│              │                  │ • API        │
+│ Keys stored  │                  │              │
+│ locally in   │                  │ RocksDB      │
+│ ~/.goya/     │                  │ persistent   │
+└──────────────┘                  └──────────────┘
+```
+
+## For developers
+
+### Run a local node
 
 ```bash
-cargo build
-cargo test
-
-# Start a single node
-cargo run
-
-# Interactive demo (no Docker needed)
-./scripts/try-it.sh
-
-# Start a 6-node network (3 peers + 3 orderers + Prometheus + Grafana)
-cd deploy && ./generate-tls.sh && cd ..
-docker compose up -d
+cargo run --bin rust-bc    # API on :8080, P2P on :8081
 ```
 
-## Features
-
-- **Channels** — Isolated ledgers per business network
-- **Private data** — Confidential data shared only between authorized organizations
-- **Endorsement policies** — AnyOf, AllOf, NOutOf with per-key overrides
-- **BFT/DPoS consensus** — HotStuff-inspired BFT + Delegated Proof of Stake
-- **WebAssembly chaincode** — Sandboxed smart contracts with state CRUD, events, cross-chaincode calls
-- **Post-quantum crypto** — ML-DSA-65 (FIPS 204), ML-KEM-768 (FIPS 203), SHA3-256 (FIPS 202)
-- **Mutual TLS** — X.509 MSP with certificate-based identity and role inference
-- **EVM compatibility** — Deploy and call Solidity contracts via revm
-- **On-chain governance** — Proposals, stake-weighted voting, parameter registry
-- **REST API** — 66+ endpoints, OpenAPI 3.0
-- **DID/VC** — W3C DID Resolution, Verifiable Credentials, JSON-LD interop
-
-## Architecture
-
-```
-Client → Gateway → Endorsing Peers → Ordering Service → Commit
-```
-
-| Component | Description |
-|---|---|
-| Peer nodes | Execute chaincode, maintain ledger, endorse proposals |
-| Ordering service | Raft or BFT consensus, block creation |
-| Gateway | Endorse-order-commit pipeline with wave-parallel execution |
-| Channels | Isolated ledgers shared between subsets of organizations |
-| Chaincode | Smart contracts in Rust/Wasm with static validation |
-| World state | Key-value state backed by RocksDB |
-
-## Post-quantum cryptography
+### Build the desktop app
 
 ```bash
-SIGNING_ALGORITHM=ml-dsa-65 cargo run
+cd tauri-app && cargo tauri build
 ```
 
-ML-DSA-65 and Ed25519 coexist. Dual-signing for migration. See [`docs/compliance/`](docs/compliance/).
-
-## Related repositories
-
-- [cerulean-explorer](https://github.com/clementeaf/cerulean-explorer) — Block explorer (Vite + React)
-- [cerulean-voto](https://github.com/clementeaf/cerulean-voto) — Electronic voting platform
-- [cerulean-sdks](https://github.com/clementeaf/cerulean-sdks) — TypeScript and Python clients
-
-## Tests
+### Run tests
 
 ```bash
-cargo test              # 1698 unit + integration tests
-./scripts/e2e-test.sh   # 71 E2E assertions on Docker network
+cargo test --lib           # Unit tests
+cargo test                 # All tests
 ```
 
-## Documentation
+### API
 
-See [`docs/`](docs/) for API reference, deployment guides, architecture, compliance, and more.
+66+ REST endpoints under `/api/v1`. Key endpoints for the free service:
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/v1/notarize` | Register a signed document hash |
+| `GET /api/v1/notarize/verify/{hash}` | Verify a document hash |
+| `GET /api/v1/health` | Node health and chain height |
+| `GET /api/v1/accounts/{address}` | Account balance and nonce |
+
+### Architecture
+
+Rust/Actix-Web 4 blockchain node with DAG + HotStuff BFT + DPoS consensus. Post-quantum crypto via ML-DSA-65 (FIPS 204). See [`docs/`](docs/) for full architecture and API reference.
 
 ## License
 
