@@ -114,9 +114,20 @@ pub async fn submit_notarization(
         )));
     }
 
+    // Verify signer DID matches public key — prevents impersonation.
+    // DID format: did:goya:{first 16 hex chars of public key}
+    let expected_did = format!("did:goya:{}", &body.public_key[..16]);
+    if body.signer != expected_did {
+        return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
+            err_dto(
+                "SIGNER_MISMATCH",
+                "signer DID does not match the provided public key",
+            ),
+            401,
+        )));
+    }
+
     // Verify signature over "notarize:{signer}:{content_hash}"
-    // The signer is included in the signed payload to prevent impersonation:
-    // only the holder of the private key can claim a specific signer identity.
     let sign_msg = format!("notarize:{}:{}", body.signer, body.content_hash);
     if !verify_ed25519(&body.public_key, sign_msg.as_bytes(), &body.signature) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
