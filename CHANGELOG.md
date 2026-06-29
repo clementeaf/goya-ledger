@@ -6,12 +6,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-29
+
+**Accounts, replay protection, signed notarization, and CI**
+
 ### Added
 
 - `GET /api/v1/accounts/{address}` — wallet-compatible endpoint returning balance and nonce
 - `store_nonce` helper deriving outbound transaction count per address
 - Nonce field on `CreateTransactionRequest` with replay protection validation
 - Coinbase transactions (`from: "0"`) exempt from balance check for test funding
+- CI workflow restored (fmt, clippy, tests, crypto boundary) — free on public repo
 
 ### Changed
 
@@ -20,6 +25,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - Local identity store uses `%APPDATA%\goya\` on Windows instead of `~/.goya/`
 - Generated platform icons (ICO, ICNS, PNG variants) from source PNG via `cargo tauri icon`
 - `pqc_crypto_module` memory locking now cross-platform: `mlock` on Unix, `VirtualLock` on Windows
+
+### Fixed
+
+- Desktop notarization now signs with Ed25519, matching server's payload verification
+- Notarize UI requires identity selection and password before submitting
 
 ## [0.1.0] — 2026-06-24
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicbarker/tauri/dev/crates/tauri-schema-generator/schemas/config.schema.json",
   "productName": "GOYA-ledger",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.goya.ledger",
   "build": {
     "frontendDist": "frontend"
