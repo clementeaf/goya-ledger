@@ -593,3 +593,287 @@ async fn e2e_impersonation_rejected() {
     assert_eq!(resp.status(), 201, "legitimate notarization should succeed");
     println!("  ✓ Victim's legitimate notarization accepted (201)");
 }
+
+// ── Account endpoint: balance, nonce, non-existent address ──────────────────
+
+#[tokio::test]
+async fn e2e_account_endpoint() {
+    println!("\n═══ E2E: Account Endpoint ═══");
+    let client = setup_client();
+
+    // Query a fresh identity that has never transacted — should return 0/0
+    let id = create_identity();
+    println!("\n── Query fresh account (never transacted) ──");
+    let resp = client
+        .get(format!("{SEED_URL}/api/v1/accounts/{}", id.did))
+        .send()
+        .await
+        .expect("account request failed");
+
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let data = &body["data"];
+    assert_eq!(data["address"], id.did);
+    let balance = data["balance"].as_u64().unwrap();
+    let nonce = data["nonce"].as_u64().unwrap();
+    println!("  ✓ Address: {}", id.did);
+    println!("  ✓ Balance: {balance} (expected 0)");
+    println!("  ✓ Nonce:   {nonce} (expected 0)");
+    assert_eq!(balance, 0, "fresh account should have 0 balance");
+    assert_eq!(nonce, 0, "fresh account should have 0 nonce");
+
+    // Query a totally bogus address — should still return 200 with 0/0
+    println!("\n── Query nonexistent address ──");
+    let resp = client
+        .get(format!(
+            "{SEED_URL}/api/v1/accounts/did:goya:does_not_exist"
+        ))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(
+        resp.status(),
+        200,
+        "nonexistent address should return 200 with defaults"
+    );
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["data"]["balance"], 0);
+    assert_eq!(body["data"]["nonce"], 0);
+    println!("  ✓ Nonexistent address returns 200 with balance=0, nonce=0");
+
+    // Query via wallets endpoint too — should match
+    println!("\n── Cross-check: /wallets/{{address}} ──");
+    let resp = client
+        .get(format!("{SEED_URL}/api/v1/wallets/{}", id.did))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), 200);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(body["data"]["balance"], 0);
+    println!("  ✓ /wallets/ endpoint consistent with /accounts/");
+}
+
+// ── Malformed payloads: the server must reject gracefully ───────────────────
+
+#[tokio::test]
+async fn e2e_malformed_payloads() {
+    println!("\n═══ E2E: Malformed Payloads ═══");
+    let client = setup_client();
+
+    // 1. Completely empty body
+    println!("\n── 1. Empty body ──");
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .header("Content-Type", "application/json")
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        resp.status().is_client_error(),
+        "empty body should be 4xx, got {}",
+        resp.status()
+    );
+    println!("  ✓ Empty body → {}", resp.status());
+
+    // 2. Raw garbage (not JSON)
+    println!("\n── 2. Non-JSON body ──");
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .header("Content-Type", "application/json")
+        .body("this is not json at all")
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        resp.status().is_client_error(),
+        "garbage body should be 4xx, got {}",
+        resp.status()
+    );
+    println!("  ✓ Non-JSON body → {}", resp.status());
+
+    // 3. Missing required fields (only content_hash, no signer/key/sig)
+    println!("\n── 3. Missing required fields ──");
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .json(&serde_json::json!({
+            "content_hash": "aa".repeat(32),
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        resp.status().is_client_error(),
+        "missing fields should be 4xx, got {}",
+        resp.status()
+    );
+    println!("  ✓ Missing fields → {}", resp.status());
+
+    // 4. Truncated public key (31 bytes instead of 32)
+    println!("\n── 4. Truncated public key (31 bytes) ──");
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .json(&serde_json::json!({
+            "content_hash": "aa".repeat(32),
+            "signer": "did:goya:test",
+            "public_key": "bb".repeat(31),
+            "signature": "cc".repeat(64),
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400, "truncated key should be 400");
+    println!("  ✓ Truncated public key → 400");
+
+    // 5. Oversized public key (33 bytes)
+    println!("\n── 5. Oversized public key (33 bytes) ──");
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .json(&serde_json::json!({
+            "content_hash": "aa".repeat(32),
+            "signer": "did:goya:test",
+            "public_key": "bb".repeat(33),
+            "signature": "cc".repeat(64),
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400, "oversized key should be 400");
+    println!("  ✓ Oversized public key → 400");
+
+    // 6. Hash too short (31 bytes)
+    println!("\n── 6. Hash too short ──");
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .json(&serde_json::json!({
+            "content_hash": "aa".repeat(31),
+            "signer": "did:goya:test",
+            "public_key": "bb".repeat(32),
+            "signature": "cc".repeat(64),
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400, "short hash should be 400");
+    println!("  ✓ Hash too short → 400");
+
+    // 7. Non-hex characters in hash
+    println!("\n── 7. Non-hex hash ──");
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .json(&serde_json::json!({
+            "content_hash": "zz".repeat(32),
+            "signer": "did:goya:test",
+            "public_key": "bb".repeat(32),
+            "signature": "cc".repeat(64),
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 400, "non-hex hash should be 400");
+    println!("  ✓ Non-hex hash → 400");
+
+    // 8. Empty string fields
+    println!("\n── 8. Empty string fields ──");
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .json(&serde_json::json!({
+            "content_hash": "",
+            "signer": "",
+            "public_key": "",
+            "signature": "",
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        resp.status().is_client_error(),
+        "empty strings should be 4xx, got {}",
+        resp.status()
+    );
+    println!("  ✓ Empty strings → {}", resp.status());
+
+    // 9. SQL injection attempt in signer field
+    println!("\n── 9. SQL injection in signer ──");
+    let id = create_identity();
+    let content_hash = hash_document(b"sql-injection-test");
+    let signer_sqli = "did:goya:test'; DROP TABLE notarizations; --";
+    let sign_msg = format!("notarize:{signer_sqli}:{content_hash}");
+    let sig = hex::encode(id.signing_key.sign(sign_msg.as_bytes()).to_bytes());
+
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .json(&serde_json::json!({
+            "content_hash": content_hash,
+            "signer": signer_sqli,
+            "public_key": id.public_key_hex,
+            "signature": sig,
+        }))
+        .send()
+        .await
+        .unwrap();
+    // Should be rejected (signer doesn't match pubkey DID) or at worst accepted harmlessly
+    assert!(
+        !resp.status().is_server_error(),
+        "SQL injection must not cause 5xx, got {}",
+        resp.status()
+    );
+    println!("  ✓ SQL injection attempt → {} (no 5xx)", resp.status());
+
+    // 10. XSS attempt in metadata
+    println!("\n── 10. XSS in metadata ──");
+    let content_hash = hash_document(b"xss-test");
+    let sign_msg = format!("notarize:{}:{}", id.did, content_hash);
+    let sig = hex::encode(id.signing_key.sign(sign_msg.as_bytes()).to_bytes());
+
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .json(&serde_json::json!({
+            "content_hash": content_hash,
+            "signer": id.did,
+            "public_key": id.public_key_hex,
+            "signature": sig,
+            "metadata": {
+                "file_name": "<script>alert('xss')</script>",
+                "onload": "javascript:alert(1)",
+            }
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        !resp.status().is_server_error(),
+        "XSS payload must not cause 5xx, got {}",
+        resp.status()
+    );
+    println!("  ✓ XSS in metadata → {} (no 5xx)", resp.status());
+
+    // 11. Massive metadata (1MB JSON blob)
+    println!("\n── 11. Oversized metadata (1MB) ──");
+    let big_value = "A".repeat(1_000_000);
+    let content_hash = hash_document(b"bigmeta-test");
+    let sign_msg = format!("notarize:{}:{}", id.did, content_hash);
+    let sig = hex::encode(id.signing_key.sign(sign_msg.as_bytes()).to_bytes());
+
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .json(&serde_json::json!({
+            "content_hash": content_hash,
+            "signer": id.did,
+            "public_key": id.public_key_hex,
+            "signature": sig,
+            "metadata": { "payload": big_value }
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        !resp.status().is_server_error(),
+        "1MB metadata must not crash server, got {}",
+        resp.status()
+    );
+    println!("  ✓ 1MB metadata → {} (server survived)", resp.status());
+}
