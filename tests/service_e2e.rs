@@ -200,7 +200,8 @@ async fn e2e_invalid_signature_rejected() {
     let client = setup_client();
     let id = create_identity();
 
-    let content_hash = hash_document(b"tampered-document");
+    let tampered_doc = format!("tampered-{}", uuid::Uuid::new_v4());
+    let content_hash = hash_document(tampered_doc.as_bytes());
 
     // Sign with correct message but then tamper the hash in the payload
     let sign_msg = format!("notarize:{}:{}", id.did, content_hash);
@@ -318,10 +319,12 @@ async fn e2e_large_document_10mb() {
     let client = setup_client();
     let id = create_identity();
 
-    // Generate 10MB of pseudo-random data (deterministic seed for reproducibility)
+    // Generate 10MB of pseudo-random data with unique seed per run
     println!("\n── Generating 10MB document ──");
     let size = 10 * 1024 * 1024;
     let mut data = Vec::with_capacity(size);
+    let nonce = uuid::Uuid::new_v4();
+    data.extend_from_slice(nonce.as_bytes());
     let mut state: u64 = 0xDEAD_BEEF_CAFE_BABE;
     while data.len() < size {
         // xorshift64
@@ -575,7 +578,8 @@ async fn e2e_impersonation_rejected() {
 
     // Sanity: victim can still notarize legitimately
     println!("\n── Sanity: victim notarizes legitimately ──");
-    let legit_content = hash_document(b"legitimate-document");
+    let legit_doc = format!("legitimate-{}", uuid::Uuid::new_v4());
+    let legit_content = hash_document(legit_doc.as_bytes());
     let legit_msg = format!("notarize:{}:{}", victim.did, legit_content);
     let legit_sig = hex::encode(victim.signing_key.sign(legit_msg.as_bytes()).to_bytes());
 
