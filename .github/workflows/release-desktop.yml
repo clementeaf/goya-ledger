@@ -77,11 +77,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ""
 
       # Collect artifacts per platform
+      # Tauri may output to workspace root target/ or tauri-app/target/ depending on config.
       - name: Collect macOS artifacts
         if: runner.os == 'macOS'
         run: |
           mkdir -p dist
-          cp tauri-app/target/release/bundle/dmg/*.dmg dist/ 2>/dev/null || true
+          find . -path '*/release/bundle/dmg/*.dmg' -exec cp {} dist/ \;
           ls -la dist/
 
       - name: Collect Windows artifacts
@@ -89,8 +90,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist
-          Copy-Item "tauri-app\target\release\bundle\nsis\*.exe" "dist\" -ErrorAction SilentlyContinue
-          Copy-Item "tauri-app\target\release\bundle\msi\*.msi" "dist\" -ErrorAction SilentlyContinue
+          Get-ChildItem -Recurse -Path . -Include "*.exe" -Filter "*GOYA*" | Where-Object { $_.FullName -match 'release.bundle.nsis' } | Copy-Item -Destination "dist\"
+          Get-ChildItem -Recurse -Path . -Include "*.msi" -Filter "*GOYA*" | Where-Object { $_.FullName -match 'release.bundle.msi' } | Copy-Item -Destination "dist\"
           Get-ChildItem dist\
 
       - name: Upload artifacts
