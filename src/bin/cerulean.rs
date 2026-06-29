@@ -136,7 +136,7 @@ fn cmd_init(node: &str, name: &str, org: &str) -> Result<(), String> {
 
     let secret_hex = hex::encode(signing_key.to_bytes());
     let public_hex = hex::encode(verifying_key.to_bytes());
-    let did = format!("did:goya:{}", &public_hex[..16]);
+    let did = rust_bc::identity::did::did_from_pubkey_hex(&public_hex);
 
     // Register DID on the node (IdentityRecord struct)
     let client = http_client();

@@ -1,10 +1,28 @@
 //! DID (Decentralized Identifier) document model
 //!
-//! Implements W3C-compatible DIDs with rust-bc specific format:
-//! did:bc:<pubkey_hash>
+//! Canonical DID format: `did:goya:{pubkey_hex[..16]}`
+//!
+//! The DID is derived deterministically from the first 8 bytes (16 hex chars)
+//! of the public key. This makes DIDs self-verifying: anyone can confirm that
+//! a DID belongs to a public key by comparing strings, with no store lookup.
 
 use hex;
 use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
+
+/// Derive a canonical DID from a hex-encoded public key.
+///
+/// Format: `did:goya:{pubkey_hex[..16]}`
+///
+/// # Panics
+/// Panics if `pubkey_hex` is shorter than 16 characters.
+pub fn did_from_pubkey_hex(pubkey_hex: &str) -> String {
+    format!("did:goya:{}", &pubkey_hex[..16])
+}
+
+/// Verify that a DID matches a hex-encoded public key.
+pub fn did_matches_pubkey(did: &str, pubkey_hex: &str) -> bool {
+    pubkey_hex.len() >= 16 && did == did_from_pubkey_hex(pubkey_hex)
+}
 
 /// DID representation
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -242,5 +260,39 @@ mod tests {
         let did1 = DidDocument::from_public_key(&pubkey1);
         let did2 = DidDocument::from_public_key(&pubkey2);
         assert_ne!(did1, did2);
+    }
+
+    // ── Canonical DID functions ──
+
+    #[test]
+    fn canonical_did_from_pubkey_hex() {
+        let pubkey_hex = "aabbccdd11223344ffffffffffffffff";
+        assert_eq!(did_from_pubkey_hex(pubkey_hex), "did:goya:aabbccdd11223344");
+    }
+
+    #[test]
+    fn canonical_did_matches_pubkey() {
+        let pubkey_hex = "aabbccdd11223344ffffffffffffffff";
+        let did = did_from_pubkey_hex(pubkey_hex);
+        assert!(did_matches_pubkey(&did, pubkey_hex));
+    }
+
+    #[test]
+    fn canonical_did_rejects_wrong_pubkey() {
+        let did = "did:goya:aabbccdd11223344";
+        let wrong_key = "1111111111111111ffffffffffffffff";
+        assert!(!did_matches_pubkey(did, wrong_key));
+    }
+
+    #[test]
+    fn canonical_did_rejects_short_pubkey() {
+        let did = "did:goya:aabbccdd11223344";
+        assert!(!did_matches_pubkey(did, "aabb"));
+    }
+
+    #[test]
+    fn canonical_did_deterministic() {
+        let key = "606024501eda68c20bd7b65841d0c580aaaaaa";
+        assert_eq!(did_from_pubkey_hex(key), did_from_pubkey_hex(key));
     }
 }

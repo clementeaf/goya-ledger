@@ -80,7 +80,7 @@ pub fn create_identity(
     password: &str,
 ) -> Result<IdentityInfo, CommandError> {
     let keypair = generate_keypair(algorithm);
-    let did = format!("did:goya:{}", &keypair.public_key_hex[..16]);
+    let did = rust_bc::identity::did::did_from_pubkey_hex(&keypair.public_key_hex);
     let now = Utc::now().to_rfc3339();
 
     let encrypted = key_crypto::encrypt_key(&keypair.private_key_raw, password)?;

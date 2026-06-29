@@ -115,9 +115,7 @@ pub async fn submit_notarization(
     }
 
     // Verify signer DID matches public key — prevents impersonation.
-    // DID format: did:goya:{first 16 hex chars of public key}
-    let expected_did = format!("did:goya:{}", &body.public_key[..16]);
-    if body.signer != expected_did {
+    if !crate::identity::did::did_matches_pubkey(&body.signer, &body.public_key) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
             err_dto(
                 "SIGNER_MISMATCH",

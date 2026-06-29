@@ -24,7 +24,7 @@ async fn create_identity(
 
     let key_mgr = KeyManager::new(now);
     let public_key_hex = hex::encode(key_mgr.public_key());
-    let did = format!("did:goya:{}", uuid::Uuid::new_v4());
+    let did = crate::identity::did::did_from_pubkey_hex(&public_key_hex);
 
     // Persist to store
     let _channel = channel_id_from_req(&req);

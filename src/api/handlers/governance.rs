@@ -550,10 +550,8 @@ pub async fn cast_governance_vote(
         }
 
         // Verify voter DID matches the public key
-        use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
-        let hash = Sha256::digest(&pk_bytes);
-        let expected_did = format!("did:goya:{}", hex::encode(&hash[..20]));
-        if body.voter != expected_did {
+        let pk_hex = hex::encode(&pk_bytes);
+        if !crate::identity::did::did_matches_pubkey(&body.voter, &pk_hex) {
             return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                 err_dto("voter DID does not match public key"),
                 400,
