@@ -6,15 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-06-29
+
+**Wallet, governance, and security hardening**
+
+### Added
+
+- Desktop wallet: balance query, testnet faucet (1000 GOYA), signed transfers, transaction history
+- Desktop governance: list proposals, create text proposals, cast signed votes, view tally
+- E2E test suite (12 tests, 70+ assertions against live seed node): notarization, concurrency, 10MB documents, signer isolation, impersonation attacks, malformed payloads, wallet flow, governance flow
+
 ### Security
 
 - Unified DID derivation to `did:goya:{pubkey_hex[..16]}` across all endpoints
 - Notarize endpoint rejects requests where signer DID does not match public key
+- Governance votes verified with DID↔pubkey binding
 - Canonical `did_from_pubkey_hex()` and `did_matches_pubkey()` in `identity::did`
 
-### Added
+### Changed
 
-- E2E test suite against live seed node (49 assertions): health, notarize, verify, concurrency, 10MB document, signer isolation, impersonation attacks, malformed payloads, account endpoint
+- Seed node rate limits increased (50 RPS, 500 RPM, 10000 RPH) for E2E suite stability
 
 ## [0.2.0] — 2026-06-29
 
