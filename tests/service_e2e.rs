@@ -1250,3 +1250,158 @@ async fn e2e_governance_full_flow() {
 
     println!("\n═══ GOVERNANCE FLOW COMPLETE ═══\n");
 }
+
+// ── Document ownership transfer ─────────────────────────────────────────────
+
+#[tokio::test]
+async fn e2e_document_transfer_flow() {
+    println!("\n═══ E2E: Document Ownership Transfer ═══");
+    let client = setup_client();
+
+    let alice = create_identity();
+    let bob = create_identity();
+    let charlie = create_identity();
+    println!("  Alice:   {}", alice.did);
+    println!("  Bob:     {}", bob.did);
+    println!("  Charlie: {}", charlie.did);
+
+    // Step 1: Alice notarizes a document
+    println!("\n── Step 1: Alice notarizes document ──");
+    let doc = format!("transfer-test-{}", uuid::Uuid::new_v4());
+    let content_hash = hash_document(doc.as_bytes());
+    let sign_msg = format!("notarize:{}:{}", alice.did, content_hash);
+    let sig = hex::encode(alice.signing_key.sign(sign_msg.as_bytes()).to_bytes());
+
+    let notarize_resp = post_json(
+        &client,
+        "/api/v1/notarize",
+        &serde_json::json!({
+            "content_hash": content_hash,
+            "signer": alice.did,
+            "public_key": alice.public_key_hex,
+            "signature": sig,
+        }),
+    )
+    .await;
+    assert_eq!(notarize_resp["status"], "Success");
+    println!("  ✓ Document notarized: {}", &content_hash[..16]);
+
+    // Step 2: Check owner — should be Alice
+    println!("\n── Step 2: Check owner (Alice) ──");
+    let owner = get_json(&client, &format!("/api/v1/notarize/{content_hash}/owner")).await;
+    assert_eq!(owner["data"]["owner"], alice.did);
+    assert_eq!(owner["data"]["transfer_count"], 0);
+    println!("  ✓ Owner: {} (0 transfers)", alice.did);
+
+    // Step 3: Alice transfers to Bob
+    println!("\n── Step 3: Transfer Alice → Bob ──");
+    let transfer_msg = format!("transfer_doc:{}:{}:{}", content_hash, alice.did, bob.did);
+    let transfer_sig = hex::encode(alice.signing_key.sign(transfer_msg.as_bytes()).to_bytes());
+
+    let transfer_resp = post_json(
+        &client,
+        &format!("/api/v1/notarize/{content_hash}/transfer"),
+        &serde_json::json!({
+            "from_did": alice.did,
+            "to_did": bob.did,
+            "public_key": alice.public_key_hex,
+            "signature": transfer_sig,
+        }),
+    )
+    .await;
+    assert_eq!(
+        transfer_resp["status"], "Success",
+        "transfer should succeed: {transfer_resp}"
+    );
+    println!("  ✓ Transferred to Bob");
+
+    // Step 4: Check owner — should be Bob
+    println!("\n── Step 4: Check owner (Bob) ──");
+    let owner = get_json(&client, &format!("/api/v1/notarize/{content_hash}/owner")).await;
+    assert_eq!(owner["data"]["owner"], bob.did);
+    assert_eq!(owner["data"]["transfer_count"], 1);
+    println!("  ✓ Owner: {} (1 transfer)", bob.did);
+
+    // Step 5: Bob transfers to Charlie (brief pause to avoid rate limit)
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    println!("\n── Step 5: Transfer Bob → Charlie ──");
+    let transfer_msg2 = format!("transfer_doc:{}:{}:{}", content_hash, bob.did, charlie.did);
+    let transfer_sig2 = hex::encode(bob.signing_key.sign(transfer_msg2.as_bytes()).to_bytes());
+
+    let transfer_resp2 = post_json(
+        &client,
+        &format!("/api/v1/notarize/{content_hash}/transfer"),
+        &serde_json::json!({
+            "from_did": bob.did,
+            "to_did": charlie.did,
+            "public_key": bob.public_key_hex,
+            "signature": transfer_sig2,
+        }),
+    )
+    .await;
+    assert_eq!(
+        transfer_resp2["status"], "Success",
+        "Bob→Charlie transfer should succeed: {transfer_resp2}"
+    );
+    println!("  ✓ Transferred to Charlie");
+
+    // Step 6: Check provenance — full chain
+    println!("\n── Step 6: Provenance chain ──");
+    let prov = get_json(
+        &client,
+        &format!("/api/v1/notarize/{content_hash}/provenance"),
+    )
+    .await;
+    assert_eq!(prov["data"]["original_signer"], alice.did);
+    let transfers = prov["data"]["transfers"].as_array().unwrap();
+    assert_eq!(transfers.len(), 2, "should have 2 transfers");
+    assert_eq!(transfers[0]["from_did"], alice.did);
+    assert_eq!(transfers[0]["to_did"], bob.did);
+    assert_eq!(transfers[1]["from_did"], bob.did);
+    assert_eq!(transfers[1]["to_did"], charlie.did);
+    println!("  ✓ Provenance: Alice → Bob → Charlie");
+
+    // Step 7: Alice tries to transfer (no longer owner) — rejected
+    println!("\n── Step 7: Unauthorized transfer (Alice no longer owner) ──");
+    let bad_msg = format!("transfer_doc:{}:{}:{}", content_hash, alice.did, alice.did);
+    let bad_sig = hex::encode(alice.signing_key.sign(bad_msg.as_bytes()).to_bytes());
+
+    let bad_resp = post_json(
+        &client,
+        &format!("/api/v1/notarize/{content_hash}/transfer"),
+        &serde_json::json!({
+            "from_did": alice.did,
+            "to_did": alice.did,
+            "public_key": alice.public_key_hex,
+            "signature": bad_sig,
+        }),
+    )
+    .await;
+    assert_ne!(
+        bad_resp["status"], "Success",
+        "non-owner transfer must be rejected"
+    );
+    println!("  ✓ Unauthorized transfer rejected");
+
+    // Step 8: Transfer nonexistent document — rejected
+    println!("\n── Step 8: Transfer nonexistent document ──");
+    let fake_hash = "ff".repeat(32);
+    let fake_msg = format!("transfer_doc:{}:{}:{}", fake_hash, alice.did, bob.did);
+    let fake_sig = hex::encode(alice.signing_key.sign(fake_msg.as_bytes()).to_bytes());
+
+    let fake_resp = post_json(
+        &client,
+        &format!("/api/v1/notarize/{fake_hash}/transfer"),
+        &serde_json::json!({
+            "from_did": alice.did,
+            "to_did": bob.did,
+            "public_key": alice.public_key_hex,
+            "signature": fake_sig,
+        }),
+    )
+    .await;
+    assert_ne!(fake_resp["status"], "Success");
+    println!("  ✓ Nonexistent document rejected");
+
+    println!("\n═══ DOCUMENT TRANSFER COMPLETE ═══\n");
+}
