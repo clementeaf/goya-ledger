@@ -2,17 +2,28 @@
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-/// Best-effort mlock: pin memory pages to prevent swap-out of key material.
-/// Fails silently if RLIMIT_MEMLOCK is insufficient — this is expected on
-/// unprivileged processes and is not required at FIPS 140-3 Security Level 1.
+/// Best-effort memory locking: pin pages to prevent swap-out of key material.
+/// Uses `mlock` on Unix, `VirtualLock` on Windows.
+/// Fails silently if insufficient privileges — not required at FIPS 140-3 Level 1.
 fn mlock_buffer(buf: &[u8]) {
     if buf.is_empty() {
         return;
     }
-    // SAFETY: buf points to a valid, initialized allocation. mlock is a
-    // read-only advisory syscall that does not modify the buffer.
-    unsafe {
-        libc::mlock(buf.as_ptr().cast(), buf.len());
+    #[cfg(unix)]
+    {
+        // SAFETY: buf points to a valid, initialized allocation. mlock is a
+        // read-only advisory syscall that does not modify the buffer.
+        unsafe {
+            libc::mlock(buf.as_ptr().cast(), buf.len());
+        }
+    }
+    #[cfg(windows)]
+    {
+        // SAFETY: buf points to a valid, initialized allocation. VirtualLock
+        // is the Windows equivalent of mlock — advisory, does not modify data.
+        unsafe {
+            windows_sys::Win32::System::Memory::VirtualLock(buf.as_ptr() as *mut _, buf.len());
+        }
     }
 }
 
