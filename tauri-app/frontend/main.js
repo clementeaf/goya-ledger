@@ -60,6 +60,13 @@ async function refreshIdentities() {
       ? ids.map(identityCard).join("")
       : "<p style='color:var(--text-muted)'>Sin identidades. Crea una para empezar.</p>";
     show($("#identity-list"), html);
+
+    // Sync notarize identity selector
+    const sel = $("#notarize-did");
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Selecciona identidad...</option>'
+      + ids.map(id => `<option value="${id.did}">${id.did}</option>`).join("");
+    if (prev && ids.some(id => id.did === prev)) sel.value = prev;
   } catch (e) {
     show($("#identity-list"), `<span class="tag error">${e.message || e}</span>`);
   }
@@ -68,14 +75,29 @@ async function refreshIdentities() {
 // ── Notarize ──
 
 async function notarizeFile(file) {
-  show($("#notarize-result"), "<p>Procesando...</p>");
+  const did = $("#notarize-did").value;
+  const password = $("#notarize-password").value;
+
+  if (!did) {
+    show($("#notarize-result"), '<span class="tag error">Selecciona una identidad</span>');
+    return;
+  }
+  if (!password) {
+    show($("#notarize-result"), '<span class="tag error">Ingresa el password de la identidad</span>');
+    return;
+  }
+
+  show($("#notarize-result"), "<p>Firmando y registrando...</p>");
 
   try {
     const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
     const result = await invoke("cmd_notarize", {
+      did,
+      password,
       fileName: file.name,
       fileBytes: bytes,
     });
+    $("#notarize-password").value = "";
     show($("#notarize-result"), `
       <span class="tag success">Registrado</span>
       ${jsonBlock(result)}

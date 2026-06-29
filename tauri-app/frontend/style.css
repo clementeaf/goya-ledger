@@ -111,7 +111,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   gap: 8px;
 }
 
-.input-row input {
+.input-row input,
+.input-row select {
   flex: 1;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -122,7 +123,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   font-family: monospace;
 }
 
-.input-row input:focus {
+.input-row input:focus,
+.input-row select:focus {
   outline: none;
   border-color: var(--accent);
 }

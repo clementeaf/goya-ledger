@@ -53,14 +53,17 @@ fn cmd_hash_document(data: Vec<u8>) -> String {
 #[tauri::command]
 async fn cmd_notarize(
     state: tauri::State<'_, Mutex<AppState>>,
+    did: String,
+    password: String,
     file_name: String,
     file_bytes: Vec<u8>,
 ) -> Result<NotarizeResult, CommandError> {
-    let proxy = {
+    let (proxy, store_path) = {
         let s = state.lock().unwrap_or_else(|e| e.into_inner());
-        s.proxy.clone()
+        (s.proxy.clone(), s.store.path().to_path_buf())
     };
-    commands::notarize_document(&proxy, &file_name, &file_bytes).await
+    let store = LocalIdentityStore::open(store_path);
+    commands::notarize_document(&proxy, &store, &did, &password, &file_name, &file_bytes).await
 }
 
 #[tauri::command]

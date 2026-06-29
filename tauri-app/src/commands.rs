@@ -142,17 +142,42 @@ pub fn hash_document(data: &[u8]) -> String {
     hex::encode(hash)
 }
 
-/// Submit a notarization to the seed node.
+/// Submit a signed notarization to the seed node.
+///
+/// Signs `"notarize:{signer}:{content_hash}"` with the identity's Ed25519 key,
+/// matching the server's verification in `notarize.rs`.
 pub async fn notarize_document(
     proxy: &SeedProxy,
+    store: &LocalIdentityStore,
+    did: &str,
+    password: &str,
     file_name: &str,
     file_bytes: &[u8],
 ) -> Result<NotarizeResult, CommandError> {
-    let hash = hash_document(file_bytes);
+    let identity = store.get(did)?.ok_or_else(|| CommandError {
+        message: format!("identity not found: {did}"),
+    })?;
+
+    let private_key_bytes = key_crypto::decrypt_key(&identity.private_key_enc, password)?;
+    let signing_key =
+        ed25519_dalek::SigningKey::from_bytes(&private_key_bytes.try_into().map_err(|_| {
+            CommandError {
+                message: "invalid Ed25519 key length".to_string(),
+            }
+        })?);
+
+    let content_hash = hash_document(file_bytes);
+    let sign_msg = format!("notarize:{did}:{content_hash}");
+
+    use ed25519_dalek::Signer;
+    let signature = signing_key.sign(sign_msg.as_bytes());
     let now = Utc::now().to_rfc3339();
 
     let body = serde_json::json!({
-        "hash": hash,
+        "content_hash": content_hash,
+        "signer": did,
+        "public_key": identity.public_key_hex,
+        "signature": hex::encode(signature.to_bytes()),
         "metadata": {
             "file_name": file_name,
             "timestamp": now,
@@ -163,7 +188,7 @@ pub async fn notarize_document(
         .post_raw("/api/v1/notarize", body.to_string().as_bytes())
         .await
         .map(|_| NotarizeResult {
-            hash,
+            hash: content_hash,
             timestamp: now,
             status: "registered".to_string(),
         })
@@ -347,6 +372,27 @@ mod tests {
         let (_dir, store) = temp_store();
         let list = list_identities(&store).unwrap();
         assert!(list.is_empty());
+    }
+
+    #[test]
+    fn notarize_builds_valid_signature() {
+        let (_dir, store) = temp_store();
+        let info = create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
+
+        // Decrypt key and verify we can sign + verify the notarize message
+        let private_bytes = key_crypto::decrypt_key(
+            &store.get(&info.did).unwrap().unwrap().private_key_enc,
+            TEST_PASSWORD,
+        )
+        .unwrap();
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&private_bytes.try_into().unwrap());
+        let content_hash = hash_document(b"test-file-content");
+        let sign_msg = format!("notarize:{}:{}", info.did, content_hash);
+
+        use ed25519_dalek::{Signer, Verifier};
+        let sig = signing_key.sign(sign_msg.as_bytes());
+        let vk = signing_key.verifying_key();
+        assert!(vk.verify(sign_msg.as_bytes(), &sig).is_ok());
     }
 
     #[test]
