@@ -94,6 +94,34 @@
       <div id="tx-history" class="result-area"></div>
     </section>
 
+    <!-- Document Transfer -->
+    <section class="card" id="doc-transfer-section">
+      <h2>Transferir Documento</h2>
+      <div class="input-row" style="margin-bottom: 8px">
+        <select id="doc-transfer-did">
+          <option value="">Desde...</option>
+        </select>
+        <input type="text" id="doc-transfer-hash" placeholder="Hash del documento (SHA-256)">
+      </div>
+      <div class="input-row">
+        <input type="text" id="doc-transfer-to" placeholder="DID destino">
+        <input type="password" id="doc-transfer-password" placeholder="Password">
+        <button id="btn-doc-transfer">Transferir</button>
+      </div>
+      <div id="doc-transfer-result" class="result-area"></div>
+    </section>
+
+    <!-- Document Owner / Provenance -->
+    <section class="card" id="provenance-section">
+      <h2>Proveniencia</h2>
+      <div class="input-row">
+        <input type="text" id="provenance-hash" placeholder="Hash del documento">
+        <button id="btn-owner">Propietario</button>
+        <button id="btn-provenance" class="btn-secondary">Cadena</button>
+      </div>
+      <div id="provenance-result" class="result-area"></div>
+    </section>
+
     <!-- Governance: Proposals -->
     <section class="card" id="proposals-section">
       <h2>Propuestas</h2>

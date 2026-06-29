@@ -6,7 +6,8 @@ use std::sync::Mutex;
 use super::errors::{StorageError, StorageResult};
 use super::traits::{
     Acta, AliasEntry, Assembly, Block, BlockStore, ClaimStatus, Credential, IdentityRecord,
-    InferenceChallenge, InferenceClaim, Invitation, NotarizationEntry, Scope, Session, Transaction,
+    InferenceChallenge, InferenceClaim, Invitation, NotarizationEntry, OwnershipTransfer, Scope,
+    Session, Transaction,
 };
 use crate::registry::compliance::{ComplianceResult, ComplianceRule};
 use crate::registry::tokenization::AssetToken;
@@ -55,6 +56,8 @@ pub struct MemoryStore {
     invitations: Mutex<HashMap<String, Invitation>>,
     /// Notarizations: id → NotarizationEntry
     notarizations: Mutex<HashMap<String, NotarizationEntry>>,
+    /// Ownership transfers: content_hash → Vec<OwnershipTransfer>
+    ownership_transfers: Mutex<HashMap<String, Vec<OwnershipTransfer>>>,
 }
 
 impl MemoryStore {
@@ -83,6 +86,7 @@ impl MemoryStore {
             inference_challenges: Mutex::new(HashMap::new()),
             invitations: Mutex::new(HashMap::new()),
             notarizations: Mutex::new(HashMap::new()),
+            ownership_transfers: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -738,6 +742,31 @@ impl BlockStore for MemoryStore {
             .collect();
         result.sort_by_key(|b| std::cmp::Reverse(b.notarized_at));
         Ok(result)
+    }
+
+    // ── Ownership Transfers ─────────────────────────────────────────────
+
+    fn write_ownership_transfer(&self, transfer: &OwnershipTransfer) -> StorageResult<()> {
+        self.ownership_transfers
+            .lock()
+            .unwrap()
+            .entry(transfer.content_hash.clone())
+            .or_default()
+            .push(transfer.clone());
+        Ok(())
+    }
+
+    fn read_ownership_transfers(
+        &self,
+        content_hash: &str,
+    ) -> StorageResult<Vec<OwnershipTransfer>> {
+        Ok(self
+            .ownership_transfers
+            .lock()
+            .unwrap()
+            .get(content_hash)
+            .cloned()
+            .unwrap_or_default())
     }
 }
 

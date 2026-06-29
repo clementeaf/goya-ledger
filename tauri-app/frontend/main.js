@@ -252,6 +252,88 @@ async function loadHistory() {
   }
 }
 
+// ── Document Transfer ──
+
+async function transferDoc() {
+  const did = $("#doc-transfer-did").value;
+  const contentHash = $("#doc-transfer-hash").value.trim();
+  const toDid = $("#doc-transfer-to").value.trim();
+  const password = $("#doc-transfer-password").value;
+
+  const errors = [
+    [!did, "Selecciona identidad"],
+    [!contentHash, "Ingresa hash del documento"],
+    [!toDid, "Ingresa DID destino"],
+    [!password, "Ingresa password"],
+  ].filter(([cond]) => cond).map(([, msg]) => msg);
+
+  switch (errors.length) {
+    case 0: break;
+    default:
+      show($("#doc-transfer-result"), `<span class="tag error">${errors[0]}</span>`);
+      return;
+  }
+
+  const btn = $("#btn-doc-transfer");
+  btn.disabled = true;
+  btn.textContent = "Transfiriendo...";
+
+  try {
+    const result = await invoke("cmd_transfer_document", {
+      did, password, contentHash, toDid,
+    });
+    $("#doc-transfer-password").value = "";
+    show($("#doc-transfer-result"), `
+      <span class="tag success">Transferido</span>
+      ${jsonBlock(result)}
+    `);
+  } catch (e) {
+    show($("#doc-transfer-result"), `<span class="tag error">${e.message || e}</span>`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Transferir";
+  }
+}
+
+async function queryOwner() {
+  const hash = $("#provenance-hash").value.trim();
+  switch (true) {
+    case !hash:
+      show($("#provenance-result"), '<span class="tag error">Ingresa hash</span>');
+      return;
+    default: break;
+  }
+
+  try {
+    const owner = await invoke("cmd_get_document_owner", { contentHash: hash });
+    show($("#provenance-result"), `
+      <div class="identity-item">
+        <div class="did">Propietario: ${owner.owner}</div>
+        <div class="meta">Firmante original: ${owner.original_signer} · ${owner.transfer_count} transferencia(s)</div>
+      </div>
+    `);
+  } catch (e) {
+    show($("#provenance-result"), `<span class="tag error">${e.message || e}</span>`);
+  }
+}
+
+async function queryProvenance() {
+  const hash = $("#provenance-hash").value.trim();
+  switch (true) {
+    case !hash:
+      show($("#provenance-result"), '<span class="tag error">Ingresa hash</span>');
+      return;
+    default: break;
+  }
+
+  try {
+    const prov = await invoke("cmd_get_provenance", { contentHash: hash });
+    show($("#provenance-result"), jsonBlock(prov));
+  } catch (e) {
+    show($("#provenance-result"), `<span class="tag error">${e.message || e}</span>`);
+  }
+}
+
 // ── Governance ──
 
 async function loadProposals() {
@@ -334,7 +416,7 @@ async function castVote() {
 // ── Sync all identity selectors ──
 
 function syncSelectors(ids) {
-  ["#notarize-did", "#wallet-did", "#transfer-from", "#history-did", "#proposal-proposer", "#vote-did"].forEach(sel => {
+  ["#notarize-did", "#wallet-did", "#transfer-from", "#history-did", "#proposal-proposer", "#vote-did", "#doc-transfer-did"].forEach(sel => {
     const el = $(sel);
     const prev = el.value;
     el.innerHTML = '<option value="">Selecciona identidad...</option>'
@@ -385,6 +467,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // History
   $("#btn-history").addEventListener("click", loadHistory);
+
+  // Document transfer
+  $("#btn-doc-transfer").addEventListener("click", transferDoc);
+  $("#btn-owner").addEventListener("click", queryOwner);
+  $("#btn-provenance").addEventListener("click", queryProvenance);
 
   // Governance
   $("#btn-load-proposals").addEventListener("click", loadProposals);

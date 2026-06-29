@@ -263,6 +263,26 @@ pub struct NotarizationEntry {
     pub signature_algorithm: SigningAlgorithm,
 }
 
+/// Records a transfer of ownership for a notarized document.
+///
+/// Current owner = last `to_did` in the chain, or `signer` of the original
+/// notarization if no transfers exist.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OwnershipTransfer {
+    /// Content hash of the notarized document.
+    pub content_hash: String,
+    /// DID of the current owner (sender).
+    pub from_did: String,
+    /// DID of the new owner (recipient).
+    pub to_did: String,
+    /// Ed25519 signature over `"transfer_doc:{content_hash}:{from_did}:{to_did}"`.
+    pub signature: String,
+    /// Ed25519 public key of the sender (hex).
+    pub public_key: String,
+    /// Unix timestamp.
+    pub transferred_at: u64,
+}
+
 /// Alias registry entry — maps a SHA3-256 commitment to a DID.
 ///
 /// The commitment is `SHA3-256(salt || alias)` where the salt is deterministic:
@@ -741,6 +761,21 @@ pub trait BlockStore: Send + Sync {
         Ok(vec![])
     }
 
+    // ── Ownership Transfer ──────────────────────────────────────────────
+
+    /// Record an ownership transfer for a notarized document.
+    fn write_ownership_transfer(&self, _transfer: &OwnershipTransfer) -> StorageResult<()> {
+        Ok(())
+    }
+
+    /// Read the transfer chain for a notarized document (ordered by timestamp).
+    fn read_ownership_transfers(
+        &self,
+        _content_hash: &str,
+    ) -> StorageResult<Vec<OwnershipTransfer>> {
+        Ok(vec![])
+    }
+
     // ── Alias Registry ────────────────────────────────────────────────────
 
     /// Store an alias entry keyed by commitment.
@@ -1007,6 +1042,15 @@ impl<T: BlockStore> BlockStore for Arc<T> {
     }
     fn list_notarizations(&self, signer: Option<&str>) -> StorageResult<Vec<NotarizationEntry>> {
         (**self).list_notarizations(signer)
+    }
+    fn write_ownership_transfer(&self, transfer: &OwnershipTransfer) -> StorageResult<()> {
+        (**self).write_ownership_transfer(transfer)
+    }
+    fn read_ownership_transfers(
+        &self,
+        content_hash: &str,
+    ) -> StorageResult<Vec<OwnershipTransfer>> {
+        (**self).read_ownership_transfers(content_hash)
     }
 }
 

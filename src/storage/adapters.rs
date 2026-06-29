@@ -86,6 +86,8 @@ const CF_INVITATIONS: &str = "invitations";
 /// Notarizations (Proof of Existence): key = id, value = JSON NotarizationEntry
 /// Secondary index: `hash:{content_hash}` → id
 const CF_NOTARIZATIONS: &str = "notarizations";
+/// Ownership transfers: key = `{content_hash}:{timestamp}`, value = JSON OwnershipTransfer
+const CF_OWNERSHIP_TRANSFERS: &str = "ownership_transfers";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -127,6 +129,7 @@ const ALL_CFS: &[&str] = &[
     CF_INFERENCE_CLAIMS,
     CF_INVITATIONS,
     CF_NOTARIZATIONS,
+    CF_OWNERSHIP_TRANSFERS,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -1709,6 +1712,51 @@ impl BlockStore for RocksDbBlockStore {
             }
         }
         result.sort_by_key(|b| std::cmp::Reverse(b.notarized_at));
+        Ok(result)
+    }
+
+    // ── Ownership Transfers ─────────────────────────────────────────────
+
+    fn write_ownership_transfer(
+        &self,
+        transfer: &super::traits::OwnershipTransfer,
+    ) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_OWNERSHIP_TRANSFERS)
+            .ok_or_else(|| StorageError::RocksDbError("missing ownership_transfers CF".into()))?;
+        let key = format!("{}:{:012}", transfer.content_hash, transfer.transferred_at);
+        let value = serde_json::to_vec(transfer)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, key.as_bytes(), &value)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+        Ok(())
+    }
+
+    fn read_ownership_transfers(
+        &self,
+        content_hash: &str,
+    ) -> StorageResult<Vec<super::traits::OwnershipTransfer>> {
+        let cf = self
+            .db
+            .cf_handle(CF_OWNERSHIP_TRANSFERS)
+            .ok_or_else(|| StorageError::RocksDbError("missing ownership_transfers CF".into()))?;
+        let prefix = format!("{content_hash}:");
+        let mut result = Vec::new();
+        for item in self.db.prefix_iterator_cf(&cf, prefix.as_bytes()) {
+            let (key, value) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let key_str = String::from_utf8_lossy(&key);
+            match key_str.starts_with(&prefix) {
+                true => {
+                    let transfer: super::traits::OwnershipTransfer = serde_json::from_slice(&value)
+                        .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+                    result.push(transfer);
+                }
+                false => break,
+            }
+        }
+        result.sort_by_key(|t| t.transferred_at);
         Ok(result)
     }
 }

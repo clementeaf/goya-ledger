@@ -4,8 +4,8 @@ mod commands;
 mod key_crypto;
 
 use commands::{
-    CommandError, FaucetResult, IdentityInfo, NodeStatus, NotarizeResult, ProposalSummary,
-    TransferResult, VoteTally, WalletBalance,
+    CommandError, DocumentOwner, FaucetResult, IdentityInfo, NodeStatus, NotarizeResult,
+    ProposalSummary, TransferDocResult, TransferResult, VoteTally, WalletBalance,
 };
 use rust_bc::light_client::local_store::LocalIdentityStore;
 use rust_bc::light_client::proxy::SeedProxy;
@@ -200,6 +200,46 @@ async fn cmd_get_tally(
     commands::get_tally(&proxy, proposal_id).await
 }
 
+#[tauri::command]
+async fn cmd_transfer_document(
+    state: tauri::State<'_, Mutex<AppState>>,
+    did: String,
+    password: String,
+    content_hash: String,
+    to_did: String,
+) -> Result<TransferDocResult, CommandError> {
+    let (proxy, store_path) = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        (s.proxy.clone(), s.store.path().to_path_buf())
+    };
+    let store = LocalIdentityStore::open(store_path);
+    commands::transfer_document(&proxy, &store, &did, &password, &content_hash, &to_did).await
+}
+
+#[tauri::command]
+async fn cmd_get_document_owner(
+    state: tauri::State<'_, Mutex<AppState>>,
+    content_hash: String,
+) -> Result<DocumentOwner, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::get_document_owner(&proxy, &content_hash).await
+}
+
+#[tauri::command]
+async fn cmd_get_provenance(
+    state: tauri::State<'_, Mutex<AppState>>,
+    content_hash: String,
+) -> Result<serde_json::Value, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::get_provenance(&proxy, &content_hash).await
+}
+
 fn main() {
     let seed_url =
         std::env::var("SEED_NODE_URL").unwrap_or_else(|_| "https://goya-node.fly.dev".to_string());
@@ -227,6 +267,9 @@ fn main() {
             cmd_create_proposal,
             cmd_cast_vote,
             cmd_get_tally,
+            cmd_transfer_document,
+            cmd_get_document_owner,
+            cmd_get_provenance,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run GOYA-ledger app");

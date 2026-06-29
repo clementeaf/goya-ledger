@@ -574,6 +574,102 @@ pub async fn get_tally(proxy: &SeedProxy, proposal_id: u64) -> Result<VoteTally,
     })
 }
 
+// ── Document transfer commands ──
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TransferDocResult {
+    pub content_hash: String,
+    pub from: String,
+    pub to: String,
+    pub transferred_at: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DocumentOwner {
+    pub content_hash: String,
+    pub owner: String,
+    pub original_signer: String,
+    pub transfer_count: u64,
+}
+
+/// Transfer ownership of a notarized document.
+pub async fn transfer_document(
+    proxy: &SeedProxy,
+    store: &LocalIdentityStore,
+    did: &str,
+    password: &str,
+    content_hash: &str,
+    to_did: &str,
+) -> Result<TransferDocResult, CommandError> {
+    let identity = store.get(did)?.ok_or_else(|| CommandError {
+        message: format!("identity not found: {did}"),
+    })?;
+
+    let private_key_bytes = key_crypto::decrypt_key(&identity.private_key_enc, password)?;
+    let signing_key =
+        ed25519_dalek::SigningKey::from_bytes(&private_key_bytes.try_into().map_err(|_| {
+            CommandError {
+                message: "invalid Ed25519 key length".to_string(),
+            }
+        })?);
+
+    let sign_msg = format!("transfer_doc:{content_hash}:{did}:{to_did}");
+    use ed25519_dalek::Signer;
+    let signature = hex::encode(signing_key.sign(sign_msg.as_bytes()).to_bytes());
+
+    let body = serde_json::json!({
+        "from_did": did,
+        "to_did": to_did,
+        "public_key": identity.public_key_hex,
+        "signature": signature,
+    });
+
+    let resp: serde_json::Value = proxy
+        .post(&format!("/api/v1/notarize/{content_hash}/transfer"), &body)
+        .await
+        .map_err(|e| CommandError {
+            message: format!("transfer failed: {e}"),
+        })?;
+
+    let data = &resp["data"];
+    Ok(TransferDocResult {
+        content_hash: content_hash.to_string(),
+        from: did.to_string(),
+        to: to_did.to_string(),
+        transferred_at: data["transferred_at"].as_u64().unwrap_or(0),
+    })
+}
+
+/// Get current owner of a notarized document.
+pub async fn get_document_owner(
+    proxy: &SeedProxy,
+    content_hash: &str,
+) -> Result<DocumentOwner, CommandError> {
+    let resp: serde_json::Value = proxy
+        .get(&format!("/api/v1/notarize/{content_hash}/owner"))
+        .await
+        .map_err(CommandError::from)?;
+
+    let data = &resp["data"];
+    Ok(DocumentOwner {
+        content_hash: content_hash.to_string(),
+        owner: data["owner"].as_str().unwrap_or("").to_string(),
+        original_signer: data["original_signer"].as_str().unwrap_or("").to_string(),
+        transfer_count: data["transfer_count"].as_u64().unwrap_or(0),
+    })
+}
+
+/// Get provenance (transfer chain) for a notarized document.
+pub async fn get_provenance(
+    proxy: &SeedProxy,
+    content_hash: &str,
+) -> Result<serde_json::Value, CommandError> {
+    proxy
+        .get(&format!("/api/v1/notarize/{content_hash}/provenance"))
+        .await
+        .map_err(CommandError::from)
+}
+
 // ── Internal helpers ──
 
 struct KeypairOutput {
@@ -915,5 +1011,57 @@ mod tests {
         let json = serde_json::to_value(&vt).unwrap();
         assert_eq!(json["yes_power"], 100);
         assert!(json["passed"].as_bool().unwrap());
+    }
+
+    // ── Document transfer tests ──
+
+    #[test]
+    fn transfer_doc_builds_valid_signature() {
+        let (_dir, store) = temp_store();
+        let info = create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
+
+        let private_bytes = key_crypto::decrypt_key(
+            &store.get(&info.did).unwrap().unwrap().private_key_enc,
+            TEST_PASSWORD,
+        )
+        .unwrap();
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&private_bytes.try_into().unwrap());
+
+        let hash = hash_document(b"my-contract.pdf");
+        let to = "did:goya:recipient0000000";
+        let sign_msg = format!("transfer_doc:{hash}:{}:{to}", info.did);
+
+        use ed25519_dalek::{Signer, Verifier};
+        let sig = signing_key.sign(sign_msg.as_bytes());
+        assert!(signing_key
+            .verifying_key()
+            .verify(sign_msg.as_bytes(), &sig)
+            .is_ok());
+    }
+
+    #[test]
+    fn transfer_doc_result_serializes() {
+        let tr = TransferDocResult {
+            content_hash: "aa".repeat(32),
+            from: "did:goya:alice".to_string(),
+            to: "did:goya:bob".to_string(),
+            transferred_at: 1700000000,
+        };
+        let json = serde_json::to_value(&tr).unwrap();
+        assert_eq!(json["from"], "did:goya:alice");
+        assert_eq!(json["to"], "did:goya:bob");
+    }
+
+    #[test]
+    fn document_owner_serializes() {
+        let owner = DocumentOwner {
+            content_hash: "bb".repeat(32),
+            owner: "did:goya:bob".to_string(),
+            original_signer: "did:goya:alice".to_string(),
+            transfer_count: 1,
+        };
+        let json = serde_json::to_value(&owner).unwrap();
+        assert_eq!(json["owner"], "did:goya:bob");
+        assert_eq!(json["transfer_count"], 1);
     }
 }
