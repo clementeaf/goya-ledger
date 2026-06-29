@@ -12,6 +12,9 @@ primary_region = "iad"
   RUST_LOG = "info"
   API_PORT = "8080"
   BIND_ADDR = "0.0.0.0"
+  RATE_LIMIT_RPS = "50"
+  RATE_LIMIT_RPM = "500"
+  RATE_LIMIT_RPH = "10000"
 
 [mounts]
   source = "goya_data"
