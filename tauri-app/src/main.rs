@@ -4,8 +4,8 @@ mod commands;
 mod key_crypto;
 
 use commands::{
-    CommandError, FaucetResult, IdentityInfo, NodeStatus, NotarizeResult, TransferResult,
-    WalletBalance,
+    CommandError, FaucetResult, IdentityInfo, NodeStatus, NotarizeResult, ProposalSummary,
+    TransferResult, VoteTally, WalletBalance,
 };
 use rust_bc::light_client::local_store::LocalIdentityStore;
 use rust_bc::light_client::proxy::SeedProxy;
@@ -146,6 +146,60 @@ async fn cmd_get_transactions(
     commands::get_transactions(&proxy, &address).await
 }
 
+#[tauri::command]
+async fn cmd_list_proposals(
+    state: tauri::State<'_, Mutex<AppState>>,
+) -> Result<Vec<ProposalSummary>, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::list_proposals(&proxy).await
+}
+
+#[tauri::command]
+async fn cmd_create_proposal(
+    state: tauri::State<'_, Mutex<AppState>>,
+    proposer: String,
+    title: String,
+    description: String,
+    deposit: u64,
+) -> Result<serde_json::Value, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::create_proposal(&proxy, &proposer, &title, &description, deposit).await
+}
+
+#[tauri::command]
+async fn cmd_cast_vote(
+    state: tauri::State<'_, Mutex<AppState>>,
+    did: String,
+    password: String,
+    proposal_id: u64,
+    option: String,
+) -> Result<VoteTally, CommandError> {
+    let (proxy, store_path) = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        (s.proxy.clone(), s.store.path().to_path_buf())
+    };
+    let store = LocalIdentityStore::open(store_path);
+    commands::cast_vote(&proxy, &store, &did, &password, proposal_id, &option).await
+}
+
+#[tauri::command]
+async fn cmd_get_tally(
+    state: tauri::State<'_, Mutex<AppState>>,
+    proposal_id: u64,
+) -> Result<VoteTally, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::get_tally(&proxy, proposal_id).await
+}
+
 fn main() {
     let seed_url =
         std::env::var("SEED_NODE_URL").unwrap_or_else(|_| "https://goya-node.fly.dev".to_string());
@@ -169,6 +223,10 @@ fn main() {
             cmd_request_faucet,
             cmd_send_transfer,
             cmd_get_transactions,
+            cmd_list_proposals,
+            cmd_create_proposal,
+            cmd_cast_vote,
+            cmd_get_tally,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run GOYA-ledger app");

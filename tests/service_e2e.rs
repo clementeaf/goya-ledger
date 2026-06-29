@@ -885,24 +885,44 @@ async fn e2e_malformed_payloads() {
 // ── Wallet: faucet → balance → transfer → verify ───────────────────────────
 
 async fn post_json(client: &Client, path: &str, body: &serde_json::Value) -> serde_json::Value {
-    let resp = client
-        .post(format!("{SEED_URL}{path}"))
-        .json(body)
-        .send()
-        .await
-        .expect("request failed");
-    let text = resp.text().await.unwrap();
-    serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({"raw": text}))
+    for attempt in 0..10u64 {
+        tokio::time::sleep(std::time::Duration::from_secs(attempt * 2)).await;
+        let resp = client
+            .post(format!("{SEED_URL}{path}"))
+            .json(body)
+            .send()
+            .await
+            .expect("request failed");
+        match resp.status().as_u16() {
+            429 => continue,
+            _ => {
+                let text = resp.text().await.unwrap();
+                return serde_json::from_str(&text)
+                    .unwrap_or_else(|_| serde_json::json!({"raw": text}));
+            }
+        }
+    }
+    panic!("post_json exhausted retries on {path}");
 }
 
 async fn get_json(client: &Client, path: &str) -> serde_json::Value {
-    let resp = client
-        .get(format!("{SEED_URL}{path}"))
-        .send()
-        .await
-        .expect("request failed");
-    let text = resp.text().await.unwrap();
-    serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({"raw": text}))
+    for attempt in 0..10u64 {
+        tokio::time::sleep(std::time::Duration::from_secs(attempt * 2)).await;
+        let resp = client
+            .get(format!("{SEED_URL}{path}"))
+            .send()
+            .await
+            .expect("request failed");
+        match resp.status().as_u16() {
+            429 => continue,
+            _ => {
+                let text = resp.text().await.unwrap();
+                return serde_json::from_str(&text)
+                    .unwrap_or_else(|_| serde_json::json!({"raw": text}));
+            }
+        }
+    }
+    panic!("get_json exhausted retries on {path}");
 }
 
 #[tokio::test]
@@ -915,18 +935,36 @@ async fn e2e_wallet_full_flow() {
     println!("  Alice: {}", alice.did);
     println!("  Bob:   {}", bob.did);
 
-    // Step 1: Faucet — fund Alice with 5000 via coinbase
+    // Step 1: Faucet — fund Alice with 5000 via coinbase (retry on 429)
     println!("\n── Step 1: Faucet fund Alice ──");
-    let faucet_resp = client
-        .post(format!("{SEED_URL}/api/v1/transactions"))
-        .json(&serde_json::json!({
-            "from": "0", "to": alice.did, "amount": 5000
-        }))
-        .send()
-        .await
-        .expect("faucet request failed");
-    assert_eq!(faucet_resp.status(), 201, "coinbase tx should return 201");
-    let faucet_tx: serde_json::Value = faucet_resp.json().await.unwrap();
+    let faucet_tx: serde_json::Value = {
+        let mut resp = None;
+        for attempt in 0..10 {
+            tokio::time::sleep(std::time::Duration::from_secs(attempt * 2)).await;
+            let r = client
+                .post(format!("{SEED_URL}/api/v1/transactions"))
+                .json(&serde_json::json!({
+                    "from": "0", "to": alice.did, "amount": 5000
+                }))
+                .send()
+                .await
+                .expect("faucet request failed");
+            match r.status().as_u16() {
+                429 => println!("  ⏳ Rate limited, retry {attempt}..."),
+                _ => {
+                    resp = Some(r);
+                    break;
+                }
+            }
+        }
+        let r = resp.expect("all faucet retries exhausted (429)");
+        assert!(
+            r.status().is_success(),
+            "coinbase tx failed: {}",
+            r.status()
+        );
+        r.json().await.unwrap()
+    };
     println!("  ✓ Coinbase tx created: {}", faucet_tx["data"]["id"]);
 
     // Commit block
@@ -1052,4 +1090,163 @@ async fn e2e_wallet_full_flow() {
     println!("  ✓ Insufficient balance rejected");
 
     println!("\n═══ WALLET FLOW COMPLETE ═══\n");
+}
+
+// ── Governance: create proposal → vote → tally ─────────────────────────────
+
+#[tokio::test]
+async fn e2e_governance_full_flow() {
+    println!("\n═══ E2E: Governance Full Flow ═══");
+    let client = setup_client();
+
+    let proposer = create_identity();
+    let voter_yes = create_identity();
+    let voter_no = create_identity();
+    println!("  Proposer: {}", proposer.did);
+    println!("  Voter A:  {}", voter_yes.did);
+    println!("  Voter B:  {}", voter_no.did);
+
+    // Step 1: Create a text proposal
+    println!("\n── Step 1: Create proposal ──");
+    let proposal = post_json(
+        &client,
+        "/api/v1/governance/proposals",
+        &serde_json::json!({
+            "proposer": proposer.did,
+            "description": format!("E2E test proposal {}", uuid::Uuid::new_v4()),
+            "deposit": 10000,
+            "action": {
+                "type": "text",
+                "title": "Increase block size to 2MB",
+                "description": "Proposal to increase maximum block size for better throughput",
+            }
+        }),
+    )
+    .await;
+    let proposal_id = proposal["data"]["id"]
+        .as_u64()
+        .expect("proposal must have id");
+    println!("  ✓ Proposal #{proposal_id} created");
+
+    // Step 2: List proposals — should include ours
+    println!("\n── Step 2: List proposals ──");
+    let list = get_json(&client, "/api/v1/governance/proposals").await;
+    let items = list["data"]["data"]
+        .as_array()
+        .or_else(|| list["data"]["items"].as_array())
+        .or_else(|| list["data"].as_array())
+        .expect("proposals list");
+    let found = items.iter().any(|p| p["id"].as_u64() == Some(proposal_id));
+    assert!(found, "our proposal should appear in list");
+    println!(
+        "  ✓ Proposal #{proposal_id} found in list ({} total)",
+        items.len()
+    );
+
+    // Step 3: Get proposal by ID
+    println!("\n── Step 3: Get proposal by ID ──");
+    let detail = get_json(
+        &client,
+        &format!("/api/v1/governance/proposals/{proposal_id}"),
+    )
+    .await;
+    assert_eq!(detail["data"]["id"], proposal_id);
+    println!("  ✓ Proposal detail retrieved");
+
+    // Step 4: Vote Yes (signed)
+    println!("\n── Step 4: Voter A votes Yes (signed) ──");
+    let option_str = "Yes";
+    let vote_payload = format!(
+        "vote:{proposal_id}:{option_str}:{}",
+        voter_yes.public_key_hex
+    );
+    let vote_sig = hex::encode(
+        voter_yes
+            .signing_key
+            .sign(vote_payload.as_bytes())
+            .to_bytes(),
+    );
+
+    let tally = post_json(
+        &client,
+        &format!("/api/v1/governance/proposals/{proposal_id}/vote"),
+        &serde_json::json!({
+            "voter": voter_yes.did,
+            "option": "Yes",
+            "signature": vote_sig,
+            "public_key": voter_yes.public_key_hex,
+        }),
+    )
+    .await;
+    println!(
+        "  ✓ Vote recorded, yes_power: {}",
+        tally["data"]["yes_power"]
+    );
+
+    // Step 5: Vote No (signed)
+    println!("\n── Step 5: Voter B votes No (signed) ──");
+    let no_payload = format!("vote:{proposal_id}:No:{}", voter_no.public_key_hex);
+    let no_sig = hex::encode(voter_no.signing_key.sign(no_payload.as_bytes()).to_bytes());
+
+    post_json(
+        &client,
+        &format!("/api/v1/governance/proposals/{proposal_id}/vote"),
+        &serde_json::json!({
+            "voter": voter_no.did,
+            "option": "No",
+            "signature": no_sig,
+            "public_key": voter_no.public_key_hex,
+        }),
+    )
+    .await;
+    println!("  ✓ No vote recorded");
+
+    // Step 6: Get tally
+    println!("\n── Step 6: Get tally ──");
+    let tally = get_json(
+        &client,
+        &format!("/api/v1/governance/proposals/{proposal_id}/tally"),
+    )
+    .await;
+    let yes = tally["data"]["yes_power"].as_u64().unwrap_or(0);
+    let no = tally["data"]["no_power"].as_u64().unwrap_or(0);
+    assert!(yes > 0, "yes_power should be > 0");
+    assert!(no > 0, "no_power should be > 0");
+    println!("  ✓ Tally — Yes: {yes}, No: {no}");
+
+    // Step 7: Duplicate vote rejected
+    println!("\n── Step 7: Duplicate vote rejected ──");
+    let dup_result = post_json(
+        &client,
+        &format!("/api/v1/governance/proposals/{proposal_id}/vote"),
+        &serde_json::json!({
+            "voter": voter_yes.did,
+            "option": "Yes",
+            "signature": vote_sig,
+            "public_key": voter_yes.public_key_hex,
+        }),
+    )
+    .await;
+    // Duplicate should return error status (not "Success")
+    assert_ne!(
+        dup_result["status"], "Success",
+        "duplicate vote should be rejected"
+    );
+    println!("  ✓ Duplicate vote rejected");
+
+    // Step 8: Vote on nonexistent proposal
+    println!("\n── Step 8: Vote on nonexistent proposal ──");
+    let fake_result = post_json(
+        &client,
+        "/api/v1/governance/proposals/999999/vote",
+        &serde_json::json!({
+            "voter": voter_yes.did,
+            "option": "Yes",
+        }),
+    )
+    .await;
+    assert_ne!(fake_result["status"], "Success");
+    println!("  ✓ Nonexistent proposal rejected");
+
+    println!("\n═══ GOVERNANCE FLOW COMPLETE ═══\n");
 }

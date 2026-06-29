@@ -252,10 +252,89 @@ async function loadHistory() {
   }
 }
 
+// ── Governance ──
+
+async function loadProposals() {
+  show($("#proposals-list"), "<p>Cargando...</p>");
+  try {
+    const proposals = await invoke("cmd_list_proposals");
+    const html = proposals.length
+      ? proposals.map(p => `<div class="identity-item">
+          <div class="did">#${p.id} — ${p.description}</div>
+          <div class="meta">${p.status} · deposito: ${p.deposit} · por: ${p.proposer}</div>
+        </div>`).join("")
+      : "<p style='color:var(--text-muted)'>Sin propuestas.</p>";
+    show($("#proposals-list"), html);
+  } catch (e) {
+    show($("#proposals-list"), `<span class="tag error">${e.message || e}</span>`);
+  }
+}
+
+async function createProposal() {
+  const proposer = $("#proposal-proposer").value;
+  const title = $("#proposal-title").value.trim();
+  const desc = $("#proposal-desc").value.trim();
+  const deposit = parseInt($("#proposal-deposit").value, 10) || 0;
+
+  const errors = [
+    [!proposer, "Selecciona proponente"],
+    [!title, "Ingresa titulo"],
+    [!desc, "Ingresa descripcion"],
+  ].filter(([cond]) => cond).map(([, msg]) => msg);
+
+  switch (errors.length) {
+    case 0: break;
+    default:
+      show($("#create-proposal-result"), `<span class="tag error">${errors[0]}</span>`);
+      return;
+  }
+
+  try {
+    const result = await invoke("cmd_create_proposal", { proposer, title, description: desc, deposit });
+    show($("#create-proposal-result"), `<span class="tag success">Propuesta creada</span>${jsonBlock(result)}`);
+    $("#proposal-title").value = "";
+    $("#proposal-desc").value = "";
+    await loadProposals();
+  } catch (e) {
+    show($("#create-proposal-result"), `<span class="tag error">${e.message || e}</span>`);
+  }
+}
+
+async function castVote() {
+  const did = $("#vote-did").value;
+  const proposalId = parseInt($("#vote-proposal-id").value, 10);
+  const option = $("#vote-option").value;
+  const password = $("#vote-password").value;
+
+  const errors = [
+    [!did, "Selecciona identidad"],
+    [!proposalId, "Ingresa ID de propuesta"],
+    [!password, "Ingresa password"],
+  ].filter(([cond]) => cond).map(([, msg]) => msg);
+
+  switch (errors.length) {
+    case 0: break;
+    default:
+      show($("#vote-result"), `<span class="tag error">${errors[0]}</span>`);
+      return;
+  }
+
+  try {
+    const tally = await invoke("cmd_cast_vote", { did, password, proposalId, option });
+    $("#vote-password").value = "";
+    show($("#vote-result"), `
+      <span class="tag success">Voto registrado</span>
+      ${jsonBlock(tally)}
+    `);
+  } catch (e) {
+    show($("#vote-result"), `<span class="tag error">${e.message || e}</span>`);
+  }
+}
+
 // ── Sync all identity selectors ──
 
 function syncSelectors(ids) {
-  ["#notarize-did", "#wallet-did", "#transfer-from", "#history-did"].forEach(sel => {
+  ["#notarize-did", "#wallet-did", "#transfer-from", "#history-did", "#proposal-proposer", "#vote-did"].forEach(sel => {
     const el = $(sel);
     const prev = el.value;
     el.innerHTML = '<option value="">Selecciona identidad...</option>'
@@ -306,6 +385,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // History
   $("#btn-history").addEventListener("click", loadHistory);
+
+  // Governance
+  $("#btn-load-proposals").addEventListener("click", loadProposals);
+  $("#btn-create-proposal").addEventListener("click", createProposal);
+  $("#btn-vote").addEventListener("click", castVote);
 
   // Initial load
   refreshIdentities();

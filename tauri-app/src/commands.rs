@@ -424,6 +424,156 @@ pub async fn get_transactions(
         })
 }
 
+// ── Governance commands ──
+
+/// Proposal summary returned to the frontend.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProposalSummary {
+    pub id: u64,
+    pub proposer: String,
+    pub description: String,
+    pub status: String,
+    pub deposit: u64,
+}
+
+/// Vote tally returned after casting a vote.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct VoteTally {
+    pub proposal_id: u64,
+    pub yes_power: u64,
+    pub no_power: u64,
+    pub abstain_power: u64,
+    pub quorum_reached: bool,
+    pub passed: bool,
+}
+
+/// List governance proposals from seed node.
+pub async fn list_proposals(proxy: &SeedProxy) -> Result<Vec<ProposalSummary>, CommandError> {
+    let resp: serde_json::Value = proxy
+        .get("/api/v1/governance/proposals")
+        .await
+        .map_err(CommandError::from)?;
+
+    let items = resp["data"]["data"]
+        .as_array()
+        .or_else(|| resp["data"]["items"].as_array())
+        .or_else(|| resp["data"].as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(items
+        .iter()
+        .filter_map(|p| {
+            Some(ProposalSummary {
+                id: p["id"].as_u64()?,
+                proposer: p["proposer"].as_str()?.to_string(),
+                description: p["description"].as_str()?.to_string(),
+                status: format!("{:?}", p["status"]).replace('"', ""),
+                deposit: p["deposit"].as_u64().unwrap_or(0),
+            })
+        })
+        .collect())
+}
+
+/// Create a text proposal on the seed node.
+pub async fn create_proposal(
+    proxy: &SeedProxy,
+    proposer: &str,
+    title: &str,
+    description: &str,
+    deposit: u64,
+) -> Result<serde_json::Value, CommandError> {
+    let body = serde_json::json!({
+        "proposer": proposer,
+        "description": description,
+        "deposit": deposit,
+        "action": {
+            "type": "text",
+            "title": title,
+            "description": description,
+        }
+    });
+
+    proxy
+        .post::<_, serde_json::Value>("/api/v1/governance/proposals", &body)
+        .await
+        .map_err(|e| CommandError {
+            message: format!("create proposal failed: {e}"),
+        })
+}
+
+/// Cast a signed vote on a proposal.
+pub async fn cast_vote(
+    proxy: &SeedProxy,
+    store: &LocalIdentityStore,
+    did: &str,
+    password: &str,
+    proposal_id: u64,
+    option: &str,
+) -> Result<VoteTally, CommandError> {
+    let identity = store.get(did)?.ok_or_else(|| CommandError {
+        message: format!("identity not found: {did}"),
+    })?;
+
+    let private_key_bytes = key_crypto::decrypt_key(&identity.private_key_enc, password)?;
+    let signing_key =
+        ed25519_dalek::SigningKey::from_bytes(&private_key_bytes.try_into().map_err(|_| {
+            CommandError {
+                message: "invalid Ed25519 key length".to_string(),
+            }
+        })?);
+
+    // Sign "vote:{proposal_id}:{option}:{public_key}"
+    let sign_msg = format!("vote:{proposal_id}:{option}:{}", identity.public_key_hex);
+    use ed25519_dalek::Signer;
+    let signature = hex::encode(signing_key.sign(sign_msg.as_bytes()).to_bytes());
+
+    let body = serde_json::json!({
+        "voter": did,
+        "option": option,
+        "signature": signature,
+        "public_key": identity.public_key_hex,
+    });
+
+    let resp: serde_json::Value = proxy
+        .post(
+            &format!("/api/v1/governance/proposals/{proposal_id}/vote"),
+            &body,
+        )
+        .await
+        .map_err(|e| CommandError {
+            message: format!("vote failed: {e}"),
+        })?;
+
+    let data = &resp["data"];
+    Ok(VoteTally {
+        proposal_id: data["proposal_id"].as_u64().unwrap_or(proposal_id),
+        yes_power: data["yes_power"].as_u64().unwrap_or(0),
+        no_power: data["no_power"].as_u64().unwrap_or(0),
+        abstain_power: data["abstain_power"].as_u64().unwrap_or(0),
+        quorum_reached: data["quorum_reached"].as_bool().unwrap_or(false),
+        passed: data["passed"].as_bool().unwrap_or(false),
+    })
+}
+
+/// Get tally for a proposal.
+pub async fn get_tally(proxy: &SeedProxy, proposal_id: u64) -> Result<VoteTally, CommandError> {
+    let resp: serde_json::Value = proxy
+        .get(&format!("/api/v1/governance/proposals/{proposal_id}/tally"))
+        .await
+        .map_err(CommandError::from)?;
+
+    let data = &resp["data"];
+    Ok(VoteTally {
+        proposal_id: data["proposal_id"].as_u64().unwrap_or(proposal_id),
+        yes_power: data["yes_power"].as_u64().unwrap_or(0),
+        no_power: data["no_power"].as_u64().unwrap_or(0),
+        abstain_power: data["abstain_power"].as_u64().unwrap_or(0),
+        quorum_reached: data["quorum_reached"].as_bool().unwrap_or(false),
+        passed: data["passed"].as_bool().unwrap_or(false),
+    })
+}
+
 // ── Internal helpers ──
 
 struct KeypairOutput {
@@ -709,5 +859,61 @@ mod tests {
         let json = serde_json::to_value(&fr).unwrap();
         assert_eq!(json["amount"], 1000);
         assert_eq!(json["status"], "funded");
+    }
+
+    // ── Governance tests ──
+
+    #[test]
+    fn vote_builds_valid_signature() {
+        let (_dir, store) = temp_store();
+        let info = create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
+
+        let private_bytes = key_crypto::decrypt_key(
+            &store.get(&info.did).unwrap().unwrap().private_key_enc,
+            TEST_PASSWORD,
+        )
+        .unwrap();
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&private_bytes.try_into().unwrap());
+
+        let proposal_id = 42u64;
+        let option = "Yes";
+        let stored = store.get(&info.did).unwrap().unwrap();
+        let sign_msg = format!("vote:{proposal_id}:{option}:{}", stored.public_key_hex);
+
+        use ed25519_dalek::{Signer, Verifier};
+        let sig = signing_key.sign(sign_msg.as_bytes());
+        assert!(signing_key
+            .verifying_key()
+            .verify(sign_msg.as_bytes(), &sig)
+            .is_ok());
+    }
+
+    #[test]
+    fn proposal_summary_serializes() {
+        let ps = ProposalSummary {
+            id: 1,
+            proposer: "did:goya:alice".to_string(),
+            description: "Increase block size".to_string(),
+            status: "Voting".to_string(),
+            deposit: 10000,
+        };
+        let json = serde_json::to_value(&ps).unwrap();
+        assert_eq!(json["id"], 1);
+        assert_eq!(json["status"], "Voting");
+    }
+
+    #[test]
+    fn vote_tally_serializes() {
+        let vt = VoteTally {
+            proposal_id: 1,
+            yes_power: 100,
+            no_power: 20,
+            abstain_power: 5,
+            quorum_reached: true,
+            passed: true,
+        };
+        let json = serde_json::to_value(&vt).unwrap();
+        assert_eq!(json["yes_power"], 100);
+        assert!(json["passed"].as_bool().unwrap());
     }
 }
