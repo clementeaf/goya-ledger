@@ -6,6 +6,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### Security
+
+- Unified DID derivation to `did:goya:{pubkey_hex[..16]}` across all endpoints
+- Notarize endpoint rejects requests where signer DID does not match public key
+- Canonical `did_from_pubkey_hex()` and `did_matches_pubkey()` in `identity::did`
+
+### Added
+
+- E2E test suite against live seed node (49 assertions): health, notarize, verify, concurrency, 10MB document, signer isolation, impersonation attacks, malformed payloads, account endpoint
+
 ## [0.2.0] — 2026-06-29
 
 **Accounts, replay protection, signed notarization, and CI**
