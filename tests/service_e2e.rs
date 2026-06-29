@@ -881,3 +881,175 @@ async fn e2e_malformed_payloads() {
     );
     println!("  ✓ 1MB metadata → {} (server survived)", resp.status());
 }
+
+// ── Wallet: faucet → balance → transfer → verify ───────────────────────────
+
+async fn post_json(client: &Client, path: &str, body: &serde_json::Value) -> serde_json::Value {
+    let resp = client
+        .post(format!("{SEED_URL}{path}"))
+        .json(body)
+        .send()
+        .await
+        .expect("request failed");
+    let text = resp.text().await.unwrap();
+    serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({"raw": text}))
+}
+
+async fn get_json(client: &Client, path: &str) -> serde_json::Value {
+    let resp = client
+        .get(format!("{SEED_URL}{path}"))
+        .send()
+        .await
+        .expect("request failed");
+    let text = resp.text().await.unwrap();
+    serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({"raw": text}))
+}
+
+#[tokio::test]
+async fn e2e_wallet_full_flow() {
+    println!("\n═══ E2E: Wallet Full Flow ═══");
+    let client = setup_client();
+
+    let alice = create_identity();
+    let bob = create_identity();
+    println!("  Alice: {}", alice.did);
+    println!("  Bob:   {}", bob.did);
+
+    // Step 1: Faucet — fund Alice with 5000 via coinbase
+    println!("\n── Step 1: Faucet fund Alice ──");
+    let faucet_resp = client
+        .post(format!("{SEED_URL}/api/v1/transactions"))
+        .json(&serde_json::json!({
+            "from": "0", "to": alice.did, "amount": 5000
+        }))
+        .send()
+        .await
+        .expect("faucet request failed");
+    assert_eq!(faucet_resp.status(), 201, "coinbase tx should return 201");
+    let faucet_tx: serde_json::Value = faucet_resp.json().await.unwrap();
+    println!("  ✓ Coinbase tx created: {}", faucet_tx["data"]["id"]);
+
+    // Commit block
+    let block = post_json(
+        &client,
+        "/api/v1/blocks",
+        &serde_json::json!({
+            "transactions": [{ "from": "0", "to": alice.did, "amount": 5000 }]
+        }),
+    )
+    .await;
+    println!("  ✓ Block committed: {}", block["data"]);
+
+    // Step 2: Check Alice balance
+    println!("\n── Step 2: Check Alice balance ──");
+    let alice_acc = get_json(&client, &format!("/api/v1/accounts/{}", alice.did)).await;
+    let alice_balance = alice_acc["data"]["balance"].as_u64().unwrap();
+    assert!(
+        alice_balance >= 5000,
+        "Alice should have >= 5000, got {alice_balance}"
+    );
+    println!("  ✓ Alice balance: {alice_balance}");
+
+    // Step 3: Alice transfers 2000 to Bob
+    println!("\n── Step 3: Transfer Alice → Bob (2000) ──");
+    let nonce = alice_acc["data"]["nonce"].as_u64().unwrap();
+    let sign_msg = format!("transfer:{}:{}:2000:{nonce}", alice.did, bob.did);
+    let signature = hex::encode(alice.signing_key.sign(sign_msg.as_bytes()).to_bytes());
+
+    let transfer_tx = post_json(
+        &client,
+        "/api/v1/transactions",
+        &serde_json::json!({
+            "from": alice.did,
+            "to": bob.did,
+            "amount": 2000,
+            "nonce": nonce,
+            "signature": signature,
+        }),
+    )
+    .await;
+    assert_eq!(
+        transfer_tx["status"], "Success",
+        "transfer should succeed: {transfer_tx}"
+    );
+    let tx_id = transfer_tx["data"]["id"].as_str().unwrap();
+    println!("  ✓ Transfer tx: {tx_id}");
+
+    // Commit block
+    post_json(
+        &client,
+        "/api/v1/blocks",
+        &serde_json::json!({
+            "transactions": [{
+                "from": alice.did, "to": bob.did, "amount": 2000,
+                "signature": signature,
+            }]
+        }),
+    )
+    .await;
+    println!("  ✓ Block committed");
+
+    // Step 4: Verify balances
+    println!("\n── Step 4: Verify balances ──");
+    let alice_after = get_json(&client, &format!("/api/v1/accounts/{}", alice.did)).await;
+    let bob_after = get_json(&client, &format!("/api/v1/accounts/{}", bob.did)).await;
+
+    let alice_bal = alice_after["data"]["balance"].as_u64().unwrap();
+    let bob_bal = bob_after["data"]["balance"].as_u64().unwrap();
+    println!("  Alice: {alice_bal} (was {alice_balance}, sent 2000)");
+    println!("  Bob:   {bob_bal}");
+
+    assert!(
+        alice_bal < alice_balance,
+        "Alice balance should decrease after transfer"
+    );
+    assert!(bob_bal >= 2000, "Bob should have >= 2000");
+
+    // Step 5: Transaction history
+    println!("\n── Step 5: Transaction history ──");
+    let alice_txs = get_json(
+        &client,
+        &format!("/api/v1/wallets/{}/transactions", alice.did),
+    )
+    .await;
+    let alice_tx_list = alice_txs["data"].as_array().unwrap();
+    assert!(
+        alice_tx_list.len() >= 2,
+        "Alice should have >= 2 txs (faucet + transfer)"
+    );
+    println!("  ✓ Alice history: {} transactions", alice_tx_list.len());
+
+    let bob_txs = get_json(
+        &client,
+        &format!("/api/v1/wallets/{}/transactions", bob.did),
+    )
+    .await;
+    let bob_tx_list = bob_txs["data"].as_array().unwrap();
+    assert!(!bob_tx_list.is_empty(), "Bob should have >= 1 tx");
+    println!("  ✓ Bob history: {} transactions", bob_tx_list.len());
+
+    // Step 6: Insufficient balance rejected
+    println!("\n── Step 6: Insufficient balance ──");
+    let big_sign = format!("transfer:{}:{}:999999:1", alice.did, bob.did);
+    let big_sig = hex::encode(alice.signing_key.sign(big_sign.as_bytes()).to_bytes());
+
+    let resp = client
+        .post(format!("{SEED_URL}/api/v1/transactions"))
+        .json(&serde_json::json!({
+            "from": alice.did,
+            "to": bob.did,
+            "amount": 999999,
+            "nonce": 1,
+            "signature": big_sig,
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert!(
+        resp.status().is_client_error(),
+        "insufficient balance should be rejected"
+    );
+    println!("  ✓ Insufficient balance rejected");
+
+    println!("\n═══ WALLET FLOW COMPLETE ═══\n");
+}

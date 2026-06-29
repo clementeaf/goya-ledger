@@ -52,6 +52,48 @@
       <div id="verify-result" class="result-area"></div>
     </section>
 
+    <!-- Wallet -->
+    <section class="card" id="wallet-section">
+      <h2>Wallet</h2>
+      <div class="input-row" style="margin-bottom: 12px">
+        <select id="wallet-did">
+          <option value="">Selecciona identidad...</option>
+        </select>
+        <button id="btn-refresh-balance">Consultar</button>
+        <button id="btn-faucet" class="btn-secondary">Faucet (1000)</button>
+      </div>
+      <div id="wallet-balance" class="result-area"></div>
+    </section>
+
+    <!-- Transfer -->
+    <section class="card" id="transfer-section">
+      <h2>Transferir</h2>
+      <div class="input-row" style="margin-bottom: 8px">
+        <select id="transfer-from">
+          <option value="">Desde...</option>
+        </select>
+        <input type="text" id="transfer-to" placeholder="DID destino">
+      </div>
+      <div class="input-row">
+        <input type="number" id="transfer-amount" placeholder="Cantidad" min="1">
+        <input type="password" id="transfer-password" placeholder="Password">
+        <button id="btn-transfer">Enviar</button>
+      </div>
+      <div id="transfer-result" class="result-area"></div>
+    </section>
+
+    <!-- Transaction History -->
+    <section class="card" id="history-section">
+      <h2>Historial</h2>
+      <div class="input-row" style="margin-bottom: 12px">
+        <select id="history-did">
+          <option value="">Selecciona identidad...</option>
+        </select>
+        <button id="btn-history">Ver</button>
+      </div>
+      <div id="tx-history" class="result-area"></div>
+    </section>
+
     <!-- Node Status -->
     <section class="card" id="status-section">
       <h2>Estado del Nodo</h2>

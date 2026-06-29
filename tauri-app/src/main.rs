@@ -3,7 +3,10 @@
 mod commands;
 mod key_crypto;
 
-use commands::{CommandError, IdentityInfo, NodeStatus, NotarizeResult};
+use commands::{
+    CommandError, FaucetResult, IdentityInfo, NodeStatus, NotarizeResult, TransferResult,
+    WalletBalance,
+};
 use rust_bc::light_client::local_store::LocalIdentityStore;
 use rust_bc::light_client::proxy::SeedProxy;
 use std::sync::Mutex;
@@ -90,6 +93,59 @@ async fn cmd_node_status(
     commands::get_node_status(&proxy, &store).await
 }
 
+#[tauri::command]
+async fn cmd_get_balance(
+    state: tauri::State<'_, Mutex<AppState>>,
+    address: String,
+) -> Result<WalletBalance, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::get_balance(&proxy, &address).await
+}
+
+#[tauri::command]
+async fn cmd_request_faucet(
+    state: tauri::State<'_, Mutex<AppState>>,
+    recipient: String,
+    amount: u64,
+) -> Result<FaucetResult, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::request_faucet(&proxy, &recipient, amount).await
+}
+
+#[tauri::command]
+async fn cmd_send_transfer(
+    state: tauri::State<'_, Mutex<AppState>>,
+    from_did: String,
+    password: String,
+    to_address: String,
+    amount: u64,
+) -> Result<TransferResult, CommandError> {
+    let (proxy, store_path) = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        (s.proxy.clone(), s.store.path().to_path_buf())
+    };
+    let store = LocalIdentityStore::open(store_path);
+    commands::send_transfer(&proxy, &store, &from_did, &password, &to_address, amount).await
+}
+
+#[tauri::command]
+async fn cmd_get_transactions(
+    state: tauri::State<'_, Mutex<AppState>>,
+    address: String,
+) -> Result<Vec<serde_json::Value>, CommandError> {
+    let proxy = {
+        let s = state.lock().unwrap_or_else(|e| e.into_inner());
+        s.proxy.clone()
+    };
+    commands::get_transactions(&proxy, &address).await
+}
+
 fn main() {
     let seed_url =
         std::env::var("SEED_NODE_URL").unwrap_or_else(|_| "https://goya-node.fly.dev".to_string());
@@ -109,6 +165,10 @@ fn main() {
             cmd_notarize,
             cmd_verify_notarization,
             cmd_node_status,
+            cmd_get_balance,
+            cmd_request_faucet,
+            cmd_send_transfer,
+            cmd_get_transactions,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run GOYA-ledger app");

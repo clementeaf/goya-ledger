@@ -235,6 +235,195 @@ pub async fn get_node_status(
     })
 }
 
+// ── Wallet commands ──
+
+/// Response types for wallet operations.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WalletBalance {
+    pub address: String,
+    pub balance: u64,
+    pub nonce: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TransferResult {
+    pub tx_id: String,
+    pub from: String,
+    pub to: String,
+    pub amount: u64,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FaucetResult {
+    pub tx_id: String,
+    pub amount: u64,
+    pub status: String,
+}
+
+/// Query account balance and nonce from seed node.
+pub async fn get_balance(proxy: &SeedProxy, address: &str) -> Result<WalletBalance, CommandError> {
+    let resp: serde_json::Value = proxy
+        .get(&format!("/api/v1/accounts/{address}"))
+        .await
+        .map_err(CommandError::from)?;
+
+    let data = &resp["data"];
+    Ok(WalletBalance {
+        address: address.to_string(),
+        balance: data["balance"].as_u64().unwrap_or(0),
+        nonce: data["nonce"].as_u64().unwrap_or(0),
+    })
+}
+
+/// Request testnet tokens via coinbase transaction + block commit.
+pub async fn request_faucet(
+    proxy: &SeedProxy,
+    recipient: &str,
+    amount: u64,
+) -> Result<FaucetResult, CommandError> {
+    // Coinbase transaction (from="0") — exempt from signature/balance checks
+    let tx_body = serde_json::json!({
+        "from": "0",
+        "to": recipient,
+        "amount": amount,
+    });
+
+    let tx_resp: serde_json::Value =
+        proxy
+            .post("/api/v1/transactions", &tx_body)
+            .await
+            .map_err(|e| CommandError {
+                message: format!("faucet tx failed: {e}"),
+            })?;
+
+    let tx_id = tx_resp["data"]["id"]
+        .as_str()
+        .unwrap_or("unknown")
+        .to_string();
+
+    // Commit to block so balance registers immediately
+    let block_body = serde_json::json!({
+        "transactions": [{ "from": "0", "to": recipient, "amount": amount }]
+    });
+    proxy
+        .post::<_, serde_json::Value>("/api/v1/blocks", &block_body)
+        .await
+        .map_err(|e| CommandError {
+            message: format!("block commit failed: {e}"),
+        })?;
+
+    Ok(FaucetResult {
+        tx_id,
+        amount,
+        status: "funded".to_string(),
+    })
+}
+
+/// Send a signed transfer from one identity to another.
+pub async fn send_transfer(
+    proxy: &SeedProxy,
+    store: &LocalIdentityStore,
+    from_did: &str,
+    password: &str,
+    to_address: &str,
+    amount: u64,
+) -> Result<TransferResult, CommandError> {
+    let identity = store.get(from_did)?.ok_or_else(|| CommandError {
+        message: format!("identity not found: {from_did}"),
+    })?;
+
+    // Unlock private key
+    let private_key_bytes = key_crypto::decrypt_key(&identity.private_key_enc, password)?;
+    let signing_key =
+        ed25519_dalek::SigningKey::from_bytes(&private_key_bytes.try_into().map_err(|_| {
+            CommandError {
+                message: "invalid Ed25519 key length".to_string(),
+            }
+        })?);
+
+    // Get current nonce
+    let balance_info = get_balance(proxy, from_did).await?;
+    let nonce = balance_info.nonce;
+
+    (balance_info.balance >= amount)
+        .then_some(())
+        .ok_or_else(|| CommandError {
+            message: format!(
+                "insufficient balance: have {}, need {amount}",
+                balance_info.balance
+            ),
+        })?;
+
+    // Sign "transfer:{from}:{to}:{amount}:{nonce}"
+    let sign_msg = format!("transfer:{from_did}:{to_address}:{amount}:{nonce}");
+    use ed25519_dalek::Signer;
+    let signature = hex::encode(signing_key.sign(sign_msg.as_bytes()).to_bytes());
+
+    let tx_body = serde_json::json!({
+        "from": from_did,
+        "to": to_address,
+        "amount": amount,
+        "nonce": nonce,
+        "signature": signature,
+    });
+
+    let tx_resp: serde_json::Value =
+        proxy
+            .post("/api/v1/transactions", &tx_body)
+            .await
+            .map_err(|e| CommandError {
+                message: format!("transfer failed: {e}"),
+            })?;
+
+    let tx_id = tx_resp["data"]["id"]
+        .as_str()
+        .unwrap_or("unknown")
+        .to_string();
+
+    // Commit to block
+    let block_body = serde_json::json!({
+        "transactions": [{
+            "from": from_did,
+            "to": to_address,
+            "amount": amount,
+            "signature": signature,
+        }]
+    });
+    proxy
+        .post::<_, serde_json::Value>("/api/v1/blocks", &block_body)
+        .await
+        .map_err(|e| CommandError {
+            message: format!("block commit failed: {e}"),
+        })?;
+
+    Ok(TransferResult {
+        tx_id,
+        from: from_did.to_string(),
+        to: to_address.to_string(),
+        amount,
+        status: "confirmed".to_string(),
+    })
+}
+
+/// Get transaction history for an address.
+pub async fn get_transactions(
+    proxy: &SeedProxy,
+    address: &str,
+) -> Result<Vec<serde_json::Value>, CommandError> {
+    let resp: serde_json::Value = proxy
+        .get(&format!("/api/v1/wallets/{address}/transactions"))
+        .await
+        .map_err(CommandError::from)?;
+
+    resp["data"]
+        .as_array()
+        .map(|arr| arr.to_vec())
+        .ok_or_else(|| CommandError {
+            message: "unexpected response format".to_string(),
+        })
+}
+
 // ── Internal helpers ──
 
 struct KeypairOutput {
@@ -443,5 +632,82 @@ mod tests {
         assert!(!status.connected);
         assert!(status.chain_height.is_none());
         assert_eq!(status.local_identities, 1);
+    }
+
+    // ── Wallet command tests ──
+
+    #[test]
+    fn transfer_builds_valid_signature() {
+        let (_dir, store) = temp_store();
+        let sender = create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
+
+        let private_bytes = key_crypto::decrypt_key(
+            &store.get(&sender.did).unwrap().unwrap().private_key_enc,
+            TEST_PASSWORD,
+        )
+        .unwrap();
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&private_bytes.try_into().unwrap());
+
+        let to = "did:goya:recipient0000000";
+        let amount = 500u64;
+        let nonce = 0u64;
+        let sign_msg = format!("transfer:{}:{to}:{amount}:{nonce}", sender.did);
+
+        use ed25519_dalek::{Signer, Verifier};
+        let sig = signing_key.sign(sign_msg.as_bytes());
+        assert!(signing_key
+            .verifying_key()
+            .verify(sign_msg.as_bytes(), &sig)
+            .is_ok());
+    }
+
+    #[test]
+    fn transfer_wrong_password_fails_unlock() {
+        let (_dir, store) = temp_store();
+        let sender = create_identity(&store, "Ed25519", TEST_PASSWORD).unwrap();
+
+        let result = key_crypto::decrypt_key(
+            &store.get(&sender.did).unwrap().unwrap().private_key_enc,
+            "wrong-password",
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn wallet_balance_struct_serializes() {
+        let wb = WalletBalance {
+            address: "did:goya:test".to_string(),
+            balance: 1000,
+            nonce: 3,
+        };
+        let json = serde_json::to_value(&wb).unwrap();
+        assert_eq!(json["balance"], 1000);
+        assert_eq!(json["nonce"], 3);
+    }
+
+    #[test]
+    fn transfer_result_struct_serializes() {
+        let tr = TransferResult {
+            tx_id: "tx-001".to_string(),
+            from: "did:goya:alice".to_string(),
+            to: "did:goya:bob".to_string(),
+            amount: 250,
+            status: "confirmed".to_string(),
+        };
+        let json = serde_json::to_value(&tr).unwrap();
+        assert_eq!(json["amount"], 250);
+        assert_eq!(json["status"], "confirmed");
+    }
+
+    #[test]
+    fn faucet_result_struct_serializes() {
+        let fr = FaucetResult {
+            tx_id: "tx-002".to_string(),
+            amount: 1000,
+            status: "funded".to_string(),
+        };
+        let json = serde_json::to_value(&fr).unwrap();
+        assert_eq!(json["amount"], 1000);
+        assert_eq!(json["status"], "funded");
     }
 }

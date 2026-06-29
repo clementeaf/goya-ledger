@@ -60,13 +60,7 @@ async function refreshIdentities() {
       ? ids.map(identityCard).join("")
       : "<p style='color:var(--text-muted)'>Sin identidades. Crea una para empezar.</p>";
     show($("#identity-list"), html);
-
-    // Sync notarize identity selector
-    const sel = $("#notarize-did");
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">Selecciona identidad...</option>'
-      + ids.map(id => `<option value="${id.did}">${id.did}</option>`).join("");
-    if (prev && ids.some(id => id.did === prev)) sel.value = prev;
+    syncSelectors(ids);
   } catch (e) {
     show($("#identity-list"), `<span class="tag error">${e.message || e}</span>`);
   }
@@ -140,6 +134,136 @@ async function refreshStatus() {
   }
 }
 
+// ── Wallet ──
+
+async function refreshBalance() {
+  const did = $("#wallet-did").value;
+  show($("#wallet-balance"), did ? "<p>Consultando...</p>" : "");
+  switch (true) {
+    case !did: return;
+    default: break;
+  }
+
+  try {
+    const bal = await invoke("cmd_get_balance", { address: did });
+    show($("#wallet-balance"), `
+      <div class="balance-display">
+        <span class="balance-amount">${bal.balance}</span> GOYA
+        <span class="balance-nonce">nonce: ${bal.nonce}</span>
+      </div>
+    `);
+  } catch (e) {
+    show($("#wallet-balance"), `<span class="tag error">${e.message || e}</span>`);
+  }
+}
+
+async function requestFaucet() {
+  const did = $("#wallet-did").value;
+  switch (true) {
+    case !did:
+      show($("#wallet-balance"), '<span class="tag error">Selecciona identidad</span>');
+      return;
+    default: break;
+  }
+
+  const btn = $("#btn-faucet");
+  btn.disabled = true;
+  btn.textContent = "Enviando...";
+
+  try {
+    const result = await invoke("cmd_request_faucet", { recipient: did, amount: 1000 });
+    show($("#wallet-balance"), `<span class="tag success">+${result.amount} GOYA</span>`);
+    await refreshBalance();
+  } catch (e) {
+    show($("#wallet-balance"), `<span class="tag error">${e.message || e}</span>`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Faucet (1000)";
+  }
+}
+
+// ── Transfer ──
+
+async function sendTransfer() {
+  const fromDid = $("#transfer-from").value;
+  const toAddress = $("#transfer-to").value.trim();
+  const amount = parseInt($("#transfer-amount").value, 10);
+  const password = $("#transfer-password").value;
+
+  const errors = [
+    [!fromDid, "Selecciona identidad origen"],
+    [!toAddress, "Ingresa DID destino"],
+    [!amount || amount <= 0, "Ingresa cantidad valida"],
+    [!password, "Ingresa password"],
+  ].filter(([cond]) => cond).map(([, msg]) => msg);
+
+  switch (errors.length) {
+    case 0: break;
+    default:
+      show($("#transfer-result"), `<span class="tag error">${errors[0]}</span>`);
+      return;
+  }
+
+  const btn = $("#btn-transfer");
+  btn.disabled = true;
+  btn.textContent = "Enviando...";
+
+  try {
+    const result = await invoke("cmd_send_transfer", {
+      fromDid, password, toAddress, amount,
+    });
+    $("#transfer-password").value = "";
+    show($("#transfer-result"), `
+      <span class="tag success">Transferido</span>
+      ${jsonBlock(result)}
+    `);
+  } catch (e) {
+    show($("#transfer-result"), `<span class="tag error">${e.message || e}</span>`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Enviar";
+  }
+}
+
+// ── Transaction History ──
+
+async function loadHistory() {
+  const did = $("#history-did").value;
+  switch (true) {
+    case !did:
+      show($("#tx-history"), '<span class="tag error">Selecciona identidad</span>');
+      return;
+    default: break;
+  }
+
+  show($("#tx-history"), "<p>Cargando...</p>");
+
+  try {
+    const txs = await invoke("cmd_get_transactions", { address: did });
+    const html = txs.length
+      ? txs.map(tx => `<div class="identity-item">
+          <div class="did">${tx.input_did === did ? "→" : "←"} ${tx.input_did === did ? tx.output_recipient : tx.input_did}</div>
+          <div class="meta">${tx.amount} GOYA · bloque #${tx.block_height}</div>
+        </div>`).join("")
+      : "<p style='color:var(--text-muted)'>Sin transacciones.</p>";
+    show($("#tx-history"), html);
+  } catch (e) {
+    show($("#tx-history"), `<span class="tag error">${e.message || e}</span>`);
+  }
+}
+
+// ── Sync all identity selectors ──
+
+function syncSelectors(ids) {
+  ["#notarize-did", "#wallet-did", "#transfer-from", "#history-did"].forEach(sel => {
+    const el = $(sel);
+    const prev = el.value;
+    el.innerHTML = '<option value="">Selecciona identidad...</option>'
+      + ids.map(id => `<option value="${id.did}">${id.did}</option>`).join("");
+    el.value = ids.some(id => id.did === prev) ? prev : "";
+  });
+}
+
 // ── Event wiring ──
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -172,6 +296,16 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#verify-hash").addEventListener("keydown", (e) => {
     e.key === "Enter" && verifyHash();
   });
+
+  // Wallet
+  $("#btn-refresh-balance").addEventListener("click", refreshBalance);
+  $("#btn-faucet").addEventListener("click", requestFaucet);
+
+  // Transfer
+  $("#btn-transfer").addEventListener("click", sendTransfer);
+
+  // History
+  $("#btn-history").addEventListener("click", loadHistory);
 
   // Initial load
   refreshIdentities();
