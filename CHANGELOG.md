@@ -28,6 +28,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
   - `alias.rs`: `AliasRegisterRequest`, `AliasRevokeRequest` — FEA appends `:{bio_hash}` to register/revoke payloads
   - `invitations.rs`: `CreateInvitationRequest`, `RespondInvitationRequest` — FEA appends `:{bio_hash}`
   - All request structs accept `signature_level`, `signature_algorithm`, `biometric_evidence` with serde defaults (fully backwards compatible)
+- `docs/compliance/ELECTRONIC-SIGNATURE-COMPLIANCE.md` — legal compliance mapping for electronic signatures: Chile Ley 19.799 (FES/FEA), EU eIDAS 910/2014 + eIDAS 2.0 (Simple/Advanced/Qualified), US ESIGN Act + UETA, NIST FIPS 204/186-5/SP 800-63B, GDPR Art. 9/25/35 biometric considerations, Chilean Ley 19.628/21.719 data protection, full endpoint coverage matrix, roadmap
 
 ### Changed
 
