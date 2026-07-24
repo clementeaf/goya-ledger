@@ -20,8 +20,12 @@
 //! The commitment is bound into the signing payload so the signature
 //! cryptographically covers the signer's biometric identity.
 
+pub mod verify;
+
 use crate::identity::signing::SigningAlgorithm;
 use serde::{Deserialize, Serialize};
+
+pub use verify::{validate_public_key, verify_ed25519, verify_mldsa65, verify_signature};
 
 // ── Signature level ──────────────────────────────────────────────────────────
 

@@ -19,7 +19,10 @@ use crate::api::errors::{ApiResponse, ApiResult, ErrorDto};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
 use crate::identity::signing::SigningAlgorithm;
-use crate::signature::{compute_biometrics_hash, BiometricEvidence, SignatureLevel};
+use crate::signature::{
+    compute_biometrics_hash, validate_public_key, verify_signature, BiometricEvidence,
+    SignatureLevel,
+};
 use crate::storage::traits::{NotarizationEntry, OwnershipTransfer};
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
@@ -38,89 +41,6 @@ fn now_secs() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
-}
-
-// ── Signature verification ──────────────────────────────────────────────────
-
-/// Verify an Ed25519 signature over a message.
-fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
-    let pub_bytes = match hex::decode(public_key_hex) {
-        Ok(b) if b.len() == 32 => b,
-        _ => return false,
-    };
-    let sig_bytes = match hex::decode(signature_hex) {
-        Ok(b) if b.len() == 64 => b,
-        _ => return false,
-    };
-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};
-    match (
-        pub_bytes
-            .as_slice()
-            .try_into()
-            .ok()
-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),
-        Signature::from_slice(&sig_bytes).ok(),
-    ) {
-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),
-        _ => false,
-    }
-}
-
-/// Verify an ML-DSA-65 signature over a message.
-fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
-    let pub_bytes = match hex::decode(public_key_hex) {
-        Ok(b) if b.len() == 1952 => b,
-        _ => return false,
-    };
-    let sig_bytes = match hex::decode(signature_hex) {
-        Ok(b) if b.len() == 3309 => b,
-        _ => return false,
-    };
-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};
-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)
-    {
-        Ok(pk) => pk,
-        Err(_) => return false,
-    };
-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(
-        &sig_bytes,
-    ) {
-        Ok(sig) => sig,
-        Err(_) => return false,
-    };
-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)
-        .is_ok()
-}
-
-/// Dispatch signature verification based on algorithm.
-fn verify_signature(
-    algorithm: SigningAlgorithm,
-    public_key_hex: &str,
-    message: &[u8],
-    signature_hex: &str,
-) -> bool {
-    match algorithm {
-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),
-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),
-    }
-}
-
-/// Validate public key hex length for the given algorithm.
-fn validate_public_key(algorithm: SigningAlgorithm, public_key_hex: &str) -> Result<(), String> {
-    let expected_bytes = match algorithm {
-        SigningAlgorithm::Ed25519 => 32,
-        SigningAlgorithm::MlDsa65 => 1952,
-    };
-    let expected_hex = expected_bytes * 2;
-    if public_key_hex.len() != expected_hex {
-        return Err(format!(
-            "public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})"
-        ));
-    }
-    if hex::decode(public_key_hex).is_err() {
-        return Err("public_key is not valid hex".into());
-    }
-    Ok(())
 }
 
 // ── Request types ────────────────────────────────────────────────────────────

@@ -19,6 +19,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - Context-prefixed signing payloads: Simple `"notarize:{s}:{h}"`, Advanced `"notarize_fea:{s}:{h}:{bio_hash}"`
 - Verify/get/list/provenance responses include `signature_level` and `biometric_evidence`
 - 36 new tests: 30 signature module (levels, biometrics, envelope, serde, payload determinism, error variants) + 6 storage (roundtrip, backwards compat, list, transfer)
+- Shared signature verification module (`src/signature/verify.rs`): `verify_ed25519`, `verify_mldsa65`, `verify_signature` dispatcher, `validate_public_key` — replaces 4 duplicated `verify_ed25519` helpers and 2 inline verifiers across handlers
+- Identity `verify_signature` endpoint auto-detects Ed25519 and ML-DSA-65 (was Ed25519-only)
+- 15 new tests for shared verification (Ed25519 + ML-DSA-65 sign/verify, dispatch, cross-algo rejection, public key validation)
+
+### Changed
+
+- Handlers `notarize`, `alias`, `inference`, `invitations`, `governance`, `identity` now use shared `crate::signature::verify_*` — eliminated ~228 lines of duplicated verification code
 
 ### Fixed
 

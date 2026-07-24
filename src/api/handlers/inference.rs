@@ -14,6 +14,7 @@
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult, ErrorDto};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
+use crate::signature::verify_ed25519;
 use crate::storage::traits::{ClaimStatus, InferenceChallenge, InferenceClaim, OutputTolerance};
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
@@ -143,30 +144,6 @@ fn parse_status(s: &str) -> Option<ClaimStatus> {
         "slashed" => Some(ClaimStatus::Slashed),
         "rejected" => Some(ClaimStatus::Rejected),
         _ => None,
-    }
-}
-
-/// Verify an Ed25519 signature (reuses the same pattern as alias handler).
-fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
-    let pub_bytes = match hex::decode(public_key_hex) {
-        Ok(b) if b.len() == 32 => b,
-        _ => return false,
-    };
-    let sig_bytes = match hex::decode(signature_hex) {
-        Ok(b) if b.len() == 64 => b,
-        _ => return false,
-    };
-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};
-    match (
-        pub_bytes
-            .as_slice()
-            .try_into()
-            .ok()
-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),
-        Signature::from_slice(&sig_bytes).ok(),
-    ) {
-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),
-        _ => false,
     }
 }
 

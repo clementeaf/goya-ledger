@@ -142,52 +142,16 @@ async fn verify_signature(
         resource: format!("identity {did}"),
     })?;
 
-    // Verify signature using Ed25519
-    let valid = {
-        let pub_bytes = match hex::decode(&body.public_key) {
-            Ok(b) => b,
-            Err(_) => {
-                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                    crate::api::errors::ErrorDto {
-                        code: "INVALID_HEX".to_string(),
-                        message: "public_key is not valid hex".to_string(),
-                        field: Some("public_key".to_string()),
-                    },
-                    400,
-                )));
-            }
-        };
-        let sig_bytes = match hex::decode(&body.signature) {
-            Ok(b) => b,
-            Err(_) => {
-                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                    crate::api::errors::ErrorDto {
-                        code: "INVALID_HEX".to_string(),
-                        message: "signature is not valid hex".to_string(),
-                        field: Some("signature".to_string()),
-                    },
-                    400,
-                )));
-            }
-        };
-
-        if pub_bytes.len() == 32 && sig_bytes.len() == 64 {
-            use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};
-            match (
-                pub_bytes
-                    .as_slice()
-                    .try_into()
-                    .ok()
-                    .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),
-                Signature::from_slice(&sig_bytes).ok(),
-            ) {
-                (Some(vk), Some(sig)) => vk.verify(body.message.as_bytes(), &sig).is_ok(),
-                _ => false,
-            }
-        } else {
-            false
-        }
-    };
+    // Verify signature — try Ed25519 first, then ML-DSA-65
+    let valid = crate::signature::verify_ed25519(
+        &body.public_key,
+        body.message.as_bytes(),
+        &body.signature,
+    ) || crate::signature::verify_mldsa65(
+        &body.public_key,
+        body.message.as_bytes(),
+        &body.signature,
+    );
 
     let response = VerifySignatureResponse {
         valid,

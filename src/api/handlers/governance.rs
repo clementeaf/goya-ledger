@@ -495,34 +495,6 @@ pub async fn cast_governance_vote(
     // signature over the canonical vote payload. This proves the voter
     // controls the private key for the claimed DID.
     if let (Some(sig_hex), Some(pk_hex)) = (&body.signature, &body.public_key) {
-        use pqc_crypto_module::legacy::ed25519::Verifier;
-        use pqc_crypto_module::legacy::ed25519::{Signature, VerifyingKey};
-
-        let pk_bytes = match hex::decode(pk_hex) {
-            Ok(b) if b.len() == 32 => b,
-            _ => {
-                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                    err_field(
-                        "public_key",
-                        "invalid Ed25519 public key (expected 32 bytes hex)",
-                    ),
-                    400,
-                )));
-            }
-        };
-        let sig_bytes = match hex::decode(sig_hex) {
-            Ok(b) if b.len() == 64 => b,
-            _ => {
-                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                    err_field(
-                        "signature",
-                        "invalid Ed25519 signature (expected 64 bytes hex)",
-                    ),
-                    400,
-                )));
-            }
-        };
-
         let option_str = match body.option {
             VoteOption::Yes => "Yes",
             VoteOption::No => "No",
@@ -530,19 +502,7 @@ pub async fn cast_governance_vote(
         };
         let payload = format!("vote:{id}:{option_str}:{pk_hex}");
 
-        let vk =
-            match VerifyingKey::from_bytes(pk_bytes.as_slice().try_into().unwrap_or(&[0u8; 32])) {
-                Ok(v) => v,
-                Err(_) => {
-                    return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                        err_field("public_key", "invalid Ed25519 public key"),
-                        400,
-                    )));
-                }
-            };
-        let sig = Signature::from_bytes(sig_bytes.as_slice().try_into().unwrap_or(&[0u8; 64]));
-
-        if vk.verify(payload.as_bytes(), &sig).is_err() {
+        if !crate::signature::verify_ed25519(pk_hex, payload.as_bytes(), sig_hex) {
             return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                 err_dto("signature verification failed — vote rejected"),
                 400,
@@ -550,8 +510,7 @@ pub async fn cast_governance_vote(
         }
 
         // Verify voter DID matches the public key
-        let pk_hex = hex::encode(&pk_bytes);
-        if !crate::identity::did::did_matches_pubkey(&body.voter, &pk_hex) {
+        if !crate::identity::did::did_matches_pubkey(&body.voter, pk_hex) {
             return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                 err_dto("voter DID does not match public key"),
                 400,
