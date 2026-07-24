@@ -36,6 +36,7 @@ Blockchain node (Rust/Actix-Web 4) with HTTP API.
 - **API** (`src/api/`): All endpoints under `/api/v1` via `ApiRoutes::register`. Handler modules in `src/api/handlers/`. Response envelope: `ApiResponse<T>` with trace ID. ACL via `enforce_acl`. `api_legacy.rs` only provides the `config_routes` entry point.
 - **Crypto** (`crates/pqc_crypto_module/`): FIPS-oriented crate. Direct imports of `sha2`, `ed25519_dalek`, etc. in `src/` are forbidden.
 - **Network** (`src/network/`): P2P over TCP/TLS. Flow: `SubmitTransaction` → `OrderedBlock` → `StateRequest/StateResponse`. Push-gossip for block propagation.
+- **Signature** (`src/signature/`): Electronic signature framework — Simple (FES/Ed25519) and Advanced (FEA/ML-DSA-65 + biometric). `SignatureLevel`, `BiometricEvidence`, `SignedEnvelope`, shared `verify_signature` dispatcher, `validate_fes_fea`. Legal alignment: Chile Ley 19.799, EU eIDAS, US ESIGN. See `docs/compliance/ELECTRONIC-SIGNATURE-COMPLIANCE.md`.
 
 - **Light Client** (`src/light_client/`): `NodeMode` (Full/Light) selects routes at startup. `SeedProxy` forwards to remote node. `LocalIdentityStore` persists DIDs as JSON. Activated via `NODE_MODE=light`.
 - **Desktop App** (`tauri-app/`): Tauri v2 macOS app wrapping the light client. Commands in `src/commands.rs`, frontend in `frontend/`.
