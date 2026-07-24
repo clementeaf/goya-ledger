@@ -748,6 +748,7 @@ mod tests {
                         let did = format!("did:goya:t{t}-{i}");
                         let rec = IdentityRecord {
                             did: did.clone(),
+                            public_key: String::new(),
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),
@@ -802,6 +803,7 @@ mod tests {
         store
             .write_identity(&IdentityRecord {
                 did: "did:goya:torture-issuer".into(),
+                public_key: String::new(),
                 created_at: 0,
                 updated_at: 0,
                 status: "active".into(),
@@ -1051,6 +1053,7 @@ mod tests {
                     for i in 0..10_000u64 {
                         let rec = IdentityRecord {
                             did: format!("did:goya:mix-id-t{t}-{i}"),
+                            public_key: String::new(),
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),
@@ -1458,6 +1461,7 @@ mod tests {
                         let did = format!("did:goya:rocks-t{t}-{i}");
                         let rec = IdentityRecord {
                             did: did.clone(),
+                            public_key: String::new(),
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),
@@ -1498,6 +1502,7 @@ mod tests {
         store
             .write_identity(&IdentityRecord {
                 did: "did:goya:rocks-issuer".into(),
+                public_key: String::new(),
                 created_at: 0,
                 updated_at: 0,
                 status: "active".into(),
@@ -1617,6 +1622,7 @@ mod tests {
                     for i in 0..5_000u64 {
                         let rec = IdentityRecord {
                             did: format!("did:goya:rmix-t{t}-{i}"),
+                            public_key: String::new(),
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),

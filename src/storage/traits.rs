@@ -8,6 +8,7 @@ use super::errors::StorageResult;
 use crate::crypto::hasher::HashAlgorithm;
 use crate::endorsement::types::Endorsement;
 use crate::identity::signing::SigningAlgorithm;
+use crate::signature::{BiometricEvidence, SignatureLevel};
 
 /// Block structure for storage
 ///
@@ -258,11 +259,21 @@ pub struct NotarizationEntry {
     pub notarized_at: u64,
     /// Block height at time of notarization (0 if not yet anchored).
     pub block_height: u64,
-    /// Ed25519 signature over `"notarize:{signer}:{content_hash}"` (hex-encoded).
+    /// Signature over the signing payload (hex-encoded).
+    ///
+    /// Payload depends on level:
+    /// - Simple:   `"fes:{signer}:{content_hash}"`
+    /// - Advanced: `"fea:{signer}:{content_hash}:{biometrics_hash}"`
     pub signature: String,
     /// Signing algorithm used.
     #[serde(default)]
     pub signature_algorithm: SigningAlgorithm,
+    /// Electronic signature level (Simple/Advanced/Qualified).
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    /// Biometric evidence commitments (required for Advanced/Qualified).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 /// Records a transfer of ownership for a notarized document.
@@ -277,12 +288,21 @@ pub struct OwnershipTransfer {
     pub from_did: String,
     /// DID of the new owner (recipient).
     pub to_did: String,
-    /// Ed25519 signature over `"transfer_doc:{content_hash}:{from_did}:{to_did}"`.
+    /// Signature over the transfer payload (hex-encoded).
     pub signature: String,
-    /// Ed25519 public key of the sender (hex).
+    /// Public key of the sender (hex).
     pub public_key: String,
     /// Unix timestamp.
     pub transferred_at: u64,
+    /// Signing algorithm used.
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    /// Electronic signature level.
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    /// Biometric evidence commitments (required for Advanced/Qualified).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 /// Alias registry entry — maps a SHA3-256 commitment to a DID.

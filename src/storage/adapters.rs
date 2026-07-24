@@ -2601,6 +2601,7 @@ mod tests {
         let (store, _dir) = tmp_store();
         let identity = IdentityRecord {
             did: "did:bc:123".to_string(),
+            public_key: String::new(),
             created_at: 1_000,
             updated_at: 2_000,
             status: "active".to_string(),

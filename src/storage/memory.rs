@@ -773,6 +773,7 @@ impl BlockStore for MemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::signature::SignatureLevel;
 
     fn sample_block(height: u64) -> Block {
         Block {
@@ -858,6 +859,7 @@ mod tests {
         let store = MemoryStore::new();
         let id = IdentityRecord {
             did: "did:bc:alice".to_string(),
+            public_key: String::new(),
             created_at: 100,
             updated_at: 200,
             status: "active".to_string(),
@@ -1076,5 +1078,189 @@ mod tests {
         let bob = store.credentials_by_subject_did("did:bc:bob").unwrap();
         assert_eq!(bob.len(), 1);
         assert_eq!(bob[0].id, "cred-3");
+    }
+
+    // ── Notarization with signature level + biometric evidence ───────
+
+    #[test]
+    fn notarization_roundtrip_with_signature_level_and_biometrics() {
+        use crate::signature::{BiometricEvidence, BiometricType, SignatureLevel};
+
+        let store = MemoryStore::new();
+        let entry = NotarizationEntry {
+            id: "nota-fea-1".into(),
+            content_hash: "a".repeat(64),
+            signer: "did:goya:fea1".into(),
+            metadata: None,
+            notarized_at: 1700000000,
+            block_height: 42,
+            signature: "ff".repeat(32),
+            signature_algorithm: crate::identity::signing::SigningAlgorithm::MlDsa65,
+            signature_level: SignatureLevel::Advanced,
+            biometric_evidence: vec![
+                BiometricEvidence {
+                    evidence_type: BiometricType::Fingerprint,
+                    commitment: "b".repeat(64),
+                    captured_at: 1700000000,
+                    capture_device: Some("Scanner-v1".into()),
+                },
+                BiometricEvidence {
+                    evidence_type: BiometricType::Rut,
+                    commitment: "c".repeat(64),
+                    captured_at: 1700000000,
+                    capture_device: None,
+                },
+            ],
+        };
+        store.write_notarization(&entry).unwrap();
+
+        let read = store.read_notarization("nota-fea-1").unwrap();
+        assert_eq!(read.signature_level, SignatureLevel::Advanced);
+        assert_eq!(read.biometric_evidence.len(), 2);
+        assert_eq!(
+            read.biometric_evidence[0].evidence_type,
+            BiometricType::Fingerprint
+        );
+        assert_eq!(read.biometric_evidence[1].commitment, "c".repeat(64));
+
+        let by_hash = store.read_notarization_by_hash(&"a".repeat(64)).unwrap();
+        assert_eq!(by_hash.signature_level, SignatureLevel::Advanced);
+        assert_eq!(by_hash.biometric_evidence.len(), 2);
+    }
+
+    #[test]
+    fn notarization_simple_has_empty_biometrics() {
+        let store = MemoryStore::new();
+        let entry = NotarizationEntry {
+            id: "nota-fes-1".into(),
+            content_hash: "d".repeat(64),
+            signer: "did:goya:fes1".into(),
+            metadata: None,
+            notarized_at: 1700000000,
+            block_height: 1,
+            signature: "ee".repeat(32),
+            signature_algorithm: Default::default(),
+            signature_level: SignatureLevel::default(),
+            biometric_evidence: vec![],
+        };
+        store.write_notarization(&entry).unwrap();
+
+        let read = store.read_notarization("nota-fes-1").unwrap();
+        assert_eq!(read.signature_level, SignatureLevel::Simple);
+        assert!(read.biometric_evidence.is_empty());
+    }
+
+    #[test]
+    fn notarization_backwards_compat_legacy_json() {
+        // Simulate a legacy JSON without signature_level or biometric_evidence
+        let legacy_json = r#"{
+            "id": "legacy-1",
+            "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "signer": "did:goya:old",
+            "notarized_at": 1600000000,
+            "block_height": 5,
+            "signature": "abcd",
+            "signature_algorithm": "Ed25519"
+        }"#;
+        let entry: NotarizationEntry = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(entry.signature_level, SignatureLevel::Simple);
+        assert!(entry.biometric_evidence.is_empty());
+        assert_eq!(
+            entry.signature_algorithm,
+            crate::identity::signing::SigningAlgorithm::Ed25519
+        );
+    }
+
+    #[test]
+    fn notarization_list_preserves_biometrics() {
+        use crate::signature::{BiometricEvidence, BiometricType, SignatureLevel};
+
+        let store = MemoryStore::new();
+        for i in 0..3 {
+            let entry = NotarizationEntry {
+                id: format!("nota-list-{i}"),
+                content_hash: format!("{:0>64}", i),
+                signer: "did:goya:lister".into(),
+                metadata: None,
+                notarized_at: 1700000000 + i,
+                block_height: i,
+                signature: "ff".repeat(32),
+                signature_algorithm: crate::identity::signing::SigningAlgorithm::MlDsa65,
+                signature_level: SignatureLevel::Advanced,
+                biometric_evidence: vec![BiometricEvidence {
+                    evidence_type: BiometricType::FacialRecognition,
+                    commitment: format!("{:a>64}", i),
+                    captured_at: 1700000000,
+                    capture_device: None,
+                }],
+            };
+            store.write_notarization(&entry).unwrap();
+        }
+
+        let all = store.list_notarizations(Some("did:goya:lister")).unwrap();
+        assert_eq!(all.len(), 3);
+        for entry in &all {
+            assert_eq!(entry.signature_level, SignatureLevel::Advanced);
+            assert_eq!(entry.biometric_evidence.len(), 1);
+        }
+    }
+
+    #[test]
+    fn ownership_transfer_with_signature_level() {
+        use crate::signature::{BiometricEvidence, BiometricType, SignatureLevel};
+
+        let store = MemoryStore::new();
+        // First create a notarization
+        let nota = NotarizationEntry {
+            id: "nota-xfer".into(),
+            content_hash: "e".repeat(64),
+            signer: "did:goya:alice".into(),
+            metadata: None,
+            notarized_at: 1700000000,
+            block_height: 1,
+            signature: "ff".repeat(32),
+            signature_algorithm: Default::default(),
+            signature_level: Default::default(),
+            biometric_evidence: vec![],
+        };
+        store.write_notarization(&nota).unwrap();
+
+        let transfer = OwnershipTransfer {
+            content_hash: "e".repeat(64),
+            from_did: "did:goya:alice".into(),
+            to_did: "did:goya:bob".into(),
+            signature: "aa".repeat(32),
+            public_key: "bb".repeat(16),
+            transferred_at: 1700001000,
+            signature_algorithm: crate::identity::signing::SigningAlgorithm::MlDsa65,
+            signature_level: SignatureLevel::Advanced,
+            biometric_evidence: vec![BiometricEvidence {
+                evidence_type: BiometricType::Fingerprint,
+                commitment: "c".repeat(64),
+                captured_at: 1700001000,
+                capture_device: None,
+            }],
+        };
+        store.write_ownership_transfer(&transfer).unwrap();
+
+        let transfers = store.read_ownership_transfers(&"e".repeat(64)).unwrap();
+        assert_eq!(transfers.len(), 1);
+        assert_eq!(transfers[0].signature_level, SignatureLevel::Advanced);
+        assert_eq!(transfers[0].biometric_evidence.len(), 1);
+    }
+
+    #[test]
+    fn ownership_transfer_backwards_compat_legacy_json() {
+        let legacy_json = r#"{
+            "content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "from_did": "did:goya:a",
+            "to_did": "did:goya:b",
+            "signature": "abcd",
+            "public_key": "1234",
+            "transferred_at": 1600000000
+        }"#;
+        let transfer: OwnershipTransfer = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(transfer.signature_level, SignatureLevel::Simple);
+        assert!(transfer.biometric_evidence.is_empty());
     }
 }

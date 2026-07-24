@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [Unreleased]
 
+### Added
+
+- Electronic signature framework: Simple (FES) and Advanced (FEA) with post-quantum cryptography + biometric evidence
+  - `src/signature/mod.rs` — `SignatureLevel` (Simple/Advanced/Qualified), `BiometricType` (Fingerprint, FacialRecognition, Rut, Iris, Voice, GovernmentId, extensible), `BiometricEvidence` (SHA-256 commitment, never raw data), `SignedEnvelope`, `compute_biometrics_hash()`
+  - Legal alignment: Chile Ley 19.799 (FES/FEA), EU eIDAS 910/2014 (Simple/Advanced/Qualified), US ESIGN Act + UETA
+  - FEA requires ML-DSA-65 (FIPS 204, PQC) + at least one biometric commitment bound to signing payload
+  - Biometric commitments are order-independent (sorted + hashed) and cryptographically bound to the signature
+- ML-DSA-65 signature verification in notarize handler (`verify_mldsa65`, `verify_signature` dispatcher)
+- `NotarizeRequest` and `TransferDocumentRequest` accept `signature_level`, `signature_algorithm`, `biometric_evidence` (backwards compatible via serde defaults)
+- `NotarizationEntry` and `OwnershipTransfer` storage types carry `signature_level` and `biometric_evidence` (backwards compatible with legacy JSON)
+- Context-prefixed signing payloads: Simple `"notarize:{s}:{h}"`, Advanced `"notarize_fea:{s}:{h}:{bio_hash}"`
+- Verify/get/list/provenance responses include `signature_level` and `biometric_evidence`
+- 36 new tests: 30 signature module (levels, biometrics, envelope, serde, payload determinism, error variants) + 6 storage (roundtrip, backwards compat, list, transfer)
+
+### Fixed
+
+- 12 `IdentityRecord` constructors missing `public_key` field in `stress.rs`, `adapters.rs`, `memory.rs`, `comprehensive_tests.rs`
+
 ## [0.3.0] — 2026-06-29
 
 **Wallet, governance, and security hardening**

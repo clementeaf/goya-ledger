@@ -43,6 +43,7 @@ mod pki;
 mod private_data;
 mod registry;
 mod regulatory;
+mod signature;
 mod smart_contracts;
 mod staking;
 mod storage;

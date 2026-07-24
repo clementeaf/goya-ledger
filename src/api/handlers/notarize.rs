@@ -1,17 +1,25 @@
 //! Notarization endpoints — Proof of Existence service.
 //!
-//! Clients compute a SHA-256 hash of their document locally (the document
-//! never leaves the client) and submit the hash for on-chain timestamping.
+//! Supports two signature levels:
+//! - **Simple (FES)**: Ed25519 signature, DID-based identity
+//! - **Advanced (FEA)**: ML-DSA-65 (PQC) signature + biometric evidence
+//!
+//! Legal alignment: Chile Ley 19.799, EU eIDAS 910/2014, US ESIGN Act.
 //!
 //! Endpoints:
-//! - POST   /api/v1/notarize          — register a document hash
+//! - POST   /api/v1/notarize              — register a document hash
 //! - GET    /api/v1/notarize/verify/{hash} — verify a document hash
-//! - GET    /api/v1/notarize/{id}     — get notarization by ID
-//! - GET    /api/v1/notarize          — list notarizations
+//! - GET    /api/v1/notarize/{id}         — get notarization by ID
+//! - GET    /api/v1/notarize              — list notarizations
+//! - POST   /api/v1/notarize/{hash}/transfer — transfer ownership
+//! - GET    /api/v1/notarize/{hash}/owner — current owner
+//! - GET    /api/v1/notarize/{hash}/provenance — full chain
 
 use crate::api::errors::{ApiResponse, ApiResult, ErrorDto};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
+use crate::identity::signing::SigningAlgorithm;
+use crate::signature::{compute_biometrics_hash, BiometricEvidence, SignatureLevel};
 use crate::storage::traits::{NotarizationEntry, OwnershipTransfer};
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
@@ -31,6 +39,8 @@ fn now_secs() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+
+// ── Signature verification ──────────────────────────────────────────────────
 
 /// Verify an Ed25519 signature over a message.
 fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
@@ -56,6 +66,63 @@ fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> 
     }
 }
 
+/// Verify an ML-DSA-65 signature over a message.
+fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
+    let pub_bytes = match hex::decode(public_key_hex) {
+        Ok(b) if b.len() == 1952 => b,
+        _ => return false,
+    };
+    let sig_bytes = match hex::decode(signature_hex) {
+        Ok(b) if b.len() == 3309 => b,
+        _ => return false,
+    };
+    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};
+    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)
+    {
+        Ok(pk) => pk,
+        Err(_) => return false,
+    };
+    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(
+        &sig_bytes,
+    ) {
+        Ok(sig) => sig,
+        Err(_) => return false,
+    };
+    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)
+        .is_ok()
+}
+
+/// Dispatch signature verification based on algorithm.
+fn verify_signature(
+    algorithm: SigningAlgorithm,
+    public_key_hex: &str,
+    message: &[u8],
+    signature_hex: &str,
+) -> bool {
+    match algorithm {
+        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),
+        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),
+    }
+}
+
+/// Validate public key hex length for the given algorithm.
+fn validate_public_key(algorithm: SigningAlgorithm, public_key_hex: &str) -> Result<(), String> {
+    let expected_bytes = match algorithm {
+        SigningAlgorithm::Ed25519 => 32,
+        SigningAlgorithm::MlDsa65 => 1952,
+    };
+    let expected_hex = expected_bytes * 2;
+    if public_key_hex.len() != expected_hex {
+        return Err(format!(
+            "public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})"
+        ));
+    }
+    if hex::decode(public_key_hex).is_err() {
+        return Err("public_key is not valid hex".into());
+    }
+    Ok(())
+}
+
 // ── Request types ────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -64,13 +131,24 @@ pub struct NotarizeRequest {
     pub content_hash: String,
     /// DID or address of the signer.
     pub signer: String,
-    /// Ed25519 public key (hex, 64 chars = 32 bytes).
+    /// Public key (hex). Size depends on algorithm:
+    /// - Ed25519: 64 hex chars (32 bytes)
+    /// - ML-DSA-65: 3904 hex chars (1952 bytes)
     pub public_key: String,
-    /// Ed25519 signature over `"notarize:{signer}:{content_hash}"`, hex-encoded.
+    /// Signature over the signing payload, hex-encoded.
     pub signature: String,
     /// Optional metadata (document name, description, etc.).
     #[serde(default)]
     pub metadata: Option<serde_json::Value>,
+    /// Signature level: "simple" (default) or "advanced".
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    /// Signing algorithm: "Ed25519" (default) or "MlDsa65".
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    /// Biometric evidence (required for Advanced).
+    #[serde(default)]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 #[derive(Deserialize)]
@@ -79,9 +157,50 @@ pub struct NotarizeListQuery {
     pub signer: Option<String>,
 }
 
+// ── Signing payload construction ─────────────────────────────────────────────
+
+/// Build the signing payload based on signature level.
+///
+/// - Simple:   `"notarize:{signer}:{content_hash}"`
+/// - Advanced: `"notarize_fea:{signer}:{content_hash}:{biometrics_hash}"`
+fn build_notarize_payload(
+    level: SignatureLevel,
+    signer: &str,
+    content_hash: &str,
+    biometric_evidence: &[BiometricEvidence],
+) -> String {
+    match level {
+        SignatureLevel::Simple => format!("notarize:{signer}:{content_hash}"),
+        SignatureLevel::Advanced | SignatureLevel::Qualified => {
+            let bio_hash = compute_biometrics_hash(biometric_evidence);
+            format!("notarize_fea:{signer}:{content_hash}:{bio_hash}")
+        }
+    }
+}
+
+/// Build the transfer signing payload based on signature level.
+fn build_transfer_payload(
+    level: SignatureLevel,
+    content_hash: &str,
+    from_did: &str,
+    to_did: &str,
+    biometric_evidence: &[BiometricEvidence],
+) -> String {
+    match level {
+        SignatureLevel::Simple => format!("transfer_doc:{content_hash}:{from_did}:{to_did}"),
+        SignatureLevel::Advanced | SignatureLevel::Qualified => {
+            let bio_hash = compute_biometrics_hash(biometric_evidence);
+            format!("transfer_fea:{content_hash}:{from_did}:{to_did}:{bio_hash}")
+        }
+    }
+}
+
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 /// Register a document hash for on-chain timestamping.
+///
+/// Supports Simple (FES) and Advanced (FEA) electronic signatures.
+/// Advanced requires ML-DSA-65 algorithm and at least one biometric evidence.
 #[post("/notarize")]
 pub async fn submit_notarization(
     state: web::Data<AppState>,
@@ -103,13 +222,48 @@ pub async fn submit_notarization(
         )));
     }
 
-    // Validate public_key
-    if body.public_key.len() != 64 || hex::decode(&body.public_key).is_err() {
+    // Validate algorithm matches signature level
+    if !body.level().algorithm_satisfies(body.signature_algorithm) {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto(
-                "INVALID_PUBLIC_KEY",
-                "public_key must be 64 hex characters (32 bytes Ed25519)",
+                "ALGORITHM_MISMATCH",
+                &format!(
+                    "signature level {} requires post-quantum algorithm (ML-DSA-65), got {}",
+                    body.signature_level, body.signature_algorithm
+                ),
             ),
+            400,
+        )));
+    }
+
+    // Validate biometric evidence for Advanced/Qualified
+    if body.level().requires_biometric() && body.biometric_evidence.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "BIOMETRIC_REQUIRED",
+                &format!(
+                    "signature level {} requires at least one biometric evidence",
+                    body.signature_level
+                ),
+            ),
+            400,
+        )));
+    }
+
+    // Validate each biometric commitment
+    for evidence in &body.biometric_evidence {
+        if let Err(e) = evidence.validate() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BIOMETRIC", &e.to_string()),
+                400,
+            )));
+        }
+    }
+
+    // Validate public_key for the declared algorithm
+    if let Err(msg) = validate_public_key(body.signature_algorithm, &body.public_key) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_PUBLIC_KEY", &msg),
             400,
         )));
     }
@@ -125,11 +279,24 @@ pub async fn submit_notarization(
         )));
     }
 
-    // Verify signature over "notarize:{signer}:{content_hash}"
-    let sign_msg = format!("notarize:{}:{}", body.signer, body.content_hash);
-    if !verify_ed25519(&body.public_key, sign_msg.as_bytes(), &body.signature) {
+    // Build and verify signature over the level-appropriate payload
+    let sign_msg = build_notarize_payload(
+        body.signature_level,
+        &body.signer,
+        &body.content_hash,
+        &body.biometric_evidence,
+    );
+    if !verify_signature(
+        body.signature_algorithm,
+        &body.public_key,
+        sign_msg.as_bytes(),
+        &body.signature,
+    ) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("INVALID_SIGNATURE", "Ed25519 signature verification failed"),
+            err_dto(
+                "INVALID_SIGNATURE",
+                &format!("{} signature verification failed", body.signature_algorithm),
+            ),
             401,
         )));
     }
@@ -153,7 +320,9 @@ pub async fn submit_notarization(
         notarized_at: now_secs(),
         block_height,
         signature: body.signature.clone(),
-        signature_algorithm: Default::default(),
+        signature_algorithm: body.signature_algorithm,
+        signature_level: body.signature_level,
+        biometric_evidence: body.biometric_evidence.clone(),
     };
 
     store
@@ -169,9 +338,17 @@ pub async fn submit_notarization(
             "signer": entry.signer,
             "notarized_at": entry.notarized_at,
             "block_height": entry.block_height,
+            "signature_level": entry.signature_level,
+            "signature_algorithm": entry.signature_algorithm,
         }),
         trace,
     )))
+}
+
+impl NotarizeRequest {
+    fn level(&self) -> SignatureLevel {
+        self.signature_level
+    }
 }
 
 /// Verify a document hash — returns the notarization record if it exists.
@@ -205,6 +382,8 @@ pub async fn verify_notarization(
                 "metadata": entry.metadata,
                 "signature": entry.signature,
                 "signature_algorithm": entry.signature_algorithm,
+                "signature_level": entry.signature_level,
+                "biometric_evidence": entry.biometric_evidence,
             }),
             trace,
         ))),
@@ -238,6 +417,8 @@ pub async fn get_notarization(
                 "metadata": entry.metadata,
                 "signature": entry.signature,
                 "signature_algorithm": entry.signature_algorithm,
+                "signature_level": entry.signature_level,
+                "biometric_evidence": entry.biometric_evidence,
             }),
             trace,
         ))),
@@ -282,10 +463,19 @@ pub struct TransferDocumentRequest {
     pub from_did: String,
     /// DID of the new owner (recipient).
     pub to_did: String,
-    /// Ed25519 public key of the sender (hex, 64 chars).
+    /// Public key of the sender (hex).
     pub public_key: String,
-    /// Ed25519 signature over `"transfer_doc:{content_hash}:{from_did}:{to_did}"`.
+    /// Signature over the transfer payload, hex-encoded.
     pub signature: String,
+    /// Signature level: "simple" (default) or "advanced".
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    /// Signing algorithm: "Ed25519" (default) or "MlDsa65".
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    /// Biometric evidence (required for Advanced).
+    #[serde(default)]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 /// POST /api/v1/notarize/{hash}/transfer — transfer document ownership.
@@ -316,10 +506,50 @@ pub async fn transfer_document(
             resource: format!("notarization {content_hash}"),
         })?;
 
-    // Validate public_key
-    if body.public_key.len() != 64 || hex::decode(&body.public_key).is_err() {
+    // Validate algorithm matches signature level
+    if !body
+        .signature_level
+        .algorithm_satisfies(body.signature_algorithm)
+    {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto("INVALID_PUBLIC_KEY", "public_key must be 64 hex characters"),
+            err_dto(
+                "ALGORITHM_MISMATCH",
+                &format!(
+                    "signature level {} requires ML-DSA-65, got {}",
+                    body.signature_level, body.signature_algorithm
+                ),
+            ),
+            400,
+        )));
+    }
+
+    // Validate biometric evidence for Advanced
+    if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "BIOMETRIC_REQUIRED",
+                &format!(
+                    "signature level {} requires biometric evidence",
+                    body.signature_level
+                ),
+            ),
+            400,
+        )));
+    }
+
+    for evidence in &body.biometric_evidence {
+        if let Err(e) = evidence.validate() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BIOMETRIC", &e.to_string()),
+                400,
+            )));
+        }
+    }
+
+    // Validate public_key
+    if let Err(msg) = validate_public_key(body.signature_algorithm, &body.public_key) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_PUBLIC_KEY", &msg),
             400,
         )));
     }
@@ -333,11 +563,19 @@ pub async fn transfer_document(
     }
 
     // Verify signature
-    let sign_msg = format!(
-        "transfer_doc:{}:{}:{}",
-        content_hash, body.from_did, body.to_did
+    let sign_msg = build_transfer_payload(
+        body.signature_level,
+        &content_hash,
+        &body.from_did,
+        &body.to_did,
+        &body.biometric_evidence,
     );
-    if !verify_ed25519(&body.public_key, sign_msg.as_bytes(), &body.signature) {
+    if !verify_signature(
+        body.signature_algorithm,
+        &body.public_key,
+        sign_msg.as_bytes(),
+        &body.signature,
+    ) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
             err_dto("INVALID_SIGNATURE", "signature verification failed"),
             401,
@@ -372,6 +610,9 @@ pub async fn transfer_document(
         signature: body.signature.clone(),
         public_key: body.public_key.clone(),
         transferred_at: now_secs(),
+        signature_algorithm: body.signature_algorithm,
+        signature_level: body.signature_level,
+        biometric_evidence: body.biometric_evidence.clone(),
     };
 
     store.write_ownership_transfer(&transfer).map_err(|e| {
@@ -386,6 +627,8 @@ pub async fn transfer_document(
             "from": body.from_did,
             "to": body.to_did,
             "transferred_at": transfer.transferred_at,
+            "signature_level": transfer.signature_level,
+            "signature_algorithm": transfer.signature_algorithm,
         }),
         trace,
     )))
@@ -455,6 +698,7 @@ pub async fn get_document_provenance(
             "content_hash": content_hash,
             "original_signer": notarization.signer,
             "notarized_at": notarization.notarized_at,
+            "signature_level": notarization.signature_level,
             "transfers": transfers,
         }),
         trace,

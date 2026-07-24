@@ -66,6 +66,7 @@ mod comprehensive_storage_tests {
         let store = RocksDbBlockStore::new("/tmp/test_identity_basic").unwrap();
         let identity = IdentityRecord {
             did: "did:bc:1".to_string(),
+            public_key: String::new(),
             created_at: 1000,
             updated_at: 2000,
             status: "active".to_string(),
@@ -150,6 +151,7 @@ mod comprehensive_storage_tests {
         let store = RocksDbBlockStore::new("/tmp/test_update_id").unwrap();
         let mut identity = IdentityRecord {
             did: "did:bc:1".to_string(),
+            public_key: String::new(),
             created_at: 1000,
             updated_at: 2000,
             status: "active".to_string(),
@@ -502,6 +504,7 @@ mod comprehensive_storage_tests {
         let long_did = format!("did:bc:{}", "x".repeat(1000));
         let identity = IdentityRecord {
             did: long_did,
+            public_key: String::new(),
             created_at: 1000,
             updated_at: 2000,
             status: "active".to_string(),
@@ -647,6 +650,7 @@ mod comprehensive_storage_tests {
         let store = RocksDbBlockStore::new("/tmp/test_id_suspended").unwrap();
         let identity = IdentityRecord {
             did: "did:bc:1".to_string(),
+            public_key: String::new(),
             created_at: 1000,
             updated_at: 2000,
             status: "suspended".to_string(),
@@ -659,6 +663,7 @@ mod comprehensive_storage_tests {
         let store = RocksDbBlockStore::new("/tmp/test_id_revoked").unwrap();
         let identity = IdentityRecord {
             did: "did:bc:1".to_string(),
+            public_key: String::new(),
             created_at: 1000,
             updated_at: 2000,
             status: "revoked".to_string(),

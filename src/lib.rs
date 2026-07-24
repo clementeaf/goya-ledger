@@ -59,6 +59,7 @@ pub mod pki;
 pub mod private_data;
 pub mod registry;
 pub mod regulatory;
+pub mod signature;
 pub mod stress;
 pub mod testnet;
 pub mod tls;
