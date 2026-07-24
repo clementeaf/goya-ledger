@@ -14,7 +14,8 @@
 use crate::api::errors::{enforce_acl, ApiError, ApiResponse, ApiResult, ErrorDto};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
-use crate::signature::verify_ed25519;
+use crate::identity::signing::SigningAlgorithm;
+use crate::signature::{BiometricEvidence, SignatureLevel};
 use crate::storage::traits::{ClaimStatus, InferenceChallenge, InferenceClaim, OutputTolerance};
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
@@ -32,6 +33,63 @@ fn err_dto(code: &str, msg: &str) -> ErrorDto {
         code: code.to_string(),
         message: msg.to_string(),
         field: None,
+    }
+}
+
+/// Validate FES/FEA constraints. Returns Err(HttpResponse) on failure.
+fn validate_fes_fea(
+    level: SignatureLevel,
+    algorithm: SigningAlgorithm,
+    evidence: &[BiometricEvidence],
+    public_key_hex: &str,
+) -> Result<(), HttpResponse> {
+    if !level.algorithm_satisfies(algorithm) {
+        return Err(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "ALGORITHM_MISMATCH",
+                &format!("signature level {level} requires ML-DSA-65, got {algorithm}"),
+            ),
+            400,
+        )));
+    }
+    if level.requires_biometric() && evidence.is_empty() {
+        return Err(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "BIOMETRIC_REQUIRED",
+                &format!("signature level {level} requires biometric evidence"),
+            ),
+            400,
+        )));
+    }
+    for e in evidence {
+        if let Err(err) = e.validate() {
+            return Err(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BIOMETRIC", &err.to_string()),
+                400,
+            )));
+        }
+    }
+    if let Err(msg) = crate::signature::validate_public_key(algorithm, public_key_hex) {
+        return Err(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_PUBLIC_KEY", &msg),
+            400,
+        )));
+    }
+    Ok(())
+}
+
+/// Build signing payload with optional biometric hash suffix for FEA.
+fn build_inference_payload(
+    level: SignatureLevel,
+    base_payload: &str,
+    evidence: &[BiometricEvidence],
+) -> String {
+    match level {
+        SignatureLevel::Simple => base_payload.to_string(),
+        _ => {
+            let bio_hash = crate::signature::compute_biometrics_hash(evidence);
+            format!("{base_payload}:{bio_hash}")
+        }
     }
 }
 
@@ -79,13 +137,22 @@ pub struct SubmitInferenceRequest {
     pub output: String,
     /// SHA3-256 of output (64 hex chars).
     pub output_hash: String,
-    /// Ed25519 signature over `"inference:{id}:{model_hash}:{output_hash}"`.
+    /// Signature over the signing payload (hex).
     pub signature: String,
-    /// Ed25519 public key (hex, 64 chars = 32 bytes).
+    /// Public key (hex).
     pub public_key: String,
     /// Tolerance mode: "exact" (default), {"numeric": threshold}, {"cosine": min_similarity}.
     #[serde(default)]
     pub tolerance: OutputTolerance,
+    /// Signature level: "simple" (default) or "advanced".
+    #[serde(default)]
+    pub signature_level: crate::signature::SignatureLevel,
+    /// Signing algorithm: "Ed25519" (default) or "MlDsa65".
+    #[serde(default)]
+    pub signature_algorithm: crate::identity::signing::SigningAlgorithm,
+    /// Biometric evidence (required for Advanced).
+    #[serde(default)]
+    pub biometric_evidence: Vec<crate::signature::BiometricEvidence>,
 }
 
 /// POST /inference/submit-proven — claim with ZK proof (instant finalization).
@@ -105,12 +172,21 @@ pub struct SubmitProvenRequest {
     pub output: String,
     /// SHA3-256 of output (64 hex chars).
     pub output_hash: String,
-    /// Ed25519 signature over `"inference:submit:{model_hash}:{output_hash}"`.
+    /// Signature over the signing payload (hex).
     pub signature: String,
-    /// Ed25519 public key (hex, 64 chars = 32 bytes).
+    /// Public key (hex).
     pub public_key: String,
     /// The ZK proof attesting to the inference computation.
     pub proof: crate::inference::proof::ZkInferenceProof,
+    /// Signature level: "simple" (default) or "advanced".
+    #[serde(default)]
+    pub signature_level: crate::signature::SignatureLevel,
+    /// Signing algorithm: "Ed25519" (default) or "MlDsa65".
+    #[serde(default)]
+    pub signature_algorithm: crate::identity::signing::SigningAlgorithm,
+    /// Biometric evidence (required for Advanced).
+    #[serde(default)]
+    pub biometric_evidence: Vec<crate::signature::BiometricEvidence>,
 }
 
 #[derive(Deserialize)]
@@ -123,10 +199,19 @@ pub struct ChallengeInferenceRequest {
     pub challenger_output: String,
     /// SHA3-256 of the challenger's output (64 hex chars).
     pub challenger_output_hash: String,
-    /// Ed25519 signature over `"challenge:{claim_id}:{challenger_output_hash}"`.
+    /// Signature over the challenge payload (hex).
     pub signature: String,
-    /// Ed25519 public key (hex, 64 chars = 32 bytes).
+    /// Public key (hex).
     pub public_key: String,
+    /// Signature level: "simple" (default) or "advanced".
+    #[serde(default)]
+    pub signature_level: crate::signature::SignatureLevel,
+    /// Signing algorithm: "Ed25519" (default) or "MlDsa65".
+    #[serde(default)]
+    pub signature_algorithm: crate::identity::signing::SigningAlgorithm,
+    /// Biometric evidence (required for Advanced).
+    #[serde(default)]
+    pub biometric_evidence: Vec<crate::signature::BiometricEvidence>,
 }
 
 #[derive(Deserialize)]
@@ -308,12 +393,28 @@ pub async fn submit_inference(
     }
 
     // Generate claim ID and verify signature.
-    // Oracle signs "inference:submit:{model_hash}:{output_hash}" (claim_id is server-generated).
     let claim_id = uuid::Uuid::new_v4().to_string();
-    let submit_msg = format!("inference:submit:{}:{}", body.model_hash, body.output_hash);
-    if !verify_ed25519(&body.public_key, submit_msg.as_bytes(), &body.signature) {
+    if let Err(resp) = validate_fes_fea(
+        body.signature_level,
+        body.signature_algorithm,
+        &body.biometric_evidence,
+        &body.public_key,
+    ) {
+        return Ok(resp);
+    }
+    let submit_msg = build_inference_payload(
+        body.signature_level,
+        &format!("inference:submit:{}:{}", body.model_hash, body.output_hash),
+        &body.biometric_evidence,
+    );
+    if !crate::signature::verify_signature(
+        body.signature_algorithm,
+        &body.public_key,
+        submit_msg.as_bytes(),
+        &body.signature,
+    ) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("INVALID_SIGNATURE", "Ed25519 signature verification failed"),
+            err_dto("INVALID_SIGNATURE", "signature verification failed"),
             401,
         )));
     }
@@ -418,11 +519,28 @@ pub async fn submit_proven(
         )));
     }
 
-    // Verify Ed25519 signature
-    let submit_msg = format!("inference:submit:{}:{}", body.model_hash, body.output_hash);
-    if !verify_ed25519(&body.public_key, submit_msg.as_bytes(), &body.signature) {
+    // Verify signature (FES/FEA)
+    if let Err(resp) = validate_fes_fea(
+        body.signature_level,
+        body.signature_algorithm,
+        &body.biometric_evidence,
+        &body.public_key,
+    ) {
+        return Ok(resp);
+    }
+    let submit_msg = build_inference_payload(
+        body.signature_level,
+        &format!("inference:submit:{}:{}", body.model_hash, body.output_hash),
+        &body.biometric_evidence,
+    );
+    if !crate::signature::verify_signature(
+        body.signature_algorithm,
+        &body.public_key,
+        submit_msg.as_bytes(),
+        &body.signature,
+    ) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("INVALID_SIGNATURE", "Ed25519 signature verification failed"),
+            err_dto("INVALID_SIGNATURE", "signature verification failed"),
             401,
         )));
     }
@@ -589,14 +707,31 @@ pub async fn challenge_inference(
         )));
     }
 
-    // Verify Ed25519 signature
-    let challenge_msg = format!(
-        "challenge:{}:{}",
-        body.claim_id, body.challenger_output_hash
+    // Verify signature (FES/FEA)
+    if let Err(resp) = validate_fes_fea(
+        body.signature_level,
+        body.signature_algorithm,
+        &body.biometric_evidence,
+        &body.public_key,
+    ) {
+        return Ok(resp);
+    }
+    let challenge_msg = build_inference_payload(
+        body.signature_level,
+        &format!(
+            "challenge:{}:{}",
+            body.claim_id, body.challenger_output_hash
+        ),
+        &body.biometric_evidence,
     );
-    if !verify_ed25519(&body.public_key, challenge_msg.as_bytes(), &body.signature) {
+    if !crate::signature::verify_signature(
+        body.signature_algorithm,
+        &body.public_key,
+        challenge_msg.as_bytes(),
+        &body.signature,
+    ) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("INVALID_SIGNATURE", "Ed25519 signature verification failed"),
+            err_dto("INVALID_SIGNATURE", "signature verification failed"),
             401,
         )));
     }

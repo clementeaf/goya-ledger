@@ -68,10 +68,10 @@ pub struct ParamChangeEntry {
 pub struct CastVoteRequest {
     pub voter: String,
     pub option: VoteOption,
-    /// Ed25519 signature over "vote:{proposal_id}:{option}:{public_key}" (hex).
+    /// Signature over the vote payload (hex).
     #[serde(default)]
     pub signature: Option<String>,
-    /// Ed25519 public key of the voter (hex).
+    /// Public key of the voter (hex).
     #[serde(default)]
     pub public_key: Option<String>,
     /// Client-generated blinding nonce (hex). Mixed into the blind voter ID
@@ -79,6 +79,15 @@ pub struct CastVoteRequest {
     /// The nonce is never stored — only its contribution to the blind ID.
     #[serde(default)]
     pub nonce: Option<String>,
+    /// Signature level: "simple" (default) or "advanced".
+    #[serde(default)]
+    pub signature_level: crate::signature::SignatureLevel,
+    /// Signing algorithm: "Ed25519" (default) or "MlDsa65".
+    #[serde(default)]
+    pub signature_algorithm: crate::identity::signing::SigningAlgorithm,
+    /// Biometric evidence (required for Advanced).
+    #[serde(default)]
+    pub biometric_evidence: Vec<crate::signature::BiometricEvidence>,
 }
 
 #[derive(Deserialize)]
@@ -491,18 +500,74 @@ pub async fn cast_governance_vote(
     };
 
     // ── Signature verification (if provided) ──
-    // When both signature and public_key are present, verify the Ed25519
-    // signature over the canonical vote payload. This proves the voter
-    // controls the private key for the claimed DID.
+    // When both signature and public_key are present, verify the signature
+    // over the canonical vote payload. Supports Simple (Ed25519) and
+    // Advanced (ML-DSA-65 + biometric evidence).
     if let (Some(sig_hex), Some(pk_hex)) = (&body.signature, &body.public_key) {
+        // Validate algorithm matches signature level
+        if !body
+            .signature_level
+            .algorithm_satisfies(body.signature_algorithm)
+        {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto(&format!(
+                    "signature level {} requires ML-DSA-65, got {}",
+                    body.signature_level, body.signature_algorithm
+                )),
+                400,
+            )));
+        }
+
+        // Validate biometric evidence for Advanced/Qualified
+        if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto(&format!(
+                    "signature level {} requires biometric evidence",
+                    body.signature_level
+                )),
+                400,
+            )));
+        }
+
+        for evidence in &body.biometric_evidence {
+            if let Err(e) = evidence.validate() {
+                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    err_dto(&format!("invalid biometric: {e}")),
+                    400,
+                )));
+            }
+        }
+
+        // Validate public key size
+        if let Err(msg) = crate::signature::validate_public_key(body.signature_algorithm, pk_hex) {
+            return Ok(
+                HttpResponse::BadRequest().json(ApiResponse::<()>::error(err_dto(&msg), 400))
+            );
+        }
+
         let option_str = match body.option {
             VoteOption::Yes => "Yes",
             VoteOption::No => "No",
             VoteOption::Abstain => "Abstain",
         };
-        let payload = format!("vote:{id}:{option_str}:{pk_hex}");
 
-        if !crate::signature::verify_ed25519(pk_hex, payload.as_bytes(), sig_hex) {
+        // Build level-appropriate payload
+        let payload = match body.signature_level {
+            crate::signature::SignatureLevel::Simple => {
+                format!("vote:{id}:{option_str}:{pk_hex}")
+            }
+            _ => {
+                let bio_hash = crate::signature::compute_biometrics_hash(&body.biometric_evidence);
+                format!("vote_fea:{id}:{option_str}:{pk_hex}:{bio_hash}")
+            }
+        };
+
+        if !crate::signature::verify_signature(
+            body.signature_algorithm,
+            pk_hex,
+            payload.as_bytes(),
+            sig_hex,
+        ) {
             return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                 err_dto("signature verification failed — vote rejected"),
                 400,

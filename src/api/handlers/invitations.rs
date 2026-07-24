@@ -8,7 +8,8 @@
 use crate::api::errors::{ApiResponse, ApiResult, ErrorDto};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
-use crate::signature::verify_ed25519;
+use crate::identity::signing::SigningAlgorithm;
+use crate::signature::{BiometricEvidence, SignatureLevel};
 use crate::storage::traits::Invitation;
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
@@ -43,8 +44,14 @@ pub struct CreateInvitationRequest {
     pub to_commitment: String,
     /// Proposal IDs to invite the user to (max 20).
     pub proposal_ids: Vec<u64>,
-    /// Ed25519 signature from the inviter (hex).
+    /// Signature from the inviter (hex).
     pub signature: String,
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    #[serde(default)]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 #[derive(Deserialize)]
@@ -59,8 +66,14 @@ pub struct RespondInvitationRequest {
     /// Ed25519 public key of the invitee (hex, 64 chars = 32 bytes).
     pub public_key: String,
     pub accepted: bool,
-    /// Ed25519 signature from the invitee (hex).
+    /// Signature from the invitee (hex).
     pub signature: String,
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    #[serde(default)]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -125,9 +138,51 @@ pub async fn create_invitation(
         );
     }
 
-    // Verify Ed25519 signature from the inviter
-    // Sign over: to_commitment + comma-separated proposal IDs
-    let sign_payload = format!(
+    // Validate FES/FEA + verify signature
+    if !body
+        .signature_level
+        .algorithm_satisfies(body.signature_algorithm)
+    {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "ALGORITHM_MISMATCH",
+                &format!(
+                    "signature level {} requires ML-DSA-65, got {}",
+                    body.signature_level, body.signature_algorithm
+                ),
+            ),
+            400,
+        )));
+    }
+    if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "BIOMETRIC_REQUIRED",
+                &format!(
+                    "signature level {} requires biometric evidence",
+                    body.signature_level
+                ),
+            ),
+            400,
+        )));
+    }
+    for evidence in &body.biometric_evidence {
+        if let Err(e) = evidence.validate() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BIOMETRIC", &e.to_string()),
+                400,
+            )));
+        }
+    }
+    if let Err(msg) =
+        crate::signature::validate_public_key(body.signature_algorithm, &body.public_key)
+    {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_PUBLIC_KEY", &msg),
+            400,
+        )));
+    }
+    let base_payload = format!(
         "{}:{}",
         body.to_commitment,
         body.proposal_ids
@@ -136,9 +191,22 @@ pub async fn create_invitation(
             .collect::<Vec<_>>()
             .join(",")
     );
-    if !verify_ed25519(&body.public_key, sign_payload.as_bytes(), &body.signature) {
+    let sign_payload = match body.signature_level {
+        SignatureLevel::Simple => base_payload,
+        _ => format!(
+            "{}:{}",
+            base_payload,
+            crate::signature::compute_biometrics_hash(&body.biometric_evidence)
+        ),
+    };
+    if !crate::signature::verify_signature(
+        body.signature_algorithm,
+        &body.public_key,
+        sign_payload.as_bytes(),
+        &body.signature,
+    ) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("INVALID_SIGNATURE", "Ed25519 signature verification failed"),
+            err_dto("INVALID_SIGNATURE", "signature verification failed"),
             401,
         )));
     }
@@ -230,11 +298,67 @@ pub async fn respond_invitation(
         )));
     }
 
-    // Verify signature from the invitee (public_key provided in request)
-    let sign_payload = format!("{}:{}", body.invitation_id, body.accepted);
-    if !verify_ed25519(&body.public_key, sign_payload.as_bytes(), &body.signature) {
+    // Validate FES/FEA + verify signature
+    if !body
+        .signature_level
+        .algorithm_satisfies(body.signature_algorithm)
+    {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "ALGORITHM_MISMATCH",
+                &format!(
+                    "signature level {} requires ML-DSA-65, got {}",
+                    body.signature_level, body.signature_algorithm
+                ),
+            ),
+            400,
+        )));
+    }
+    if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "BIOMETRIC_REQUIRED",
+                &format!(
+                    "signature level {} requires biometric evidence",
+                    body.signature_level
+                ),
+            ),
+            400,
+        )));
+    }
+    for evidence in &body.biometric_evidence {
+        if let Err(e) = evidence.validate() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BIOMETRIC", &e.to_string()),
+                400,
+            )));
+        }
+    }
+    if let Err(msg) =
+        crate::signature::validate_public_key(body.signature_algorithm, &body.public_key)
+    {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_PUBLIC_KEY", &msg),
+            400,
+        )));
+    }
+    let base_payload = format!("{}:{}", body.invitation_id, body.accepted);
+    let sign_payload = match body.signature_level {
+        SignatureLevel::Simple => base_payload,
+        _ => format!(
+            "{}:{}",
+            base_payload,
+            crate::signature::compute_biometrics_hash(&body.biometric_evidence)
+        ),
+    };
+    if !crate::signature::verify_signature(
+        body.signature_algorithm,
+        &body.public_key,
+        sign_payload.as_bytes(),
+        &body.signature,
+    ) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("INVALID_SIGNATURE", "Ed25519 signature verification failed"),
+            err_dto("INVALID_SIGNATURE", "signature verification failed"),
             401,
         )));
     }

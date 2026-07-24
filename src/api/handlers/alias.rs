@@ -11,7 +11,8 @@
 use crate::api::errors::{ApiResponse, ApiResult, ErrorDto};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
-use crate::signature::verify_ed25519;
+use crate::identity::signing::SigningAlgorithm;
+use crate::signature::{BiometricEvidence, SignatureLevel};
 use crate::storage::traits::AliasEntry;
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
@@ -48,8 +49,14 @@ pub struct AliasRegisterRequest {
     pub salt: String,
     /// AES-256-GCM encrypted alias (hex). Opaque to the node.
     pub encrypted_alias: String,
-    /// Ed25519 signature over `"alias:register:{commitment}"`, hex-encoded.
+    /// Signature over the register payload (hex).
     pub signature: String,
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    #[serde(default)]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 #[derive(Deserialize)]
@@ -64,8 +71,14 @@ pub struct AliasRevokeRequest {
     /// Ed25519 public key (hex, 64 chars = 32 bytes).
     pub public_key: String,
     pub commitment: String,
-    /// Ed25519 signature over `"alias:revoke:{commitment}"`, hex-encoded.
+    /// Signature over the revoke payload (hex).
     pub signature: String,
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    #[serde(default)]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -97,11 +110,69 @@ pub async fn alias_register(
         )));
     }
 
-    // Verify Ed25519 signature over "alias:register:{commitment}"
-    let register_msg = format!("alias:register:{}", body.commitment);
-    if !verify_ed25519(&body.public_key, register_msg.as_bytes(), &body.signature) {
+    // Validate FES/FEA constraints
+    if !body
+        .signature_level
+        .algorithm_satisfies(body.signature_algorithm)
+    {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "ALGORITHM_MISMATCH",
+                &format!(
+                    "signature level {} requires ML-DSA-65, got {}",
+                    body.signature_level, body.signature_algorithm
+                ),
+            ),
+            400,
+        )));
+    }
+    if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "BIOMETRIC_REQUIRED",
+                &format!(
+                    "signature level {} requires biometric evidence",
+                    body.signature_level
+                ),
+            ),
+            400,
+        )));
+    }
+    for evidence in &body.biometric_evidence {
+        if let Err(e) = evidence.validate() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BIOMETRIC", &e.to_string()),
+                400,
+            )));
+        }
+    }
+    if let Err(msg) =
+        crate::signature::validate_public_key(body.signature_algorithm, &body.public_key)
+    {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_PUBLIC_KEY", &msg),
+            400,
+        )));
+    }
+
+    // Verify signature over register payload
+    let base_payload = format!("alias:register:{}", body.commitment);
+    let register_msg = match body.signature_level {
+        SignatureLevel::Simple => base_payload,
+        _ => format!(
+            "{}:{}",
+            base_payload,
+            crate::signature::compute_biometrics_hash(&body.biometric_evidence)
+        ),
+    };
+    if !crate::signature::verify_signature(
+        body.signature_algorithm,
+        &body.public_key,
+        register_msg.as_bytes(),
+        &body.signature,
+    ) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("INVALID_SIGNATURE", "Ed25519 signature verification failed"),
+            err_dto("INVALID_SIGNATURE", "signature verification failed"),
             401,
         )));
     }
@@ -273,11 +344,67 @@ pub async fn alias_revoke(
         )));
     }
 
-    // Verify Ed25519 signature over "alias:revoke:{commitment}"
-    let revoke_msg = format!("alias:revoke:{}", body.commitment);
-    if !verify_ed25519(&body.public_key, revoke_msg.as_bytes(), &body.signature) {
+    // Validate FES/FEA + verify signature
+    if !body
+        .signature_level
+        .algorithm_satisfies(body.signature_algorithm)
+    {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "ALGORITHM_MISMATCH",
+                &format!(
+                    "signature level {} requires ML-DSA-65, got {}",
+                    body.signature_level, body.signature_algorithm
+                ),
+            ),
+            400,
+        )));
+    }
+    if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "BIOMETRIC_REQUIRED",
+                &format!(
+                    "signature level {} requires biometric evidence",
+                    body.signature_level
+                ),
+            ),
+            400,
+        )));
+    }
+    for evidence in &body.biometric_evidence {
+        if let Err(e) = evidence.validate() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BIOMETRIC", &e.to_string()),
+                400,
+            )));
+        }
+    }
+    if let Err(msg) =
+        crate::signature::validate_public_key(body.signature_algorithm, &body.public_key)
+    {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_PUBLIC_KEY", &msg),
+            400,
+        )));
+    }
+    let base_payload = format!("alias:revoke:{}", body.commitment);
+    let revoke_msg = match body.signature_level {
+        SignatureLevel::Simple => base_payload,
+        _ => format!(
+            "{}:{}",
+            base_payload,
+            crate::signature::compute_biometrics_hash(&body.biometric_evidence)
+        ),
+    };
+    if !crate::signature::verify_signature(
+        body.signature_algorithm,
+        &body.public_key,
+        revoke_msg.as_bytes(),
+        &body.signature,
+    ) {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("INVALID_SIGNATURE", "Ed25519 signature verification failed"),
+            err_dto("INVALID_SIGNATURE", "signature verification failed"),
             401,
         )));
     }
@@ -311,15 +438,5 @@ mod tests {
     fn now_secs_returns_reasonable_value() {
         let t = now_secs();
         assert!(t > 1_700_000_000); // After 2023
-    }
-
-    #[test]
-    fn verify_ed25519_rejects_bad_hex() {
-        assert!(!verify_ed25519("not_hex", b"msg", "not_hex"));
-    }
-
-    #[test]
-    fn verify_ed25519_rejects_wrong_length() {
-        assert!(!verify_ed25519("abcd", b"msg", "abcd"));
     }
 }

@@ -22,10 +22,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - Shared signature verification module (`src/signature/verify.rs`): `verify_ed25519`, `verify_mldsa65`, `verify_signature` dispatcher, `validate_public_key` — replaces 4 duplicated `verify_ed25519` helpers and 2 inline verifiers across handlers
 - Identity `verify_signature` endpoint auto-detects Ed25519 and ML-DSA-65 (was Ed25519-only)
 - 15 new tests for shared verification (Ed25519 + ML-DSA-65 sign/verify, dispatch, cross-algo rejection, public key validation)
+- System-wide FES/FEA support across all signature-bearing endpoints:
+  - `governance.rs`: `CastVoteRequest` — FEA payload `"vote_fea:{id}:{option}:{pk}:{bio_hash}"`
+  - `inference.rs`: `SubmitInferenceRequest`, `SubmitProvenRequest`, `ChallengeInferenceRequest` — FEA appends `:{bio_hash}` to existing payloads
+  - `alias.rs`: `AliasRegisterRequest`, `AliasRevokeRequest` — FEA appends `:{bio_hash}` to register/revoke payloads
+  - `invitations.rs`: `CreateInvitationRequest`, `RespondInvitationRequest` — FEA appends `:{bio_hash}`
+  - All request structs accept `signature_level`, `signature_algorithm`, `biometric_evidence` with serde defaults (fully backwards compatible)
 
 ### Changed
 
 - Handlers `notarize`, `alias`, `inference`, `invitations`, `governance`, `identity` now use shared `crate::signature::verify_*` — eliminated ~228 lines of duplicated verification code
+- All 10 signature-bearing endpoints validate FES/FEA constraints: level↔algorithm match, biometric evidence required for Advanced, public key size per algorithm, biometric commitment format
 
 ### Fixed
 
