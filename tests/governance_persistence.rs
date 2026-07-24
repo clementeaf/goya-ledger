@@ -142,6 +142,9 @@ fn rocksdb_proposals_and_votes_survive_reopen() {
             option: VoteOption::Yes,
             power: 5000,
             voted_at: 15,
+            signature_level: Default::default(),
+            signature_algorithm: Default::default(),
+            biometric_evidence: vec![],
         };
         store.write_vote(&vote).unwrap();
     }
@@ -240,6 +243,9 @@ fn stress_500_proposals_5000_votes() {
                 },
                 power: 1000 + v * 100,
                 voted_at: i + v,
+                signature_level: Default::default(),
+                signature_algorithm: Default::default(),
+                biometric_evidence: vec![],
             };
             store.write_vote(&vote).unwrap();
         }
@@ -301,6 +307,9 @@ fn stress_concurrent_vote_writes() {
                     option: VoteOption::Yes,
                     power: 100,
                     voted_at: 50,
+                    signature_level: Default::default(),
+                    signature_algorithm: Default::default(),
+                    biometric_evidence: vec![],
                 };
                 s.write_vote(&vote).unwrap();
             }
@@ -367,6 +376,9 @@ fn adversarial_null_bytes_in_voter_name() {
         option: VoteOption::Yes,
         power: 999,
         voted_at: 10,
+        signature_level: Default::default(),
+        signature_algorithm: Default::default(),
+        biometric_evidence: vec![],
     };
     store.write_vote(&vote).unwrap();
 
@@ -453,6 +465,9 @@ fn adversarial_vote_for_nonexistent_proposal_in_store() {
         option: VoteOption::Yes,
         power: 1_000_000,
         voted_at: 1,
+        signature_level: Default::default(),
+        signature_algorithm: Default::default(),
+        biometric_evidence: vec![],
     };
     store.write_vote(&vote).unwrap();
 
@@ -504,6 +519,9 @@ fn adversarial_u64_max_proposal_id() {
         option: VoteOption::Yes,
         power: u64::MAX,
         voted_at: u64::MAX,
+        signature_level: Default::default(),
+        signature_algorithm: Default::default(),
+        biometric_evidence: vec![],
     };
     store.write_vote(&vote).unwrap();
     let votes = store.list_votes(u64::MAX).unwrap();
@@ -526,6 +544,9 @@ fn vote_prefix_scan_isolation() {
                 option: VoteOption::Yes,
                 power: 100,
                 voted_at: 1,
+                signature_level: Default::default(),
+                signature_algorithm: Default::default(),
+                biometric_evidence: vec![],
             };
             store.write_vote(&vote).unwrap();
         }
@@ -667,6 +688,9 @@ fn stress_concurrent_proposals_and_votes() {
                     option: VoteOption::Yes,
                     power: 100,
                     voted_at: t + v,
+                    signature_level: Default::default(),
+                    signature_algorithm: Default::default(),
+                    biometric_evidence: vec![],
                 };
                 s.write_vote(&vote).unwrap();
             }

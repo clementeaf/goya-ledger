@@ -624,3 +624,347 @@ pub async fn get_document_provenance(
         trace,
     )))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_state::AppState;
+    use crate::identity::signing::{
+        MlDsaSigningProvider, SigningProvider, SoftwareSigningProvider,
+    };
+    use actix_web::{test, web, App};
+
+    fn make_app_data() -> web::Data<AppState> {
+        web::Data::new(AppState::test_default())
+    }
+
+    fn ed25519_identity() -> (String, String, SoftwareSigningProvider) {
+        let provider = SoftwareSigningProvider::generate();
+        let pk_hex = hex::encode(provider.public_key());
+        let did = crate::identity::did::did_from_pubkey_hex(&pk_hex);
+        (did, pk_hex, provider)
+    }
+
+    fn mldsa65_identity() -> (String, String, MlDsaSigningProvider) {
+        let provider = MlDsaSigningProvider::generate();
+        let pk_hex = hex::encode(provider.public_key());
+        let did = crate::identity::did::did_from_pubkey_hex(&pk_hex);
+        (did, pk_hex, provider)
+    }
+
+    fn content_hash() -> String {
+        use pqc_crypto_module::legacy::sha256::Digest;
+        let hash = pqc_crypto_module::legacy::sha256::Sha256::digest(b"test document");
+        hex::encode(hash)
+    }
+
+    // ── E2E: Simple (FES) with Ed25519 ──────────────────────────────
+
+    #[actix_web::test]
+    async fn e2e_simple_notarize_and_verify() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(verify_notarization),
+            ),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = ed25519_identity();
+        let hash = content_hash();
+        let payload = format!("notarize:{did}:{hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["signature_level"], "simple");
+        assert_eq!(body["data"]["signature_algorithm"], "Ed25519");
+
+        // Verify
+        let req = test::TestRequest::get()
+            .uri(&format!("/api/v1/notarize/verify/{hash}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["verified"], true);
+        assert_eq!(body["data"]["signature_level"], "simple");
+    }
+
+    // ── E2E: Advanced (FEA) with ML-DSA-65 + biometric ──────────────
+
+    #[actix_web::test]
+    async fn e2e_advanced_notarize_with_mldsa65_and_biometric() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(verify_notarization)
+                    .service(get_notarization),
+            ),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = mldsa65_identity();
+        let hash = content_hash();
+        let fingerprint_commitment = "a".repeat(64);
+        let rut_commitment = "b".repeat(64);
+        let bio_evidence = vec![
+            serde_json::json!({
+                "evidence_type": "fingerprint",
+                "commitment": fingerprint_commitment,
+                "captured_at": 1700000000u64,
+            }),
+            serde_json::json!({
+                "evidence_type": "rut",
+                "commitment": rut_commitment,
+                "captured_at": 1700000000u64,
+            }),
+        ];
+
+        // Build the FEA signing payload
+        let bio_for_hash = vec![
+            crate::signature::BiometricEvidence {
+                evidence_type: crate::signature::BiometricType::Fingerprint,
+                commitment: fingerprint_commitment.clone(),
+                captured_at: 1700000000,
+                capture_device: None,
+            },
+            crate::signature::BiometricEvidence {
+                evidence_type: crate::signature::BiometricType::Rut,
+                commitment: rut_commitment.clone(),
+                captured_at: 1700000000,
+                capture_device: None,
+            },
+        ];
+        let bio_hash = crate::signature::compute_biometrics_hash(&bio_for_hash);
+        let payload = format!("notarize_fea:{did}:{hash}:{bio_hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+                "signature_level": "advanced",
+                "signature_algorithm": "MlDsa65",
+                "biometric_evidence": bio_evidence,
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201, "FEA notarize should succeed");
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["signature_level"], "advanced");
+        assert_eq!(body["data"]["signature_algorithm"], "MlDsa65");
+
+        // Verify — should include biometric evidence
+        let req = test::TestRequest::get()
+            .uri(&format!("/api/v1/notarize/verify/{hash}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["verified"], true);
+        assert_eq!(body["data"]["signature_level"], "advanced");
+        assert_eq!(body["data"]["signature_algorithm"], "MlDsa65");
+        let bio = body["data"]["biometric_evidence"].as_array().unwrap();
+        assert_eq!(bio.len(), 2);
+        assert_eq!(bio[0]["evidence_type"], "fingerprint");
+        assert_eq!(bio[1]["evidence_type"], "rut");
+    }
+
+    // ── Rejection: Advanced with Ed25519 ─────────────────────────────
+
+    #[actix_web::test]
+    async fn e2e_advanced_with_ed25519_rejected() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_notarization)),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = ed25519_identity();
+        let hash = content_hash();
+        let payload = format!("notarize:{did}:{hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+                "signature_level": "advanced",
+                "signature_algorithm": "Ed25519",
+                "biometric_evidence": [{
+                    "evidence_type": "fingerprint",
+                    "commitment": "a".repeat(64),
+                    "captured_at": 1700000000u64,
+                }],
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert!(body["error"]["code"]
+            .as_str()
+            .unwrap()
+            .contains("ALGORITHM_MISMATCH"));
+    }
+
+    // ── Rejection: Advanced without biometric ────────────────────────
+
+    #[actix_web::test]
+    async fn e2e_advanced_without_biometric_rejected() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_notarization)),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = mldsa65_identity();
+        let hash = content_hash();
+        let payload = format!("notarize_fea:{did}:{hash}:{}", "0".repeat(64));
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+                "signature_level": "advanced",
+                "signature_algorithm": "MlDsa65",
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert!(body["error"]["code"]
+            .as_str()
+            .unwrap()
+            .contains("BIOMETRIC_REQUIRED"));
+    }
+
+    // ── Backwards compat: old request without signature_level ────────
+
+    #[actix_web::test]
+    async fn e2e_legacy_request_defaults_to_simple() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_notarization)),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = ed25519_identity();
+        let hash = content_hash();
+        let payload = format!("notarize:{did}:{hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        // No signature_level, signature_algorithm, or biometric_evidence
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["signature_level"], "simple");
+    }
+
+    // ── E2E: Qualified with ML-DSA-65 + biometric ────────────────────
+
+    #[actix_web::test]
+    async fn e2e_qualified_notarize_accepted() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(verify_notarization),
+            ),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = mldsa65_identity();
+        let hash = content_hash();
+        let bio_commitment = "d".repeat(64);
+        let bio_for_hash = vec![crate::signature::BiometricEvidence {
+            evidence_type: crate::signature::BiometricType::GovernmentId,
+            commitment: bio_commitment.clone(),
+            captured_at: 1700000000,
+            capture_device: None,
+        }];
+        let bio_hash = crate::signature::compute_biometrics_hash(&bio_for_hash);
+        let payload = format!("notarize_fea:{did}:{hash}:{bio_hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+                "signature_level": "qualified",
+                "signature_algorithm": "MlDsa65",
+                "biometric_evidence": [{
+                    "evidence_type": "government_id",
+                    "commitment": bio_commitment,
+                    "captured_at": 1700000000u64,
+                }],
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["signature_level"], "qualified");
+        assert_eq!(body["data"]["signature_algorithm"], "MlDsa65");
+
+        // Verify persisted
+        let req = test::TestRequest::get()
+            .uri(&format!("/api/v1/notarize/verify/{hash}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["signature_level"], "qualified");
+        assert_eq!(
+            body["data"]["biometric_evidence"][0]["evidence_type"],
+            "government_id"
+        );
+    }
+}

@@ -55,9 +55,12 @@ pub struct RotateKeyResponse {
 pub struct VerifySignatureRequest {
     pub message: String,
     pub signature: String, // hex encoded
-    /// Ed25519 public key (hex encoded, 32 bytes).
+    /// Public key (hex encoded).
     #[serde(default)]
     pub public_key: String,
+    /// Signing algorithm: "Ed25519" (default) or "MlDsa65".
+    #[serde(default)]
+    pub signature_algorithm: crate::identity::signing::SigningAlgorithm,
 }
 
 /// Signature verification response

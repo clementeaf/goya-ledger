@@ -25,7 +25,7 @@ pub mod verify;
 use crate::identity::signing::SigningAlgorithm;
 use serde::{Deserialize, Serialize};
 
-pub use verify::{validate_public_key, verify_ed25519, verify_mldsa65, verify_signature};
+pub use verify::{validate_public_key, verify_signature};
 
 // ── Signature level ──────────────────────────────────────────────────────────
 
@@ -263,6 +263,31 @@ pub fn compute_biometrics_hash(evidence: &[BiometricEvidence]) -> String {
     use pqc_crypto_module::legacy::sha256::Digest;
     let hash = pqc_crypto_module::legacy::sha256::Sha256::digest(joined.as_bytes());
     hex::encode(hash)
+}
+
+/// Validate FES/FEA constraints: algorithm↔level, biometric requirement,
+/// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.
+pub fn validate_fes_fea(
+    level: SignatureLevel,
+    algorithm: SigningAlgorithm,
+    evidence: &[BiometricEvidence],
+    public_key_hex: &str,
+) -> Result<(), SignatureError> {
+    if !level.algorithm_satisfies(algorithm) {
+        return Err(SignatureError::AlgorithmMismatch {
+            level,
+            expected: level.required_algorithm(),
+            got: algorithm,
+        });
+    }
+    if level.requires_biometric() && evidence.is_empty() {
+        return Err(SignatureError::BiometricRequired(level));
+    }
+    for e in evidence {
+        e.validate()?;
+    }
+    validate_public_key(algorithm, public_key_hex).map_err(SignatureError::InvalidBiometric)?;
+    Ok(())
 }
 
 // ── Errors ───────────────────────────────────────────────────────────────────

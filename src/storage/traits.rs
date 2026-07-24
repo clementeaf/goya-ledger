@@ -327,6 +327,15 @@ pub struct AliasEntry {
     /// Unix timestamp when revoked (if applicable).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revoked_at: Option<u64>,
+    /// Electronic signature level.
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    /// Signing algorithm used.
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    /// Biometric evidence commitments.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 /// Status of an inference claim in the optimistic oracle.
@@ -400,6 +409,15 @@ pub struct InferenceClaim {
     /// Unix timestamp when finalized (if applicable).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub finalized_at: Option<u64>,
+    /// Electronic signature level.
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    /// Signing algorithm used.
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    /// Biometric evidence commitments.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 /// A challenge against a pending inference claim.
@@ -448,6 +466,15 @@ pub struct Invitation {
     pub responded: bool,
     /// true = accepted, false = rejected (meaningful only when responded = true).
     pub accepted: bool,
+    /// Electronic signature level.
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    /// Signing algorithm used.
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    /// Biometric evidence commitments.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 /// BlockStore trait - main storage interface

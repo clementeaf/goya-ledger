@@ -138,47 +138,15 @@ pub async fn create_invitation(
         );
     }
 
-    // Validate FES/FEA + verify signature
-    if !body
-        .signature_level
-        .algorithm_satisfies(body.signature_algorithm)
-    {
+    // Validate FES/FEA constraints
+    if let Err(e) = crate::signature::validate_fes_fea(
+        body.signature_level,
+        body.signature_algorithm,
+        &body.biometric_evidence,
+        &body.public_key,
+    ) {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto(
-                "ALGORITHM_MISMATCH",
-                &format!(
-                    "signature level {} requires ML-DSA-65, got {}",
-                    body.signature_level, body.signature_algorithm
-                ),
-            ),
-            400,
-        )));
-    }
-    if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto(
-                "BIOMETRIC_REQUIRED",
-                &format!(
-                    "signature level {} requires biometric evidence",
-                    body.signature_level
-                ),
-            ),
-            400,
-        )));
-    }
-    for evidence in &body.biometric_evidence {
-        if let Err(e) = evidence.validate() {
-            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                err_dto("INVALID_BIOMETRIC", &e.to_string()),
-                400,
-            )));
-        }
-    }
-    if let Err(msg) =
-        crate::signature::validate_public_key(body.signature_algorithm, &body.public_key)
-    {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto("INVALID_PUBLIC_KEY", &msg),
+            err_dto("VALIDATION", &e.to_string()),
             400,
         )));
     }
@@ -220,6 +188,9 @@ pub async fn create_invitation(
         created_at: now_secs(),
         responded: false,
         accepted: false,
+        signature_level: body.signature_level,
+        signature_algorithm: body.signature_algorithm,
+        biometric_evidence: body.biometric_evidence.clone(),
     };
 
     store.write_invitation(&invitation).map_err(|e| {
@@ -298,47 +269,15 @@ pub async fn respond_invitation(
         )));
     }
 
-    // Validate FES/FEA + verify signature
-    if !body
-        .signature_level
-        .algorithm_satisfies(body.signature_algorithm)
-    {
+    // Validate FES/FEA constraints
+    if let Err(e) = crate::signature::validate_fes_fea(
+        body.signature_level,
+        body.signature_algorithm,
+        &body.biometric_evidence,
+        &body.public_key,
+    ) {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto(
-                "ALGORITHM_MISMATCH",
-                &format!(
-                    "signature level {} requires ML-DSA-65, got {}",
-                    body.signature_level, body.signature_algorithm
-                ),
-            ),
-            400,
-        )));
-    }
-    if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto(
-                "BIOMETRIC_REQUIRED",
-                &format!(
-                    "signature level {} requires biometric evidence",
-                    body.signature_level
-                ),
-            ),
-            400,
-        )));
-    }
-    for evidence in &body.biometric_evidence {
-        if let Err(e) = evidence.validate() {
-            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                err_dto("INVALID_BIOMETRIC", &e.to_string()),
-                400,
-            )));
-        }
-    }
-    if let Err(msg) =
-        crate::signature::validate_public_key(body.signature_algorithm, &body.public_key)
-    {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto("INVALID_PUBLIC_KEY", &msg),
+            err_dto("VALIDATION", &e.to_string()),
             400,
         )));
     }

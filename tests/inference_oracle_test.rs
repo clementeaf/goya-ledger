@@ -51,6 +51,9 @@ fn sample_claim(id: &str, oracle: &str, _model: &str, status: ClaimStatus) -> In
         tolerance: OutputTolerance::Exact,
         dispute_deadline: now_secs() + 86400,
         finalized_at: None,
+        signature_level: Default::default(),
+        signature_algorithm: Default::default(),
+        biometric_evidence: vec![],
     }
 }
 
@@ -832,6 +835,9 @@ fn claim_with_tolerance(
         tolerance,
         dispute_deadline: now_secs() + 86400,
         finalized_at: None,
+        signature_level: Default::default(),
+        signature_algorithm: Default::default(),
+        biometric_evidence: vec![],
     }
 }
 

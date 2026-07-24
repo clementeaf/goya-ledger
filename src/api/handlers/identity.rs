@@ -142,12 +142,9 @@ async fn verify_signature(
         resource: format!("identity {did}"),
     })?;
 
-    // Verify signature — try Ed25519 first, then ML-DSA-65
-    let valid = crate::signature::verify_ed25519(
-        &body.public_key,
-        body.message.as_bytes(),
-        &body.signature,
-    ) || crate::signature::verify_mldsa65(
+    // Verify signature using the declared algorithm
+    let valid = crate::signature::verify_signature(
+        body.signature_algorithm,
         &body.public_key,
         body.message.as_bytes(),
         &body.signature,

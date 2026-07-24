@@ -435,6 +435,9 @@ pub async fn submit_inference(
         tolerance: body.tolerance.clone(),
         dispute_deadline: now + dispute_window(),
         finalized_at: None,
+        signature_level: body.signature_level,
+        signature_algorithm: body.signature_algorithm,
+        biometric_evidence: body.biometric_evidence.clone(),
     };
 
     store
@@ -584,6 +587,9 @@ pub async fn submit_proven(
         tolerance: OutputTolerance::Exact, // proven claims don't need tolerance
         dispute_deadline: now,             // no window
         finalized_at: Some(now),
+        signature_level: body.signature_level,
+        signature_algorithm: body.signature_algorithm,
+        biometric_evidence: body.biometric_evidence.clone(),
     };
 
     store

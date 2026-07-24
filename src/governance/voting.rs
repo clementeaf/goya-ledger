@@ -29,6 +29,15 @@ pub struct Vote {
     pub power: u64,
     /// Block height when the vote was cast.
     pub voted_at: u64,
+    /// Electronic signature level (Simple/Advanced/Qualified).
+    #[serde(default)]
+    pub signature_level: crate::signature::SignatureLevel,
+    /// Signing algorithm used.
+    #[serde(default)]
+    pub signature_algorithm: crate::identity::signing::SigningAlgorithm,
+    /// Biometric evidence commitments.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub biometric_evidence: Vec<crate::signature::BiometricEvidence>,
 }
 
 /// Result of tallying votes for a proposal.
@@ -158,10 +167,35 @@ impl VoteStore {
                 option,
                 power,
                 voted_at: current_height,
+                signature_level: Default::default(),
+                signature_algorithm: Default::default(),
+                biometric_evidence: vec![],
             },
         );
 
         Ok(())
+    }
+
+    /// Update FES/FEA metadata on an existing vote.
+    pub fn set_vote_signature_data(
+        &self,
+        proposal_id: ProposalId,
+        voter: &str,
+        level: crate::signature::SignatureLevel,
+        algorithm: crate::identity::signing::SigningAlgorithm,
+        evidence: Vec<crate::signature::BiometricEvidence>,
+    ) {
+        if let Some(vote) = self
+            .votes
+            .lock()
+            .unwrap()
+            .get_mut(&proposal_id)
+            .and_then(|m| m.get_mut(voter))
+        {
+            vote.signature_level = level;
+            vote.signature_algorithm = algorithm;
+            vote.biometric_evidence = evidence;
+        }
     }
 
     /// Tally votes for a proposal.

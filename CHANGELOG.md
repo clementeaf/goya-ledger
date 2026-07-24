@@ -29,11 +29,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
   - `invitations.rs`: `CreateInvitationRequest`, `RespondInvitationRequest` — FEA appends `:{bio_hash}`
   - All request structs accept `signature_level`, `signature_algorithm`, `biometric_evidence` with serde defaults (fully backwards compatible)
 - `docs/compliance/ELECTRONIC-SIGNATURE-COMPLIANCE.md` — legal compliance mapping for electronic signatures: Chile Ley 19.799 (FES/FEA), EU eIDAS 910/2014 + eIDAS 2.0 (Simple/Advanced/Qualified), US ESIGN Act + UETA, NIST FIPS 204/186-5/SP 800-63B, GDPR Art. 9/25/35 biometric considerations, Chilean Ley 19.628/21.719 data protection, full endpoint coverage matrix, roadmap
+- 6 E2E handler tests: FES notarize+verify, FEA ML-DSA-65+biometric full flow, Advanced+Ed25519 rejected, Advanced without biometric rejected, legacy backwards compat, Qualified+GovernmentId
+- `validate_fes_fea()` shared helper in `signature/mod.rs` — validates level↔algorithm, biometric requirement, commitment format, public key size
+- Storage types `Vote`, `AliasEntry`, `InferenceClaim`, `Invitation` now persist `signature_level`, `signature_algorithm`, `biometric_evidence` (serde defaults for backwards compat)
+- `VoteStore::set_vote_signature_data()` — attaches FEA metadata to votes after casting
 
 ### Changed
 
 - Handlers `notarize`, `alias`, `inference`, `invitations`, `governance`, `identity` now use shared `crate::signature::verify_*` — eliminated ~228 lines of duplicated verification code
 - All 10 signature-bearing endpoints validate FES/FEA constraints: level↔algorithm match, biometric evidence required for Advanced, public key size per algorithm, biometric commitment format
+- `alias.rs` and `invitations.rs` use shared `validate_fes_fea()` instead of inline validation (eliminated 4 duplicated ~40-line blocks)
+- Identity `verify_signature` endpoint dispatches by `signature_algorithm` field (was blind try-both hack)
+- Governance, inference, alias, invitations handlers now pass FEA data through to storage (was silently discarded)
 
 ### Fixed
 

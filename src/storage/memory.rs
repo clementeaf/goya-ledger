@@ -997,6 +997,9 @@ mod tests {
             option: crate::governance::voting::VoteOption::Yes,
             power: 1000,
             voted_at: 50,
+            signature_level: Default::default(),
+            signature_algorithm: Default::default(),
+            biometric_evidence: vec![],
         }
     }
 

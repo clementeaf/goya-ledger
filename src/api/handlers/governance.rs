@@ -633,6 +633,14 @@ pub async fn cast_governance_vote(
         proposal.voting_ends_at,
     ) {
         Ok(()) => {
+            // Attach FES/FEA metadata to the vote
+            vote_store.set_vote_signature_data(
+                id,
+                &effective_voter,
+                body.signature_level,
+                body.signature_algorithm,
+                body.biometric_evidence.clone(),
+            );
             // Persist vote to storage layer
             if let Some(vote) = vote_store.get_vote(id, &effective_voter) {
                 persist_vote(&state, &vote);
