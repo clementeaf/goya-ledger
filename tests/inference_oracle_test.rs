@@ -554,6 +554,9 @@ async fn storage_write_and_list_challenges() {
         timestamp: now_secs(),
         signature: "sig".to_string(),
         succeeded: Some(true),
+        signature_level: Default::default(),
+        signature_algorithm: Default::default(),
+        biometric_evidence: vec![],
     };
     store.write_inference_challenge(&ch).unwrap();
 
@@ -804,6 +807,9 @@ async fn inference_challenge_serde_roundtrip() {
         timestamp: now_secs(),
         signature: "sig".to_string(),
         succeeded: Some(false),
+        signature_level: Default::default(),
+        signature_algorithm: Default::default(),
+        biometric_evidence: vec![],
     };
     let json = serde_json::to_string(&ch).unwrap();
     let decoded: InferenceChallenge = serde_json::from_str(&json).unwrap();

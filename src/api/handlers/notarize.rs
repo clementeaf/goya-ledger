@@ -20,8 +20,7 @@ use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
 use crate::identity::signing::SigningAlgorithm;
 use crate::signature::{
-    compute_biometrics_hash, validate_public_key, verify_signature, BiometricEvidence,
-    SignatureLevel,
+    compute_biometrics_hash, verify_signature, BiometricEvidence, SignatureLevel,
 };
 use crate::storage::traits::{NotarizationEntry, OwnershipTransfer};
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
@@ -142,48 +141,15 @@ pub async fn submit_notarization(
         )));
     }
 
-    // Validate algorithm matches signature level
-    if !body.level().algorithm_satisfies(body.signature_algorithm) {
+    // Validate FES/FEA constraints
+    if let Err(e) = crate::signature::validate_fes_fea(
+        body.signature_level,
+        body.signature_algorithm,
+        &body.biometric_evidence,
+        &body.public_key,
+    ) {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto(
-                "ALGORITHM_MISMATCH",
-                &format!(
-                    "signature level {} requires post-quantum algorithm (ML-DSA-65), got {}",
-                    body.signature_level, body.signature_algorithm
-                ),
-            ),
-            400,
-        )));
-    }
-
-    // Validate biometric evidence for Advanced/Qualified
-    if body.level().requires_biometric() && body.biometric_evidence.is_empty() {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto(
-                "BIOMETRIC_REQUIRED",
-                &format!(
-                    "signature level {} requires at least one biometric evidence",
-                    body.signature_level
-                ),
-            ),
-            400,
-        )));
-    }
-
-    // Validate each biometric commitment
-    for evidence in &body.biometric_evidence {
-        if let Err(e) = evidence.validate() {
-            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                err_dto("INVALID_BIOMETRIC", &e.to_string()),
-                400,
-            )));
-        }
-    }
-
-    // Validate public_key for the declared algorithm
-    if let Err(msg) = validate_public_key(body.signature_algorithm, &body.public_key) {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto("INVALID_PUBLIC_KEY", &msg),
+            err_dto("VALIDATION", &e.to_string()),
             400,
         )));
     }
@@ -263,12 +229,6 @@ pub async fn submit_notarization(
         }),
         trace,
     )))
-}
-
-impl NotarizeRequest {
-    fn level(&self) -> SignatureLevel {
-        self.signature_level
-    }
 }
 
 /// Verify a document hash — returns the notarization record if it exists.
@@ -426,50 +386,15 @@ pub async fn transfer_document(
             resource: format!("notarization {content_hash}"),
         })?;
 
-    // Validate algorithm matches signature level
-    if !body
-        .signature_level
-        .algorithm_satisfies(body.signature_algorithm)
-    {
+    // Validate FES/FEA constraints
+    if let Err(e) = crate::signature::validate_fes_fea(
+        body.signature_level,
+        body.signature_algorithm,
+        &body.biometric_evidence,
+        &body.public_key,
+    ) {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto(
-                "ALGORITHM_MISMATCH",
-                &format!(
-                    "signature level {} requires ML-DSA-65, got {}",
-                    body.signature_level, body.signature_algorithm
-                ),
-            ),
-            400,
-        )));
-    }
-
-    // Validate biometric evidence for Advanced
-    if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto(
-                "BIOMETRIC_REQUIRED",
-                &format!(
-                    "signature level {} requires biometric evidence",
-                    body.signature_level
-                ),
-            ),
-            400,
-        )));
-    }
-
-    for evidence in &body.biometric_evidence {
-        if let Err(e) = evidence.validate() {
-            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                err_dto("INVALID_BIOMETRIC", &e.to_string()),
-                400,
-            )));
-        }
-    }
-
-    // Validate public_key
-    if let Err(msg) = validate_public_key(body.signature_algorithm, &body.public_key) {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto("INVALID_PUBLIC_KEY", &msg),
+            err_dto("VALIDATION", &e.to_string()),
             400,
         )));
     }
@@ -830,7 +755,7 @@ mod tests {
         assert!(body["error"]["code"]
             .as_str()
             .unwrap()
-            .contains("ALGORITHM_MISMATCH"));
+            .contains("VALIDATION"));
     }
 
     // ── Rejection: Advanced without biometric ────────────────────────
@@ -868,7 +793,7 @@ mod tests {
         assert!(body["error"]["code"]
             .as_str()
             .unwrap()
-            .contains("BIOMETRIC_REQUIRED"));
+            .contains("VALIDATION"));
     }
 
     // ── Backwards compat: old request without signature_level ────────

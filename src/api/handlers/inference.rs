@@ -765,6 +765,9 @@ pub async fn challenge_inference(
         timestamp: now,
         signature: body.signature.clone(),
         succeeded: Some(challenge_succeeded),
+        signature_level: body.signature_level,
+        signature_algorithm: body.signature_algorithm,
+        biometric_evidence: body.biometric_evidence.clone(),
     };
 
     store

@@ -445,6 +445,15 @@ pub struct InferenceChallenge {
     /// Whether the challenge succeeded (oracle output differs from challenger output).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub succeeded: Option<bool>,
+    /// Electronic signature level.
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    /// Signing algorithm used.
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    /// Biometric evidence commitments.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
 /// An invitation to participate in governance proposals.

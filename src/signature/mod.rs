@@ -838,4 +838,105 @@ mod tests {
         env2.signer = "did:goya:other".into();
         assert_ne!(env1.signing_payload(), env2.signing_payload());
     }
+
+    // ── validate_fes_fea ─────────────────────────────────────────────
+
+    #[test]
+    fn validate_fes_fea_simple_ed25519_ok() {
+        let pk = "aa".repeat(32); // 64 hex = 32 bytes Ed25519
+        assert!(
+            validate_fes_fea(SignatureLevel::Simple, SigningAlgorithm::Ed25519, &[], &pk).is_ok()
+        );
+    }
+
+    #[test]
+    fn validate_fes_fea_simple_with_optional_bio_ok() {
+        let pk = "aa".repeat(32);
+        let bio = vec![dummy_bio(BiometricType::Rut)];
+        assert!(
+            validate_fes_fea(SignatureLevel::Simple, SigningAlgorithm::Ed25519, &bio, &pk).is_ok()
+        );
+    }
+
+    #[test]
+    fn validate_fes_fea_advanced_mldsa65_with_bio_ok() {
+        let pk = "aa".repeat(1952); // 3904 hex = 1952 bytes ML-DSA-65
+        let bio = vec![dummy_bio(BiometricType::Fingerprint)];
+        assert!(validate_fes_fea(
+            SignatureLevel::Advanced,
+            SigningAlgorithm::MlDsa65,
+            &bio,
+            &pk
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn validate_fes_fea_advanced_ed25519_rejected() {
+        let pk = "aa".repeat(32);
+        let bio = vec![dummy_bio(BiometricType::Fingerprint)];
+        let err = validate_fes_fea(
+            SignatureLevel::Advanced,
+            SigningAlgorithm::Ed25519,
+            &bio,
+            &pk,
+        )
+        .unwrap_err();
+        assert!(matches!(err, SignatureError::AlgorithmMismatch { .. }));
+    }
+
+    #[test]
+    fn validate_fes_fea_advanced_no_bio_rejected() {
+        let pk = "aa".repeat(1952);
+        let err = validate_fes_fea(
+            SignatureLevel::Advanced,
+            SigningAlgorithm::MlDsa65,
+            &[],
+            &pk,
+        )
+        .unwrap_err();
+        assert!(matches!(err, SignatureError::BiometricRequired(_)));
+    }
+
+    #[test]
+    fn validate_fes_fea_invalid_bio_commitment_rejected() {
+        let pk = "aa".repeat(1952);
+        let mut bio = dummy_bio(BiometricType::Iris);
+        bio.commitment = "short".into();
+        let err = validate_fes_fea(
+            SignatureLevel::Advanced,
+            SigningAlgorithm::MlDsa65,
+            &[bio],
+            &pk,
+        )
+        .unwrap_err();
+        assert!(matches!(err, SignatureError::InvalidBiometric(_)));
+    }
+
+    #[test]
+    fn validate_fes_fea_wrong_pk_size_rejected() {
+        let pk = "aa".repeat(32); // Ed25519 size, but declared MlDsa65
+        let bio = vec![dummy_bio(BiometricType::Fingerprint)];
+        let err = validate_fes_fea(
+            SignatureLevel::Advanced,
+            SigningAlgorithm::MlDsa65,
+            &bio,
+            &pk,
+        )
+        .unwrap_err();
+        assert!(matches!(err, SignatureError::InvalidBiometric(_)));
+    }
+
+    #[test]
+    fn validate_fes_fea_qualified_same_as_advanced() {
+        let pk = "aa".repeat(1952);
+        let bio = vec![dummy_bio(BiometricType::GovernmentId)];
+        assert!(validate_fes_fea(
+            SignatureLevel::Qualified,
+            SigningAlgorithm::MlDsa65,
+            &bio,
+            &pk
+        )
+        .is_ok());
+    }
 }

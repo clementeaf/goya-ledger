@@ -504,45 +504,15 @@ pub async fn cast_governance_vote(
     // over the canonical vote payload. Supports Simple (Ed25519) and
     // Advanced (ML-DSA-65 + biometric evidence).
     if let (Some(sig_hex), Some(pk_hex)) = (&body.signature, &body.public_key) {
-        // Validate algorithm matches signature level
-        if !body
-            .signature_level
-            .algorithm_satisfies(body.signature_algorithm)
-        {
-            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                err_dto(&format!(
-                    "signature level {} requires ML-DSA-65, got {}",
-                    body.signature_level, body.signature_algorithm
-                )),
-                400,
-            )));
-        }
-
-        // Validate biometric evidence for Advanced/Qualified
-        if body.signature_level.requires_biometric() && body.biometric_evidence.is_empty() {
-            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                err_dto(&format!(
-                    "signature level {} requires biometric evidence",
-                    body.signature_level
-                )),
-                400,
-            )));
-        }
-
-        for evidence in &body.biometric_evidence {
-            if let Err(e) = evidence.validate() {
-                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                    err_dto(&format!("invalid biometric: {e}")),
-                    400,
-                )));
-            }
-        }
-
-        // Validate public key size
-        if let Err(msg) = crate::signature::validate_public_key(body.signature_algorithm, pk_hex) {
-            return Ok(
-                HttpResponse::BadRequest().json(ApiResponse::<()>::error(err_dto(&msg), 400))
-            );
+        // Validate FES/FEA constraints
+        if let Err(e) = crate::signature::validate_fes_fea(
+            body.signature_level,
+            body.signature_algorithm,
+            &body.biometric_evidence,
+            pk_hex,
+        ) {
+            return Ok(HttpResponse::BadRequest()
+                .json(ApiResponse::<()>::error(err_dto(&e.to_string()), 400)));
         }
 
         let option_str = match body.option {
