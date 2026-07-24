@@ -99,6 +99,8 @@ pub struct Transaction {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct IdentityRecord {
     pub did: String,
+    #[serde(default)]
+    pub public_key: String,
     pub created_at: u64,
     pub updated_at: u64,
     pub status: String,

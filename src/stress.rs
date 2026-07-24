@@ -466,6 +466,7 @@ pub fn stress_identity(ops: u64) -> ModuleStressResult {
         let did = format!("did:goya:stress-{i}");
         let record = IdentityRecord {
             did: did.clone(),
+            public_key: String::new(),
             created_at: 1000 + i,
             updated_at: 1000 + i,
             status: "active".into(),
@@ -516,6 +517,7 @@ pub fn stress_credential(ops: u64) -> ModuleStressResult {
     store
         .write_identity(&IdentityRecord {
             did: issuer_did.into(),
+            public_key: String::new(),
             created_at: 1000,
             updated_at: 1000,
             status: "active".into(),

@@ -31,6 +31,7 @@ async fn create_identity(
     let store = get_channel_store(&state, _channel)?;
     let record = crate::storage::traits::IdentityRecord {
         did: did.clone(),
+        public_key: public_key_hex.clone(),
         created_at: now,
         updated_at: now,
         status: "active".to_string(),
@@ -77,7 +78,7 @@ async fn get_identity(
 
     let response = IdentityResponse {
         did: record.did,
-        public_key: String::new(), // Key not stored in IdentityRecord; would need KeyStore
+        public_key: record.public_key,
         created_at: chrono::DateTime::from_timestamp(record.created_at as i64, 0)
             .unwrap_or_else(Utc::now),
     };
