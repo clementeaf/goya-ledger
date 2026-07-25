@@ -246,7 +246,8 @@ impl ApiRoutes {
             .service(notarize::list_notarizations)
             .service(notarize::transfer_document)
             .service(notarize::get_document_owner)
-            .service(notarize::get_document_provenance);
+            .service(notarize::get_document_provenance)
+            .service(notarize::sign_fea);
         // Invitations (governance proposal invitations via alias)
         cfg.service(invitations::create_invitation)
             .service(invitations::list_invitations)
@@ -366,7 +367,8 @@ impl LightRoutes {
             .service(notarize::list_notarizations)
             .service(notarize::transfer_document)
             .service(notarize::get_document_owner)
-            .service(notarize::get_document_provenance);
+            .service(notarize::get_document_provenance)
+            .service(notarize::sign_fea);
         // Audit trail
         cfg.service(audit::list_audit_entries)
             .service(audit::export_audit_csv);

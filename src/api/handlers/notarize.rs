@@ -550,6 +550,90 @@ pub async fn get_document_provenance(
     )))
 }
 
+// ── Server-side FEA signing ─────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct SignFeaRequest {
+    /// SHA-256 hash of the document (64 hex chars).
+    pub content_hash: String,
+    /// DID of the signer.
+    pub signer: String,
+    /// Biometric evidence (required, at least one).
+    pub biometric_evidence: Vec<BiometricEvidence>,
+}
+
+/// POST /api/v1/sign/fea — server-side ML-DSA-65 signature.
+///
+/// The browser cannot run ML-DSA-65 (no WebCrypto/WASM support).
+/// This endpoint signs on behalf of the user using the node's ML-DSA-65
+/// signing provider and returns the signature + public key so the
+/// frontend can call POST /notarize with a real FEA envelope.
+#[post("/sign/fea")]
+pub async fn sign_fea(
+    state: web::Data<AppState>,
+    body: web::Json<SignFeaRequest>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+
+    // Validate content_hash
+    if body.content_hash.len() != 64 || hex::decode(&body.content_hash).is_err() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_HASH", "content_hash must be 64 hex characters"),
+            400,
+        )));
+    }
+
+    // Require biometric evidence
+    if body.biometric_evidence.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "BIOMETRIC_REQUIRED",
+                "FEA requires at least one biometric evidence",
+            ),
+            400,
+        )));
+    }
+    for evidence in &body.biometric_evidence {
+        if let Err(e) = evidence.validate() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BIOMETRIC", &e.to_string()),
+                400,
+            )));
+        }
+    }
+
+    // Build FEA signing payload
+    let bio_hash = compute_biometrics_hash(&body.biometric_evidence);
+    let payload = format!(
+        "notarize_fea:{}:{}:{}",
+        body.signer, body.content_hash, bio_hash
+    );
+
+    // Sign with the node's signing provider (ML-DSA-65 or Ed25519 depending on config)
+    let signing_provider = state.signing_provider.as_ref().ok_or_else(|| {
+        crate::api::errors::ApiError::StorageError {
+            reason: "signing provider not configured".into(),
+        }
+    })?;
+    let signature = signing_provider.sign(payload.as_bytes()).map_err(|e| {
+        crate::api::errors::ApiError::StorageError {
+            reason: format!("signing failed: {e}"),
+        }
+    })?;
+    let public_key = signing_provider.public_key();
+    let algorithm = signing_provider.algorithm();
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        serde_json::json!({
+            "signature": hex::encode(&signature),
+            "public_key": hex::encode(&public_key),
+            "signature_algorithm": algorithm,
+            "signing_payload": payload,
+        }),
+        trace,
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
