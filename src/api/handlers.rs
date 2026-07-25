@@ -44,6 +44,7 @@ pub mod snapshots;
 pub mod staking;
 pub mod stats;
 pub mod stress;
+pub mod stripe;
 pub mod tokenization;
 pub mod transactions;
 pub mod utilities;

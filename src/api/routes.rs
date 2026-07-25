@@ -7,8 +7,8 @@ use crate::api::handlers::{
     compliance_auto, contact, contracts, credentials, discovery, events, forensic, gateway,
     governance, governance_entities, identity, inference, intelligence, interop, invitations,
     legal_oracle, msp, network, notarize, oracle, organizations, pentest, pin, private_data,
-    proposals, registry, regulatory, snapshots, staking, stats, stress, tokenization, transactions,
-    utilities, vault, wallets, zkp,
+    proposals, registry, regulatory, snapshots, staking, stats, stress, stripe, tokenization,
+    transactions, utilities, vault, wallets, zkp,
 };
 
 /// API routes configuration
@@ -295,6 +295,9 @@ impl ApiRoutes {
         cfg.service(billing::create_api_key)
             .service(billing::deactivate_api_key)
             .service(billing::get_billing_usage);
+        // Stripe (checkout, webhook)
+        cfg.service(stripe::create_checkout)
+            .service(stripe::stripe_webhook);
         // Utilities (health, version, openapi)
         cfg.route("/health", web::get().to(utilities::health_check))
             .route("/version", web::get().to(utilities::get_version))

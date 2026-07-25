@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- Stripe integration: `POST /api/v1/checkout` (creates Stripe Checkout Session) + `POST /api/v1/stripe/webhook` (handles `checkout.session.completed`)
+  - `src/api/handlers/stripe.rs` — direct Stripe REST API via reqwest (no SDK), 3 tiers (starter/business/enterprise), env-driven price IDs
+  - Env vars: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_BUSINESS`, `STRIPE_PRICE_ENTERPRISE`
+  - Returns 503 with clear message when Stripe not configured (graceful degradation)
 - Electronic signature framework: Simple (FES) and Advanced (FEA) with post-quantum cryptography + biometric evidence
   - `src/signature/mod.rs` — `SignatureLevel` (Simple/Advanced/Qualified), `BiometricType` (Fingerprint, FacialRecognition, Rut, Iris, Voice, GovernmentId, extensible), `BiometricEvidence` (SHA-256 commitment, never raw data), `SignedEnvelope`, `compute_biometrics_hash()`
   - Legal alignment: Chile Ley 19.799 (FES/FEA), EU eIDAS 910/2014 (Simple/Advanced/Qualified), US ESIGN Act + UETA
