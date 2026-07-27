@@ -76,6 +76,7 @@ fn get_json(url: &str) -> serde_json::Value {
 }
 
 fn post_json(url: &str, body: serde_json::Value) -> serde_json::Value {
+    rust_bc::tls::install_crypto_provider();
     reqwest::blocking::Client::new()
         .post(url)
         .json(&body)

@@ -113,6 +113,7 @@ fn dirs_next() -> PathBuf {
 // ── HTTP helpers ─────────────────────────────────────────────────────────────
 
 fn http_client() -> reqwest::blocking::Client {
+    rust_bc::tls::install_crypto_provider();
     reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -197,7 +198,7 @@ fn cmd_sign(node: &str, file: &PathBuf, description: Option<&str>) -> Result<(),
 
     // Sign the hash with private key
     use pqc_crypto_module::legacy::ed25519::Signer;
-    let signature = signing_key.sign(file_hash.as_slice());
+    let signature = signing_key.sign(&file_hash[..]);
     let sig_hex = hex::encode(signature.to_bytes());
 
     // Build credential

@@ -12,7 +12,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
   - T0 static (`fmt`, `clippy --all-targets`, crypto boundary) · T1 unit + doc · T2 integration suite · T3 coverage threshold · T4 supply chain (`audit`, `deny`) · T5 mutation score · T6 fuzz targets
   - `./scripts/gauntlet.sh` runs T0–T4; `full` adds mutation and fuzzing; a bare tier number runs one tier
   - Thresholds are env-overridable: `COV_MIN`, `MUTANTS_MIN`, `FUZZ_SECS`, `MUTANTS_SCOPE`
-  - Baseline on first full run: T0–T2 green (1861 unit + 4 doc + 35 integration suites), coverage 66.51% lines, `cargo audit` reports 12 vulnerabilities in transitive dependencies (tracked separately)
+  - Baseline on first full run: T0–T2 green (1861 unit + 4 doc + 35 integration suites), coverage 66.51% lines
+  - Runs at `JOBS=3` with incremental caching and full debuginfo off. Those two, not job count, were what pushed `target/debug/incremental` to 37 GB and filled the disk — and a full disk surfaces as a bogus `exit 101` "compile failure", so check `df` before believing one
+  - T3 (coverage) is excluded from the default run: `llvm-cov` compiles with its own instrumentation flags, so it builds a second full set of artifacts and roughly doubles `target/`. Request it explicitly with `./scripts/gauntlet.sh 3`
   - Fully serial by default (`CARGO_BUILD_JOBS=1`, `RUST_TEST_THREADS=1`, `line-tables-only` debuginfo) — default parallelism peaks past 16 GB on this tree; T2 links one integration binary at a time instead of all 36 at once
 - Stripe integration: `POST /api/v1/checkout` (creates Stripe Checkout Session) + `POST /api/v1/stripe/webhook` (handles `checkout.session.completed`)
   - `src/api/handlers/stripe.rs` — direct Stripe REST API via reqwest (no SDK), 3 tiers (starter/business/enterprise), env-driven price IDs
@@ -43,6 +45,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `validate_fes_fea()` shared helper in `signature/mod.rs` — validates level↔algorithm, biometric requirement, commitment format, public key size
 - Storage types `Vote`, `AliasEntry`, `InferenceClaim`, `Invitation` now persist `signature_level`, `signature_algorithm`, `biometric_evidence` (serde defaults for backwards compat)
 - `VoteStore::set_vote_signature_data()` — attaches FEA metadata to votes after casting
+
+### Security
+
+- Dependency audit: 12 known vulnerabilities reduced to 5, none of which have a fix reachable from this tree
+  - `cargo update` closed 7, including `quick-xml` RUSTSEC-2026-0194/0195 (both 7.5 high — memory exhaustion and quadratic attribute parsing), `wasmtime` RUSTSEC-2026-0114 (5.9) and `crossbeam-epoch` RUSTSEC-2026-0204. The fixes were already published upstream; the lockfile was simply pinned to older versions
+  - `reqwest` 0.11 → 0.12, moving the node's HTTP client onto the rustls 0.23 stack. Its feature is `rustls-tls-webpki-roots-no-provider`, not `rustls-tls`: the latter enables reqwest's own ring-backed provider alongside the aws-lc-rs one installed by `tls::install_crypto_provider()`, and rustls 0.23 panics rather than choose between two. That collision broke 25 TLS unit tests, which is how it was caught — production already installs a provider explicitly at startup, so only test binaries were affected
+  - The 5 remaining are listed individually in `.cargo/audit.toml`, each naming the crate that blocks it: `protobuf` 2.x (pinned by `raft` 0.7, the latest published release), `rustls-webpki` 0.101 ×3 (pinned by `tauri` 2.11.5 → `reqwest` 0.11, reachable only from the desktop app — the node's own P2P TLS uses rustls 0.23), `tracing-subscriber` 0.2 (pinned by `revm` → `ark-bn254` → `ark-relations`). Marked for re-review 2026-10-27
+  - 27 `unmaintained` advisories remain as warnings, notably `pqcrypto-mldsa`/`-mlkem`/`-traits` (upstream PQClean being archived) — relevant to the FIPS 204 posture, tracked but not vulnerabilities
 
 ### Changed
 

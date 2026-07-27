@@ -96,6 +96,7 @@ const ALL_NODES: &[&str] = &["node1", "node2", "node3", "orderer1"];
 const PEERS: &[&str] = &["node1", "node2", "node3"];
 
 fn build_client(insecure: bool) -> Client {
+    rust_bc::tls::install_crypto_provider();
     Client::builder()
         .danger_accept_invalid_certs(insecure)
         .timeout(std::time::Duration::from_secs(10))

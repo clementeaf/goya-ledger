@@ -78,6 +78,7 @@ impl ExternalChaincodeClient {
             state_context,
         };
 
+        crate::tls::install_crypto_provider();
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()

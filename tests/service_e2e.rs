@@ -18,6 +18,7 @@ use std::time::Duration;
 const SEED_URL: &str = "https://goya-node.fly.dev";
 
 fn setup_client() -> Client {
+    rust_bc::tls::install_crypto_provider();
     Client::builder()
         .timeout(Duration::from_secs(15))
         .build()

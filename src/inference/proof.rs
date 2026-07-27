@@ -89,7 +89,7 @@ impl ProofVerifier for Sha256CommitmentVerifier {
         hasher.update(inputs.output_hash.as_bytes());
         let expected = hasher.finalize();
 
-        Ok(proof_bytes == expected.as_slice())
+        Ok(proof_bytes == expected[..])
     }
 
     fn supported_types(&self) -> Vec<ProofType> {

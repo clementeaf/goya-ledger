@@ -272,7 +272,7 @@ pub fn run_crypto_self_tests() -> Result<(), SigningError> {
         let expected =
             hex::decode("11ffe3edcec6203b91f4f575c8d51dad935ea2a40e0bed0e5f9f69575afb80d0")
                 .expect("valid hex");
-        if hash.as_slice() != expected.as_slice() {
+        if hash[..] != expected[..] {
             return Err(SigningError::SignFailed(
                 "SHA-256 KAT: digest mismatch".into(),
             ));

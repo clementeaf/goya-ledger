@@ -150,6 +150,7 @@ fn extract_json_value(body: &str, json_path: &str) -> Result<f64, ConnectorError
 
 /// Fetch a single data point from one source.
 async fn fetch_source(source: &SourceConfig) -> Result<ExternalDataPoint, ConnectorError> {
+    crate::tls::install_crypto_provider();
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(source.timeout_secs))
         .build()

@@ -18,10 +18,11 @@ MUTANTS_SCOPE="${MUTANTS_SCOPE:-src/signature src/consensus src/identity}"
 
 # ── RAM budget ────────────────────────────────────────────────────────────
 # Cargo defaults to one rustc per core; on this tree (wasmtime, revm, rocksdb)
-# that peaks well past 16GB and swaps the machine. Fully serial is the
-# deliberate choice here — this gate is never on a deadline, so wall-clock is
-# traded away for a machine that stays usable while it runs.
-JOBS="${JOBS:-1}"
+# that peaks well past 16GB and swaps the machine. Three concurrent jobs is
+# the calibrated middle: it only became safe once incremental caching and full
+# debuginfo were switched off below, which is where most of the memory went.
+# Drop to JOBS=1 if the machine still struggles.
+JOBS="${JOBS:-3}"
 export CARGO_BUILD_JOBS="$JOBS"
 export RUST_TEST_THREADS="${TEST_THREADS:-1}"
 export CARGO_PROFILE_TEST_DEBUG="${CARGO_PROFILE_TEST_DEBUG:-line-tables-only}"
@@ -49,7 +50,11 @@ run() { # run <tier> <label> <cmd...>
 want() { # want <tier> -> should this tier run?
   case "$MODE" in
     full) return 0 ;;
-    default) [ "$1" -le 4 ] ;;
+    # T3 is excluded from the default run: llvm-cov compiles with its own
+    # instrumentation flags, so it builds a second full set of artifacts and
+    # roughly doubles target/. It is the slowest tier and the one that changes
+    # least between runs — ask for it explicitly with `gauntlet.sh 3`.
+    default) [ "$1" -le 4 ] && [ "$1" -ne 3 ] ;;
     *) [ "$MODE" = "$1" ] ;;
   esac
 }

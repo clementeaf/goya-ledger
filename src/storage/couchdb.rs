@@ -81,6 +81,7 @@ fn block_on_async<F: std::future::Future>(f: F) -> F::Output {
 impl CouchDbWorldState {
     /// Create a new adapter and ensure the database exists.
     pub fn new(couchdb_url: &str, db_name: &str) -> StorageResult<Self> {
+        crate::tls::install_crypto_provider();
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()

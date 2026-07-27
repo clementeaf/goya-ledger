@@ -31,7 +31,11 @@ ed25519-dalek = { version = "2.1", features = ["rand_core", "serde"] }
 rand = "0.8"
 rand_core = { version = "0.6", features = ["getrandom"] }
 rayon = "1.8"
-reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"] }
+# `rustls-tls` would enable reqwest's own ring-backed provider, which collides
+# with the aws-lc-rs provider this crate installs in tls::install_crypto_provider()
+# — with both enabled, rustls 0.23 refuses to pick one and panics. The
+# `-no-provider` variant leaves that choice to us.
+reqwest = { version = "0.12", default-features = false, features = ["json", "blocking", "rustls-tls-webpki-roots-no-provider"] }
 log = "0.4"
 clap = { version = "4.4", features = ["derive"] }
 tracing = "0.1"

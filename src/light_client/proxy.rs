@@ -34,6 +34,7 @@ impl SeedProxy {
     }
 
     pub fn new(base_url: String) -> Self {
+        crate::tls::install_crypto_provider();
         let client = Client::builder()
             .timeout(Duration::from_secs(15))
             .build()

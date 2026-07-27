@@ -24,15 +24,22 @@ pub fn pqc_kem_enabled() -> bool {
 /// Must be called once before any TLS config is built. When `TLS_PQC_KEM=true`,
 /// installs the post-quantum provider (X25519+ML-KEM-768 hybrid). Otherwise
 /// installs the default `aws-lc-rs` provider.
+/// Idempotent: the first call wins, later ones are no-ops. `main` calls this at
+/// startup, but anything that builds a rustls or reqwest client may call it too
+/// rather than depend on that ordering — reqwest is built with a `-no-provider`
+/// feature and panics with "No provider set" if none is installed yet.
 pub fn install_crypto_provider() {
-    if pqc_kem_enabled() {
-        log::info!("TLS: installing post-quantum CryptoProvider (X25519+ML-KEM-768 hybrid)");
-        rustls_post_quantum::provider()
-            .install_default()
-            .expect("failed to install PQ CryptoProvider");
-    } else {
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-    }
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        if pqc_kem_enabled() {
+            log::info!("TLS: installing post-quantum CryptoProvider (X25519+ML-KEM-768 hybrid)");
+            rustls_post_quantum::provider()
+                .install_default()
+                .expect("failed to install PQ CryptoProvider");
+        } else {
+            let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        }
+    });
 }
 
 /// Carga certificados PEM desde un archivo.
