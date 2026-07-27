@@ -1,19 +1,44 @@
 name: CI
 
+# Manual trigger only. GitHub Actions minutes are a real cost on this project,
+# so the routine gate is local: `.githooks/pre-push` on every push, and
+# `./scripts/gauntlet.sh` by hand. Run this from the Actions tab when a clean-room
+# check on Linux is worth paying for — before a release, or after a dependency bump.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  gauntlet:
     runs-on: ubuntu-latest
+    # T2 builds and runs 36 integration suites one at a time; the default
+    # 360-minute cap is generous but a cold cache still needs real headroom.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+
+      # No toolchain action here on purpose: rust-toolchain.toml pins
+      # nightly-2026-04-20 and lists the rustfmt/clippy components, and rustup
+      # honours it on the first cargo invocation. Installing "latest nightly"
+      # would silently disagree with what everyone builds locally.
+
       - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --check
-      - run: cargo clippy -- -D warnings
-      - run: cargo test --lib
-      - run: cargo test --test crypto_boundary
+
+      # prost-build shells out to protoc for the raft-ordering feature.
+      # Its absence is what had every CI run failing before this change.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler clang
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny
+
+      # Runs T0 static, T1 unit + doc, T2 integration, T4 supply chain.
+      # T3 (coverage) and T5/T6 (mutation, fuzz) are excluded by default —
+      # see the tier table in scripts/gauntlet.sh.
+      - name: Gauntlet
+        run: ./scripts/gauntlet.sh

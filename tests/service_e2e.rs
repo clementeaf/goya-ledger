@@ -15,7 +15,16 @@ use rand::rngs::OsRng;
 use reqwest::Client;
 use std::time::Duration;
 
-const SEED_URL: &str = "https://goya-node.fly.dev";
+/// Target node for this suite. These tests WRITE — they notarize documents
+/// and create on-chain records — so there is no default: point it somewhere
+/// deliberately, or the suite stays ignored.
+///
+///   GOYA_E2E_URL=https://goya-node.fly.dev \
+///     cargo test --test service_e2e -- --ignored
+fn seed_url() -> String {
+    std::env::var("GOYA_E2E_URL")
+        .expect("GOYA_E2E_URL must be set — these tests write to a live node")
+}
 
 fn setup_client() -> Client {
     rust_bc::tls::install_crypto_provider();
@@ -57,12 +66,13 @@ fn hash_document(data: &[u8]) -> String {
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_health_check() {
     println!("\n═══ E2E: Health Check ═══");
     let client = setup_client();
 
     let resp = client
-        .get(format!("{SEED_URL}/api/v1/health"))
+        .get(format!("{}/api/v1/health", seed_url()))
         .send()
         .await
         .expect("health request failed");
@@ -79,6 +89,7 @@ async fn e2e_health_check() {
 }
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_full_notarize_and_verify() {
     println!("\n═══ E2E: Full Notarize & Verify Flow ═══");
     let client = setup_client();
@@ -123,7 +134,7 @@ async fn e2e_full_notarize_and_verify() {
     });
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -148,7 +159,7 @@ async fn e2e_full_notarize_and_verify() {
     // Step 4b: Verify duplicate is rejected (409)
     println!("\n── Step 4b: Verify duplicate rejection ──");
     let dup_resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -161,7 +172,10 @@ async fn e2e_full_notarize_and_verify() {
     // Step 5: Verify the notarization via GET
     println!("\n── Step 5: Verify notarization ──");
     let verify_resp = client
-        .get(format!("{SEED_URL}/api/v1/notarize/verify/{content_hash}"))
+        .get(format!(
+            "{}/api/v1/notarize/verify/{content_hash}",
+            seed_url()
+        ))
         .send()
         .await
         .expect("verify request failed");
@@ -184,7 +198,7 @@ async fn e2e_full_notarize_and_verify() {
     println!("\n── Step 6: Verify non-existent hash ──");
     let fake_hash = hex::encode([0xde, 0xad].repeat(16)); // 64 hex chars
     let not_found = client
-        .get(format!("{SEED_URL}/api/v1/notarize/verify/{fake_hash}"))
+        .get(format!("{}/api/v1/notarize/verify/{fake_hash}", seed_url()))
         .send()
         .await
         .expect("verify-not-found request failed");
@@ -196,6 +210,7 @@ async fn e2e_full_notarize_and_verify() {
 }
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_invalid_signature_rejected() {
     println!("\n═══ E2E: Invalid Signature Rejected ═══");
     let client = setup_client();
@@ -218,7 +233,7 @@ async fn e2e_invalid_signature_rejected() {
     });
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&body)
         .send()
         .await
@@ -229,6 +244,7 @@ async fn e2e_invalid_signature_rejected() {
 }
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_invalid_hash_format_rejected() {
     println!("\n═══ E2E: Invalid Hash Format Rejected ═══");
     let client = setup_client();
@@ -241,7 +257,7 @@ async fn e2e_invalid_hash_format_rejected() {
     });
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&body)
         .send()
         .await
@@ -254,6 +270,7 @@ async fn e2e_invalid_hash_format_rejected() {
 // ── Concurrency: 5 identities notarize in parallel ─────────────────────────
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_concurrent_notarizations() {
     println!("\n═══ E2E: 5 Concurrent Notarizations ═══");
     let client = setup_client();
@@ -277,7 +294,7 @@ async fn e2e_concurrent_notarizations() {
                 });
 
                 let resp = c
-                    .post(format!("{SEED_URL}/api/v1/notarize"))
+                    .post(format!("{}/api/v1/notarize", seed_url()))
                     .json(&body)
                     .send()
                     .await
@@ -301,7 +318,7 @@ async fn e2e_concurrent_notarizations() {
     println!("\n  Verifying all 5...");
     for (did, hash) in &results {
         let resp = client
-            .get(format!("{SEED_URL}/api/v1/notarize/verify/{hash}"))
+            .get(format!("{}/api/v1/notarize/verify/{hash}", seed_url()))
             .send()
             .await
             .unwrap();
@@ -315,6 +332,7 @@ async fn e2e_concurrent_notarizations() {
 // ── Large document: 10MB hashed and notarized ───────────────────────────────
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_large_document_10mb() {
     println!("\n═══ E2E: 10MB Document Notarization ═══");
     let client = setup_client();
@@ -364,7 +382,7 @@ async fn e2e_large_document_10mb() {
     });
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&body)
         .send()
         .await
@@ -376,7 +394,10 @@ async fn e2e_large_document_10mb() {
 
     // Verify
     let verify = client
-        .get(format!("{SEED_URL}/api/v1/notarize/verify/{content_hash}"))
+        .get(format!(
+            "{}/api/v1/notarize/verify/{content_hash}",
+            seed_url()
+        ))
         .send()
         .await
         .unwrap();
@@ -390,6 +411,7 @@ async fn e2e_large_document_10mb() {
 // ── Multiple docs, same identity, filter by signer ──────────────────────────
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_multiple_docs_same_identity_and_list() {
     println!("\n═══ E2E: Multiple Docs Same Identity + List Filter ═══");
     let client = setup_client();
@@ -415,7 +437,7 @@ async fn e2e_multiple_docs_same_identity_and_list() {
         });
 
         let resp = client
-            .post(format!("{SEED_URL}/api/v1/notarize"))
+            .post(format!("{}/api/v1/notarize", seed_url()))
             .json(&body)
             .send()
             .await
@@ -445,7 +467,11 @@ async fn e2e_multiple_docs_same_identity_and_list() {
     // List all notarizations filtered by Alice's DID
     println!("\n── List by signer: Alice ──");
     let resp = client
-        .get(format!("{SEED_URL}/api/v1/notarize?signer={}", alice.did))
+        .get(format!(
+            "{}/api/v1/notarize?signer={}",
+            seed_url(),
+            alice.did
+        ))
         .send()
         .await
         .expect("list request failed");
@@ -478,7 +504,7 @@ async fn e2e_multiple_docs_same_identity_and_list() {
     // List by Bob — should contain exactly his hash
     println!("\n── List by signer: Bob ──");
     let resp = client
-        .get(format!("{SEED_URL}/api/v1/notarize?signer={}", bob.did))
+        .get(format!("{}/api/v1/notarize?signer={}", seed_url(), bob.did))
         .send()
         .await
         .unwrap();
@@ -504,6 +530,7 @@ async fn e2e_multiple_docs_same_identity_and_list() {
 // ── Impersonation: sign with key A, claim to be identity B ──────────────────
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_impersonation_rejected() {
     println!("\n═══ E2E: Impersonation Attack ═══");
     let client = setup_client();
@@ -521,7 +548,7 @@ async fn e2e_impersonation_rejected() {
     let sig = hex::encode(attacker.signing_key.sign(sign_msg.as_bytes()).to_bytes());
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": content_hash,
             "signer": victim.did,
@@ -545,7 +572,7 @@ async fn e2e_impersonation_rejected() {
     );
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": content_hash,
             "signer": victim.did,
@@ -564,7 +591,7 @@ async fn e2e_impersonation_rejected() {
     let forged_sig = hex::encode(attacker.signing_key.sign(sign_msg.as_bytes()).to_bytes());
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": content_hash,
             "signer": victim.did,
@@ -585,7 +612,7 @@ async fn e2e_impersonation_rejected() {
     let legit_sig = hex::encode(victim.signing_key.sign(legit_msg.as_bytes()).to_bytes());
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": legit_content,
             "signer": victim.did,
@@ -602,6 +629,7 @@ async fn e2e_impersonation_rejected() {
 // ── Account endpoint: balance, nonce, non-existent address ──────────────────
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_account_endpoint() {
     println!("\n═══ E2E: Account Endpoint ═══");
     let client = setup_client();
@@ -610,7 +638,7 @@ async fn e2e_account_endpoint() {
     let id = create_identity();
     println!("\n── Query fresh account (never transacted) ──");
     let resp = client
-        .get(format!("{SEED_URL}/api/v1/accounts/{}", id.did))
+        .get(format!("{}/api/v1/accounts/{}", seed_url(), id.did))
         .send()
         .await
         .expect("account request failed");
@@ -631,7 +659,8 @@ async fn e2e_account_endpoint() {
     println!("\n── Query nonexistent address ──");
     let resp = client
         .get(format!(
-            "{SEED_URL}/api/v1/accounts/did:goya:does_not_exist"
+            "{}/api/v1/accounts/did:goya:does_not_exist",
+            seed_url()
         ))
         .send()
         .await
@@ -650,7 +679,7 @@ async fn e2e_account_endpoint() {
     // Query via wallets endpoint too — should match
     println!("\n── Cross-check: /wallets/{{address}} ──");
     let resp = client
-        .get(format!("{SEED_URL}/api/v1/wallets/{}", id.did))
+        .get(format!("{}/api/v1/wallets/{}", seed_url(), id.did))
         .send()
         .await
         .unwrap();
@@ -664,6 +693,7 @@ async fn e2e_account_endpoint() {
 // ── Malformed payloads: the server must reject gracefully ───────────────────
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_malformed_payloads() {
     println!("\n═══ E2E: Malformed Payloads ═══");
     let client = setup_client();
@@ -671,7 +701,7 @@ async fn e2e_malformed_payloads() {
     // 1. Completely empty body
     println!("\n── 1. Empty body ──");
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .header("Content-Type", "application/json")
         .body("{}")
         .send()
@@ -687,7 +717,7 @@ async fn e2e_malformed_payloads() {
     // 2. Raw garbage (not JSON)
     println!("\n── 2. Non-JSON body ──");
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .header("Content-Type", "application/json")
         .body("this is not json at all")
         .send()
@@ -703,7 +733,7 @@ async fn e2e_malformed_payloads() {
     // 3. Missing required fields (only content_hash, no signer/key/sig)
     println!("\n── 3. Missing required fields ──");
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": "aa".repeat(32),
         }))
@@ -720,7 +750,7 @@ async fn e2e_malformed_payloads() {
     // 4. Truncated public key (31 bytes instead of 32)
     println!("\n── 4. Truncated public key (31 bytes) ──");
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": "aa".repeat(32),
             "signer": "did:goya:test",
@@ -736,7 +766,7 @@ async fn e2e_malformed_payloads() {
     // 5. Oversized public key (33 bytes)
     println!("\n── 5. Oversized public key (33 bytes) ──");
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": "aa".repeat(32),
             "signer": "did:goya:test",
@@ -752,7 +782,7 @@ async fn e2e_malformed_payloads() {
     // 6. Hash too short (31 bytes)
     println!("\n── 6. Hash too short ──");
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": "aa".repeat(31),
             "signer": "did:goya:test",
@@ -768,7 +798,7 @@ async fn e2e_malformed_payloads() {
     // 7. Non-hex characters in hash
     println!("\n── 7. Non-hex hash ──");
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": "zz".repeat(32),
             "signer": "did:goya:test",
@@ -784,7 +814,7 @@ async fn e2e_malformed_payloads() {
     // 8. Empty string fields
     println!("\n── 8. Empty string fields ──");
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": "",
             "signer": "",
@@ -810,7 +840,7 @@ async fn e2e_malformed_payloads() {
     let sig = hex::encode(id.signing_key.sign(sign_msg.as_bytes()).to_bytes());
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": content_hash,
             "signer": signer_sqli,
@@ -835,7 +865,7 @@ async fn e2e_malformed_payloads() {
     let sig = hex::encode(id.signing_key.sign(sign_msg.as_bytes()).to_bytes());
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": content_hash,
             "signer": id.did,
@@ -864,7 +894,7 @@ async fn e2e_malformed_payloads() {
     let sig = hex::encode(id.signing_key.sign(sign_msg.as_bytes()).to_bytes());
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/notarize"))
+        .post(format!("{}/api/v1/notarize", seed_url()))
         .json(&serde_json::json!({
             "content_hash": content_hash,
             "signer": id.did,
@@ -889,7 +919,7 @@ async fn post_json(client: &Client, path: &str, body: &serde_json::Value) -> ser
     for attempt in 0..10u64 {
         tokio::time::sleep(std::time::Duration::from_secs(attempt * 2)).await;
         let resp = client
-            .post(format!("{SEED_URL}{path}"))
+            .post(format!("{}{path}", seed_url()))
             .json(body)
             .send()
             .await
@@ -910,7 +940,7 @@ async fn get_json(client: &Client, path: &str) -> serde_json::Value {
     for attempt in 0..10u64 {
         tokio::time::sleep(std::time::Duration::from_secs(attempt * 2)).await;
         let resp = client
-            .get(format!("{SEED_URL}{path}"))
+            .get(format!("{}{path}", seed_url()))
             .send()
             .await
             .expect("request failed");
@@ -927,6 +957,7 @@ async fn get_json(client: &Client, path: &str) -> serde_json::Value {
 }
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_wallet_full_flow() {
     println!("\n═══ E2E: Wallet Full Flow ═══");
     let client = setup_client();
@@ -943,7 +974,7 @@ async fn e2e_wallet_full_flow() {
         for attempt in 0..10 {
             tokio::time::sleep(std::time::Duration::from_secs(attempt * 2)).await;
             let r = client
-                .post(format!("{SEED_URL}/api/v1/transactions"))
+                .post(format!("{}/api/v1/transactions", seed_url()))
                 .json(&serde_json::json!({
                     "from": "0", "to": alice.did, "amount": 5000
                 }))
@@ -1073,7 +1104,7 @@ async fn e2e_wallet_full_flow() {
     let big_sig = hex::encode(alice.signing_key.sign(big_sign.as_bytes()).to_bytes());
 
     let resp = client
-        .post(format!("{SEED_URL}/api/v1/transactions"))
+        .post(format!("{}/api/v1/transactions", seed_url()))
         .json(&serde_json::json!({
             "from": alice.did,
             "to": bob.did,
@@ -1096,6 +1127,7 @@ async fn e2e_wallet_full_flow() {
 // ── Governance: create proposal → vote → tally ─────────────────────────────
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_governance_full_flow() {
     println!("\n═══ E2E: Governance Full Flow ═══");
     let client = setup_client();
@@ -1255,6 +1287,7 @@ async fn e2e_governance_full_flow() {
 // ── Document ownership transfer ─────────────────────────────────────────────
 
 #[tokio::test]
+#[ignore = "writes to a live node; set GOYA_E2E_URL and run with --ignored"]
 async fn e2e_document_transfer_flow() {
     println!("\n═══ E2E: Document Ownership Transfer ═══");
     let client = setup_client();

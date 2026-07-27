@@ -14,6 +14,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
   - Thresholds are env-overridable: `COV_MIN`, `MUTANTS_MIN`, `FUZZ_SECS`, `MUTANTS_SCOPE`
   - Baseline on first full run: T0–T2 green (1861 unit + 4 doc + 35 integration suites), coverage 66.51% lines
   - Runs at `JOBS=3` with incremental caching and full debuginfo off. Those two, not job count, were what pushed `target/debug/incremental` to 37 GB and filled the disk — and a full disk surfaces as a bogus `exit 101` "compile failure", so check `df` before believing one
+  - `.githooks/pre-push` runs T0+T1 (~1 min warm) before every push — the only gate that runs automatically. Enable with `git config core.hooksPath .githooks`. T2 is left out so the hook stays below the threshold where people reach for `--no-verify`. The existing `.pre-commit-config.yaml` was decorative: `pre-commit` was never installed and `.git/hooks/` was empty
+  - `.github/workflows/ci.yml` now runs the gauntlet and is `workflow_dispatch:` only — Actions minutes are a real cost here, so it consumes none unless launched by hand for a clean-room Linux check. Its `push`/`pull_request` triggers had been failing on *every* run because `prost-build` could not find `protoc` and the workflow never installed it, so the four commands it did list were gating nothing. Now installs `protobuf-compiler` + `clang`, and stops pinning "latest nightly" so `rust-toolchain.toml` governs and CI matches local builds
   - T3 (coverage) is excluded from the default run: `llvm-cov` compiles with its own instrumentation flags, so it builds a second full set of artifacts and roughly doubles `target/`. Request it explicitly with `./scripts/gauntlet.sh 3`
   - Fully serial by default (`CARGO_BUILD_JOBS=1`, `RUST_TEST_THREADS=1`, `line-tables-only` debuginfo) — default parallelism peaks past 16 GB on this tree; T2 links one integration binary at a time instead of all 36 at once
 - Stripe integration: `POST /api/v1/checkout` (creates Stripe Checkout Session) + `POST /api/v1/stripe/webhook` (handles `checkout.session.completed`)
@@ -47,6 +49,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - `VoteStore::set_vote_signature_data()` — attaches FEA metadata to votes after casting
 
 ### Security
+
+- `tests/service_e2e.rs` no longer writes to a live node by default. `SEED_URL` was hardcoded to `https://goya-node.fly.dev`, so a plain `cargo test` notarized documents and created on-chain records on the deployed node — silently, with no opt-in and no way to redirect it. The URL now comes from `GOYA_E2E_URL` and all 13 tests are `#[ignore]`d, so they report as *ignored* rather than as passing no-ops:
+
+  ```
+  GOYA_E2E_URL=https://goya-node.fly.dev cargo test --test service_e2e -- --ignored
+  ```
 
 - Dependency audit: 12 known vulnerabilities reduced to 5, none of which have a fix reachable from this tree
   - `cargo update` closed 7, including `quick-xml` RUSTSEC-2026-0194/0195 (both 7.5 high — memory exhaustion and quadratic attribute parsing), `wasmtime` RUSTSEC-2026-0114 (5.9) and `crossbeam-epoch` RUSTSEC-2026-0204. The fixes were already published upstream; the lockfile was simply pinned to older versions

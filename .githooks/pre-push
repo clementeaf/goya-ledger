@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Pre-push gate: rustfmt, clippy across all targets, the crypto-boundary check,
+# then the unit and doc tests. Roughly a minute with a warm cache.
+#
+# Enable with:     git config core.hooksPath .githooks
+# Skip once with:  git push --no-verify
+#
+# This is the only gate that runs automatically — CI is manual-dispatch only
+# because Actions minutes cost real money here. T2 (36 integration suites,
+# ~2 min) is left out so the hook stays under the threshold where people start
+# reaching for --no-verify; run `./scripts/gauntlet.sh` by hand for the rest.
+set -e
+
+repo_root="$(git rev-parse --show-toplevel)"
+"$repo_root/scripts/gauntlet.sh" 0
+"$repo_root/scripts/gauntlet.sh" 1
