@@ -41,10 +41,6 @@ struct SimNode {
     id: String,
     behavior: NodeBehavior,
     manager: RoundManager<TestVerifier>,
-    /// Blocks this node has decided (height → block_hash).
-    decided: HashMap<u64, [u8; 32]>,
-    /// Outbox: messages to be delivered to other nodes.
-    outbox: Vec<(String, RoundEvent)>, // (target "broadcast" or node_id, event)
 }
 
 /// Network simulator that routes messages between nodes.
@@ -95,8 +91,6 @@ impl BftTestNetwork {
                     id,
                     behavior,
                     manager,
-                    decided: HashMap::new(),
-                    outbox: Vec::new(),
                 },
             );
         }
@@ -212,12 +206,14 @@ impl BftTestNetwork {
             match node.behavior {
                 NodeBehavior::Silent => continue,
                 NodeBehavior::Equivocator => {
-                    // Equivocator votes for a DIFFERENT block hash.
+                    // Equivocator sends TWO conflicting votes for the same
+                    // (round, phase): the correct hash and a corrupted one.
+                    // The vote collector must deduplicate by voter_id so only
+                    // the first counts — that dedup is what this exercises.
                     let mut bad_hash = bh;
                     bad_hash[31] ^= 0xFF;
-                    votes.push(make_vote(phase, bh, round, id)); // also votes correctly
-                                                                 // The equivocator sends conflicting votes — but the vote collector
-                                                                 // will deduplicate by voter_id, so only the first one counts.
+                    votes.push(make_vote(phase, bh, round, id));
+                    votes.push(make_vote(phase, bad_hash, round, id));
                 }
                 _ => {
                     votes.push(make_vote(phase, bh, round, id));

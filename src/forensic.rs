@@ -555,7 +555,7 @@ mod tests {
         let mut e1 = ForensicEngine::new();
         let mut e2 = ForensicEngine::new();
         let audit = sample_audit("2026-05-08T10:00:00Z", 200, "t1");
-        e1.ingest_audit(&[audit.clone()]);
+        e1.ingest_audit(std::slice::from_ref(&audit));
         e2.ingest_audit(&[audit]);
 
         let p1 = e1.build_evidence_package("test", "auditor", None);

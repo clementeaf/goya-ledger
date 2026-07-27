@@ -63,7 +63,6 @@ pub trait ConsensusBackend: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
 
     #[test]
     fn consensus_mode_default_is_raft() {

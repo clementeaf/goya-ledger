@@ -323,7 +323,7 @@ pub async fn list_channels(state: web::Data<AppState>) -> ApiResult<HttpResponse
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::sync::{Arc, Mutex, RwLock};
+    use std::sync::{Arc, RwLock};
 
     use crate::app_state::AppState;
     use crate::storage::memory::MemoryStore;

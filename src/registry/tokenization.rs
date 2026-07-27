@@ -77,7 +77,7 @@ mod tests {
             asset_id: "asset-1".into(),
             issuer_did: "did:goya:scania-credit".into(),
             holder_did: "did:goya:fleet-owner".into(),
-            valuation: 15_000_000_00, // $150,000.00 in centavos
+            valuation: 1_500_000_000, // $150,000.00 in centavos
             currency: "ARS".into(),
             collateral_status: CollateralStatus::Free,
             regulatory_ref: "CNV RG 1069/2025".into(),

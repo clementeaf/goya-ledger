@@ -8,7 +8,7 @@ use std::sync::Arc;
 use rust_bc::audit::{AuditAction, AuditStore, MemoryAuditStore};
 use rust_bc::chaincode::sandbox::{validate, MemorySandboxReportStore, SandboxReportStore};
 use rust_bc::legal_oracle::legal::{LegalOracle, LegalSourceConfig};
-use rust_bc::legal_oracle::{MemoryOracleRecordStore, OracleError, OracleRecordStore};
+use rust_bc::legal_oracle::{MemoryOracleRecordStore, OracleRecordStore};
 use rust_bc::storage::traits::{BlockStore, Credential, IdentityRecord};
 use rust_bc::storage::MemoryStore;
 
@@ -22,6 +22,7 @@ fn identity_then_credential_produces_audit_trail() {
     // 1. Create identity
     let identity = IdentityRecord {
         did: "did:goya:alice".to_string(),
+        public_key: "test_public_key".to_string(),
         created_at: 1000,
         updated_at: 1000,
         status: "active".to_string(),

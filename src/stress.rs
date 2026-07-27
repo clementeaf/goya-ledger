@@ -716,8 +716,8 @@ mod tests {
         let p50 = percentile(&data, 50.0);
         let p99 = percentile(&data, 99.0);
         // p50 should be around 50 (±1 due to indexing)
-        assert!(p50 >= 49 && p50 <= 51, "p50 was {p50}");
-        assert!(p99 >= 98 && p99 <= 100, "p99 was {p99}");
+        assert!((49..=51).contains(&p50), "p50 was {p50}");
+        assert!((98..=100).contains(&p99), "p99 was {p99}");
     }
 
     #[test]

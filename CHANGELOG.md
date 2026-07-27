@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- `scripts/gauntlet.sh` — tiered quality gate that runs every existing check as one command, so agent-written code is constrained by tests rather than by review
+  - T0 static (`fmt`, `clippy --all-targets`, crypto boundary) · T1 unit + doc · T2 integration suite · T3 coverage threshold · T4 supply chain (`audit`, `deny`) · T5 mutation score · T6 fuzz targets
+  - `./scripts/gauntlet.sh` runs T0–T4; `full` adds mutation and fuzzing; a bare tier number runs one tier
+  - Thresholds are env-overridable: `COV_MIN`, `MUTANTS_MIN`, `FUZZ_SECS`, `MUTANTS_SCOPE`
+  - Baseline on first full run: T0–T2 green (1861 unit + 4 doc + 35 integration suites), coverage 66.51% lines, `cargo audit` reports 12 vulnerabilities in transitive dependencies (tracked separately)
+  - Fully serial by default (`CARGO_BUILD_JOBS=1`, `RUST_TEST_THREADS=1`, `line-tables-only` debuginfo) — default parallelism peaks past 16 GB on this tree; T2 links one integration binary at a time instead of all 36 at once
 - Stripe integration: `POST /api/v1/checkout` (creates Stripe Checkout Session) + `POST /api/v1/stripe/webhook` (handles `checkout.session.completed`)
   - `src/api/handlers/stripe.rs` — direct Stripe REST API via reqwest (no SDK), 3 tiers (starter/business/enterprise), env-driven price IDs
   - Env vars: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_STARTER`, `STRIPE_PRICE_BUSINESS`, `STRIPE_PRICE_ENTERPRISE`
@@ -49,6 +55,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 ### Fixed
 
 - 12 `IdentityRecord` constructors missing `public_key` field in `stress.rs`, `adapters.rs`, `memory.rs`, `comprehensive_tests.rs`
+- `tests/cross_subsystem.rs` did not compile — 13th `IdentityRecord` constructor missed by the `public_key` migration, plus an unused `OracleError` import. CI only builds `--lib` and `--test crypto_boundary`, so the breakage went unnoticed. 7 tests green again.
+- 9 clippy errors surfaced by `--all-targets` (in-file `#[cfg(test)]` modules were never linted): unused imports in `consensus/backend.rs`, `api/handlers/channels.rs`, `api/handlers/proposals.rs`, `discovery/auto.rs`; `clone()` → `std::slice::from_ref` in `forensic.rs` and `signature/mod.rs`; manual range checks → `RangeInclusive::contains` in `stress.rs`; inconsistent digit grouping in `registry/tokenization.rs`
+- `rustfmt` drift in `api/handlers/stripe.rs`
+- `tests/bft_e2e.rs` equivocator never equivocated — it computed a conflicting block hash, then discarded it and cast only the honest vote, so `e2e_safety_under_equivocation_across_100_rounds` and `e2e_7_nodes_tolerates_2_byzantine` passed without any equivocation occurring. It now casts both conflicting votes; all 16 tests still pass, confirming the vote collector deduplicates by `voter_id`
+- `tests/chaos_network.rs` `assert_honest_convergence()` was written but never called. Now asserted in the 5 scenarios that can converge; the 3 that cannot (partition, crash-recovery, message-drop) document why — this harness does not simulate `StateRequest`/`StateResponse` catch-up, so missed blocks are never reconciled
+- Dead test scaffolding removed: `Replayer` node behavior (never constructed; replay is covered by `scenario_4` via `replay_old_blocks()`), `SimNode.decided`/`.outbox`, `TestNode.store`, `FloodNode.id`/`.signing_provider`
+- 11 further clippy errors in `tests/` — never linted before because the gate omitted `--all-targets`
 
 ## [0.3.0] — 2026-06-29
 

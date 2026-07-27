@@ -41,11 +41,9 @@ enum RejectionReason {
 }
 
 struct FloodNode {
-    id: String,
     engine: ConsensusEngine,
     #[allow(dead_code)]
     store: Arc<MemoryStore>,
-    signing_provider: Box<dyn SigningProvider>,
     accepted_blocks: HashMap<u64, [u8; 32]>,
     /// Count of rejections by reason.
     rejection_counts: HashMap<RejectionReason, usize>,
@@ -62,7 +60,7 @@ struct FloodNode {
 }
 
 impl FloodNode {
-    fn new(id: &str, all_validators: &[String]) -> Self {
+    fn new(_id: &str, all_validators: &[String]) -> Self {
         let store = Arc::new(MemoryStore::new());
         let engine = ConsensusEngine::new(
             ConsensusConfig::default(),
@@ -73,10 +71,8 @@ impl FloodNode {
         .with_store(Box::new(Arc::clone(&store)));
 
         Self {
-            id: id.to_string(),
             engine,
             store,
-            signing_provider: Box::new(MlDsaSigningProvider::generate()),
             accepted_blocks: HashMap::new(),
             rejection_counts: HashMap::new(),
             seen_hashes: HashSet::new(),
@@ -107,10 +103,8 @@ impl FloodNode {
             .entry(peer_id.to_string())
             .or_insert(0);
         *count += 1;
-        if *count > self.rate_limit_threshold {
-            if !self.rate_limited_peers.contains(peer_id) {
-                self.rate_limited_peers.insert(peer_id.to_string());
-            }
+        if *count > self.rate_limit_threshold && !self.rate_limited_peers.contains(peer_id) {
+            self.rate_limited_peers.insert(peer_id.to_string());
         }
         if self.rate_limited_peers.contains(peer_id) {
             *self

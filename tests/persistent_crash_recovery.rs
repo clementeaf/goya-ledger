@@ -271,7 +271,7 @@ fn persistent_node_rejects_tampered_signature_bytes() {
 
         // The signature is corrupted — verify it doesn't pass ML-DSA verification
         let pk = signer.public_key();
-        let payload = format!("persistent-block-3");
+        let payload = "persistent-block-3".to_string();
         let hash = hash_with(HashAlgorithm::Sha3_256, payload.as_bytes());
 
         use pqcrypto_traits::sign::{DetachedSignature, PublicKey};
@@ -373,7 +373,7 @@ fn persistent_node_rejects_tampered_hash_algorithm() {
         let block = store.read_block(4).expect("read tampered block");
 
         // Block says Sha256 but merkle_root was computed with Sha3_256
-        let payload = format!("persistent-block-4");
+        let payload = "persistent-block-4".to_string();
         let expected_sha256 = hash_with(HashAlgorithm::Sha256, payload.as_bytes());
         let expected_sha3 = hash_with(HashAlgorithm::Sha3_256, payload.as_bytes());
 

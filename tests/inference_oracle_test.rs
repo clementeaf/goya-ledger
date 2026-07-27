@@ -501,7 +501,7 @@ async fn claim_status_serde_all_variants() {
 // ── Phase 2: Challenge Tests ─────────────────────────────────────────────────
 
 fn make_state_with_staking(store: Arc<MemoryStore>) -> AppState {
-    let mut state = make_state(store);
+    let state = make_state(store);
     // Register oracle and challenger as staked validators
     state
         .staking_manager

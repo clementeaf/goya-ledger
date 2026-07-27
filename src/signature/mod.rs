@@ -775,7 +775,7 @@ mod tests {
     #[test]
     fn biometrics_hash_duplicate_commitments() {
         let a = dummy_bio(BiometricType::Fingerprint);
-        let hash_one = compute_biometrics_hash(&[a.clone()]);
+        let hash_one = compute_biometrics_hash(std::slice::from_ref(&a));
         let hash_two = compute_biometrics_hash(&[a.clone(), a]);
         // Two identical commitments should differ from one (different payload)
         assert_ne!(hash_one, hash_two);

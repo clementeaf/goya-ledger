@@ -135,7 +135,7 @@ pub async fn submit_endorsed_transaction(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex, RwLock};
+    use std::sync::Arc;
 
     use actix_web::{test, web, App};
 

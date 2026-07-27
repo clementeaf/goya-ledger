@@ -61,8 +61,6 @@ enum NodeBehavior {
     AlgorithmTagForger,
     /// Sends blocks with corrupted PQC signatures.
     CorruptedPqcSigner,
-    /// Replays old valid blocks.
-    Replayer,
     /// Sends random garbage bytes as signatures.
     RandomGarbage,
     /// Crashed — does not participate.
@@ -74,7 +72,6 @@ struct TestNode {
     id: String,
     behavior: NodeBehavior,
     engine: ConsensusEngine,
-    store: Arc<MemoryStore>,
     signing_provider: Box<dyn SigningProvider>,
     /// Blocks this node has accepted (height → block hash).
     accepted_blocks: HashMap<u64, [u8; 32]>,
@@ -113,7 +110,6 @@ impl TestNode {
             id: id.to_string(),
             behavior,
             engine,
-            store,
             signing_provider,
             accepted_blocks: HashMap::new(),
             pqc_required,
@@ -207,8 +203,8 @@ impl TestNode {
                 block.signature_algorithm = SigningAlgorithm::Ed25519;
                 block
             }
-            NodeBehavior::Replayer | NodeBehavior::Crashed => {
-                // Replayer will reuse old blocks; Crashed doesn't propose.
+            NodeBehavior::Crashed => {
+                // Crashed doesn't propose.
                 // Return a dummy block — caller handles the logic.
                 DagBlock::new(
                     hash,
@@ -626,6 +622,7 @@ fn scenario_1_normal_operation_convergence() {
     }
 
     cluster.assert_no_invalid_pqc_accepted();
+    cluster.assert_honest_convergence();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -661,6 +658,7 @@ fn scenario_2_malicious_classical_downgrade_rejected() {
     );
 
     cluster.assert_no_invalid_pqc_accepted();
+    cluster.assert_honest_convergence();
 }
 
 #[test]
@@ -686,6 +684,7 @@ fn scenario_2b_corrupted_pqc_and_garbage_rejected() {
     );
 
     cluster.assert_no_invalid_pqc_accepted();
+    cluster.assert_honest_convergence();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -722,6 +721,11 @@ fn scenario_3_partition_and_healing() {
 
     // After healing, nodes should share blocks
     cluster.assert_no_invalid_pqc_accepted();
+    // No convergence assertion here: this harness does not simulate the
+    // StateRequest/StateResponse catch-up that the real node performs, and
+    // partition leaves each group missing the other's blocks from heights 0-4.
+    // Asserting full-history convergence would fail on the harness gap, not
+    // on a consensus defect. Covered instead by scenario_1.
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -785,6 +789,7 @@ fn scenario_5_downgrade_attempt_rejected() {
 
     // Verify no honest node accepted a downgraded block
     cluster.assert_no_invalid_pqc_accepted();
+    cluster.assert_honest_convergence();
 
     // Verify the specific reason in rejection logs
     let has_pqc_violation = cluster.nodes.iter().any(|n| {
@@ -851,6 +856,11 @@ fn scenario_6_crash_and_recovery() {
     );
 
     cluster.assert_no_invalid_pqc_accepted();
+    // No convergence assertion here: this harness does not simulate the
+    // StateRequest/StateResponse catch-up that the real node performs, and
+    // the crashed node misses every block produced while it was down.
+    // Asserting full-history convergence would fail on the harness gap, not
+    // on a consensus defect. Covered instead by scenario_1.
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -889,6 +899,7 @@ fn scenario_7_mixed_pqc_configuration() {
     }
 
     cluster.assert_no_invalid_pqc_accepted();
+    cluster.assert_honest_convergence();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -929,6 +940,11 @@ fn scenario_8_stress_with_faults() {
     assert!(total_rejected > 0, "malicious blocks must be rejected");
 
     cluster.assert_no_invalid_pqc_accepted();
+    // No convergence assertion here: this harness does not simulate the
+    // StateRequest/StateResponse catch-up that the real node performs, and
+    // the fault injector drops messages, so nodes miss blocks at random heights.
+    // Asserting full-history convergence would fail on the harness gap, not
+    // on a consensus defect. Covered instead by scenario_1.
 
     // Print summary for audit trail
     cluster.print_summary();
@@ -962,7 +978,7 @@ fn scenario_9_all_forgery_vectors() {
     // All attack vectors must have generated rejections
     let honest_node = &cluster.nodes[0];
     assert!(
-        honest_node.rejection_log.len() > 0,
+        !honest_node.rejection_log.is_empty(),
         "honest node must have rejected adversarial blocks"
     );
 

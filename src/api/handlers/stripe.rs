@@ -38,16 +38,19 @@ pub struct CheckoutResponse {
 }
 
 #[post("/checkout")]
-pub async fn create_checkout(
-    body: web::Json<CheckoutRequest>,
-) -> ApiResult<HttpResponse> {
+pub async fn create_checkout(body: web::Json<CheckoutRequest>) -> ApiResult<HttpResponse> {
     let secret_key = match std::env::var("STRIPE_SECRET_KEY") {
         Ok(k) if !k.is_empty() => k,
         _ => {
-            return Ok(HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
-                err_dto("STRIPE_NOT_CONFIGURED", "Stripe is not configured — set STRIPE_SECRET_KEY"),
-                503,
-            )));
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto(
+                        "STRIPE_NOT_CONFIGURED",
+                        "Stripe is not configured — set STRIPE_SECRET_KEY",
+                    ),
+                    503,
+                )),
+            );
         }
     };
 
@@ -58,7 +61,10 @@ pub async fn create_checkout(
         "enterprise" => "STRIPE_PRICE_ENTERPRISE",
         _ => {
             return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                err_dto("INVALID_TIER", "tier must be starter, business, or enterprise"),
+                err_dto(
+                    "INVALID_TIER",
+                    "tier must be starter, business, or enterprise",
+                ),
                 400,
             )));
         }
@@ -67,13 +73,15 @@ pub async fn create_checkout(
     let price_id = match std::env::var(price_env) {
         Ok(p) if !p.is_empty() => p,
         _ => {
-            return Ok(HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
-                err_dto(
-                    "PRICE_NOT_CONFIGURED",
-                    &format!("Stripe price not configured — set {price_env}"),
-                ),
-                503,
-            )));
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto(
+                        "PRICE_NOT_CONFIGURED",
+                        &format!("Stripe price not configured — set {price_env}"),
+                    ),
+                    503,
+                )),
+            );
         }
     };
 
@@ -116,8 +124,7 @@ pub async fn create_checkout(
     }
 
     // Parse Stripe response — we only need url and id
-    let stripe_resp: serde_json::Value =
-        serde_json::from_str(&body_text).unwrap_or_default();
+    let stripe_resp: serde_json::Value = serde_json::from_str(&body_text).unwrap_or_default();
 
     let checkout_url = stripe_resp["url"].as_str().unwrap_or("").to_string();
     let session_id = stripe_resp["id"].as_str().unwrap_or("").to_string();
@@ -146,8 +153,7 @@ pub async fn create_checkout(
 #[post("/stripe/webhook")]
 pub async fn stripe_webhook(body: web::Bytes) -> ApiResult<HttpResponse> {
     // ponytail: no signature verification yet — add STRIPE_WEBHOOK_SECRET + HMAC when going live
-    let payload: serde_json::Value =
-        serde_json::from_slice(&body).unwrap_or_default();
+    let payload: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
 
     let event_type = payload["type"].as_str().unwrap_or("unknown");
 

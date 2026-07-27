@@ -139,7 +139,7 @@ proptest! {
             Some(&owner),
         );
         let _ = contract.execute(
-            ContractFunction::ApproveNFT { to: to, token_id },
+            ContractFunction::ApproveNFT { to, token_id },
             Some(&owner),
         );
     }
@@ -155,7 +155,7 @@ proptest! {
         from in "[a-z0-9]{5,64}",
         to in "[a-z0-9]{5,64}",
         amount in any::<u64>(),
-        fee in 0u64..1000,
+        _fee in 0u64..1000,
     ) {
         use rust_bc::storage::traits::Transaction;
 
@@ -177,7 +177,7 @@ proptest! {
         from in "[a-z0-9]{5,300}",
         to in "[a-z0-9]{5,300}",
         amount in any::<u64>(),
-        fee in any::<u64>(),
+        _fee in any::<u64>(),
         timestamp in any::<u64>(),
     ) {
         use rust_bc::transaction_validation::{TransactionValidator, ValidationConfig};
@@ -193,9 +193,11 @@ proptest! {
             state: "pending".to_string(),
         };
 
-        let mut config = ValidationConfig::default();
-        config.max_future_drift_secs = u64::MAX;
-        config.max_past_age_secs = u64::MAX;
+        let config = ValidationConfig {
+            max_future_drift_secs: u64::MAX,
+            max_past_age_secs: u64::MAX,
+            ..Default::default()
+        };
 
         let mut validator = TransactionValidator::new(config);
         let result = validator.validate(&tx);

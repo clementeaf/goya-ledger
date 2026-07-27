@@ -171,7 +171,6 @@ pub fn spawn_auto_discovery(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::endorsement::policy::EndorsementPolicy;
     use crate::endorsement::registry::MemoryOrgRegistry;
     use crate::endorsement::MemoryPolicyStore;
 
