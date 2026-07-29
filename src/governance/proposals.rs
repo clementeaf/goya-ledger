@@ -151,7 +151,10 @@ impl ProposalStore {
 
         // Item 12: Rate limiting — max 1 proposal per PROPOSAL_RATE_LIMIT_BLOCKS
         {
-            let last = self.last_submission.lock().unwrap();
+            let last = self
+                .last_submission
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             if let Some(&last_height) = last.get(proposer) {
                 if current_height < last_height + PROPOSAL_RATE_LIMIT_BLOCKS {
                     return Err(ProposalError::RateLimited {
@@ -161,7 +164,7 @@ impl ProposalStore {
             }
         }
 
-        let mut next = self.next_id.lock().unwrap();
+        let mut next = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
         let id = *next;
         *next += 1;
 
@@ -178,20 +181,23 @@ impl ProposalStore {
             description: description.to_string(),
         };
 
-        self.proposals.lock().unwrap().insert(id, proposal);
+        self.proposals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, proposal);
 
         // Item 5: Lock the deposit
         *self
             .locked_deposits
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .entry(proposer.to_string())
             .or_insert(0) += deposit;
 
         // Record submission time for rate limiting
         self.last_submission
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(proposer.to_string(), current_height);
 
         Ok(id)
@@ -201,7 +207,7 @@ impl ProposalStore {
     pub fn locked_deposit_for(&self, proposer: &str) -> u64 {
         self.locked_deposits
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(proposer)
             .copied()
             .unwrap_or(0)
@@ -209,7 +215,10 @@ impl ProposalStore {
 
     /// Refund deposit — called when proposal is executed, rejected, or cancelled.
     fn refund_deposit(&self, proposer: &str, amount: u64) {
-        let mut locked = self.locked_deposits.lock().unwrap();
+        let mut locked = self
+            .locked_deposits
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if let Some(total) = locked.get_mut(proposer) {
             *total = total.saturating_sub(amount);
             if *total == 0 {
@@ -220,7 +229,11 @@ impl ProposalStore {
 
     /// Get a proposal by ID.
     pub fn get(&self, id: ProposalId) -> Option<Proposal> {
-        self.proposals.lock().unwrap().get(&id).cloned()
+        self.proposals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&id)
+            .cloned()
     }
 
     /// Mark a proposal as passed and set the timelock.
@@ -230,7 +243,7 @@ impl ProposalStore {
         current_height: u64,
         timelock_blocks: u64,
     ) -> Result<(), ProposalError> {
-        let mut proposals = self.proposals.lock().unwrap();
+        let mut proposals = self.proposals.lock().unwrap_or_else(|e| e.into_inner());
         let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
 
         if p.status != ProposalStatus::Voting {
@@ -251,7 +264,7 @@ impl ProposalStore {
 
     /// Mark a proposal as rejected. Refunds deposit.
     pub fn mark_rejected(&self, id: ProposalId, current_height: u64) -> Result<(), ProposalError> {
-        let mut proposals = self.proposals.lock().unwrap();
+        let mut proposals = self.proposals.lock().unwrap_or_else(|e| e.into_inner());
         let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
 
         if p.status != ProposalStatus::Voting {
@@ -276,7 +289,7 @@ impl ProposalStore {
         id: ProposalId,
         current_height: u64,
     ) -> Result<Proposal, ProposalError> {
-        let mut proposals = self.proposals.lock().unwrap();
+        let mut proposals = self.proposals.lock().unwrap_or_else(|e| e.into_inner());
         let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
 
         if p.status != ProposalStatus::Passed {
@@ -309,7 +322,7 @@ impl ProposalStore {
         caller: &str,
         current_height: u64,
     ) -> Result<Proposal, ProposalError> {
-        let mut proposals = self.proposals.lock().unwrap();
+        let mut proposals = self.proposals.lock().unwrap_or_else(|e| e.into_inner());
         let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
 
         if p.proposer != caller {
@@ -337,7 +350,7 @@ impl ProposalStore {
     pub fn list_by_status(&self, status: ProposalStatus) -> Vec<Proposal> {
         self.proposals
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|p| p.status == status)
             .cloned()
@@ -346,7 +359,13 @@ impl ProposalStore {
 
     /// List all proposals sorted by ID.
     pub fn list_all(&self) -> Vec<Proposal> {
-        let mut all: Vec<Proposal> = self.proposals.lock().unwrap().values().cloned().collect();
+        let mut all: Vec<Proposal> = self
+            .proposals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect();
         all.sort_by_key(|p| p.id);
         all
     }
@@ -354,16 +373,22 @@ impl ProposalStore {
     /// Load a proposal from persistent storage (hydration on startup).
     /// Bypasses validation — the proposal was already accepted when first submitted.
     pub fn load_proposal(&self, proposal: Proposal) {
-        let mut next = self.next_id.lock().unwrap();
+        let mut next = self.next_id.lock().unwrap_or_else(|e| e.into_inner());
         if proposal.id >= *next {
             *next = proposal.id + 1;
         }
-        self.proposals.lock().unwrap().insert(proposal.id, proposal);
+        self.proposals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(proposal.id, proposal);
     }
 
     /// Total number of proposals.
     pub fn count(&self) -> usize {
-        self.proposals.lock().unwrap().len()
+        self.proposals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .len()
     }
 
     /// Emergency veto — cancels a proposal in any non-final state.
@@ -379,7 +404,7 @@ impl ProposalStore {
             return Err(ProposalError::NotAuthorized);
         }
 
-        let mut proposals = self.proposals.lock().unwrap();
+        let mut proposals = self.proposals.lock().unwrap_or_else(|e| e.into_inner());
         let p = proposals.get_mut(&id).ok_or(ProposalError::NotFound(id))?;
 
         // Can veto anything that isn't already Executed or Cancelled
@@ -759,6 +784,28 @@ mod tests {
         s.submit(sp("alice", param_change("k", 2), "", 100, 100, 200, 100))
             .unwrap();
         assert_eq!(s.count(), 2);
+    }
+
+    #[test]
+    fn no_bare_unwrap_in_production_code() {
+        let source = include_str!("proposals.rs");
+        let prod_code = source.split("#[cfg(test)]").next().unwrap_or(source);
+        let violations: Vec<(usize, &str)> = prod_code
+            .lines()
+            .enumerate()
+            .filter(|(_, l)| l.contains(".unwrap()") && !l.trim().starts_with("//"))
+            .collect();
+        assert!(
+            violations.is_empty(),
+            "proposals.rs has {} bare .unwrap() in prod code:\n  {}",
+            violations.len(),
+            violations
+                .iter()
+                .take(5)
+                .map(|(i, l)| format!("line {}: {}", i + 1, l.trim()))
+                .collect::<Vec<_>>()
+                .join("\n  ")
+        );
     }
 
     #[test]

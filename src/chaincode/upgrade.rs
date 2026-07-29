@@ -108,7 +108,7 @@ impl UpgradeManager {
         required_orgs: Vec<String>,
         block_height: u64,
     ) -> Result<(), UpgradeError> {
-        let mut pending = self.pending.lock().unwrap();
+        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(existing) = pending.get(chaincode_id) {
             if !existing.committed {
                 return Err(UpgradeError::AlreadyPending(
@@ -139,7 +139,7 @@ impl UpgradeManager {
         chaincode_id: &str,
         org_id: &str,
     ) -> Result<UpgradeProposal, UpgradeError> {
-        let mut pending = self.pending.lock().unwrap();
+        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         let proposal = pending
             .get_mut(chaincode_id)
             .ok_or_else(|| UpgradeError::NotFound(chaincode_id.into()))?;
@@ -162,7 +162,7 @@ impl UpgradeManager {
 
     /// Commit the upgrade if all required orgs have approved.
     pub fn commit(&self, chaincode_id: &str) -> Result<UpgradeProposal, UpgradeError> {
-        let mut pending = self.pending.lock().unwrap();
+        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
         let proposal = pending
             .get_mut(chaincode_id)
             .ok_or_else(|| UpgradeError::NotFound(chaincode_id.into()))?;
@@ -183,7 +183,7 @@ impl UpgradeManager {
         // Move to history.
         self.history
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .entry(chaincode_id.to_string())
             .or_default()
             .push(result.clone());
@@ -195,7 +195,7 @@ impl UpgradeManager {
     pub fn get_pending(&self, chaincode_id: &str) -> Option<UpgradeProposal> {
         self.pending
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(chaincode_id)
             .filter(|p| !p.committed)
             .cloned()
@@ -205,7 +205,7 @@ impl UpgradeManager {
     pub fn get_history(&self, chaincode_id: &str) -> Vec<UpgradeProposal> {
         self.history
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(chaincode_id)
             .cloned()
             .unwrap_or_default()

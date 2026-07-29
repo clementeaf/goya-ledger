@@ -32,7 +32,7 @@ impl ChannelStore {
 
     /// Initialize a new channel with empty state.
     pub fn create_channel(&self, channel_id: &str) -> StorageResult<()> {
-        let mut ws = self.world_states.lock().unwrap();
+        let mut ws = self.world_states.lock().unwrap_or_else(|e| e.into_inner());
         if ws.contains_key(channel_id) {
             return Err(StorageError::KeyNotFound(format!(
                 "channel '{channel_id}' already exists"
@@ -41,18 +41,18 @@ impl ChannelStore {
         ws.insert(channel_id.to_string(), MemoryWorldState::new());
         self.block_heights
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(channel_id.to_string(), 0);
         self.blocks
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(channel_id.to_string(), Vec::new());
         Ok(())
     }
 
     /// Get the world state for a channel (read a key).
     pub fn get_state(&self, channel_id: &str, key: &str) -> StorageResult<Option<VersionedValue>> {
-        let ws = self.world_states.lock().unwrap();
+        let ws = self.world_states.lock().unwrap_or_else(|e| e.into_inner());
         let state = ws
             .get(channel_id)
             .ok_or_else(|| StorageError::KeyNotFound(format!("channel '{channel_id}'")))?;
@@ -61,7 +61,7 @@ impl ChannelStore {
 
     /// Write to a channel's world state.
     pub fn put_state(&self, channel_id: &str, key: &str, value: &[u8]) -> StorageResult<u64> {
-        let ws = self.world_states.lock().unwrap();
+        let ws = self.world_states.lock().unwrap_or_else(|e| e.into_inner());
         let state = ws
             .get(channel_id)
             .ok_or_else(|| StorageError::KeyNotFound(format!("channel '{channel_id}'")))?;
@@ -70,14 +70,16 @@ impl ChannelStore {
 
     /// Write a block to a channel's ledger.
     pub fn write_block(&self, channel_id: &str, block: &Block) -> StorageResult<()> {
-        let mut blocks = self.blocks.lock().unwrap();
+        let mut blocks = self.blocks.lock().unwrap_or_else(|e| e.into_inner());
         let chain = blocks
             .get_mut(channel_id)
             .ok_or_else(|| StorageError::KeyNotFound(format!("channel '{channel_id}'")))?;
         chain.push(block.clone());
 
-        let mut heights = self.block_heights.lock().unwrap();
-        *heights.get_mut(channel_id).unwrap() = block.height;
+        let mut heights = self.block_heights.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(h) = heights.get_mut(channel_id) {
+            *h = block.height;
+        }
         Ok(())
     }
 
@@ -85,7 +87,7 @@ impl ChannelStore {
     pub fn get_height(&self, channel_id: &str) -> StorageResult<u64> {
         self.block_heights
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(channel_id)
             .copied()
             .ok_or_else(|| StorageError::KeyNotFound(format!("channel '{channel_id}'")))
@@ -93,7 +95,7 @@ impl ChannelStore {
 
     /// Get a block by height from a channel.
     pub fn get_block(&self, channel_id: &str, height: u64) -> StorageResult<Option<Block>> {
-        let blocks = self.blocks.lock().unwrap();
+        let blocks = self.blocks.lock().unwrap_or_else(|e| e.into_inner());
         let chain = blocks
             .get(channel_id)
             .ok_or_else(|| StorageError::KeyNotFound(format!("channel '{channel_id}'")))?;
@@ -102,7 +104,7 @@ impl ChannelStore {
 
     /// Number of blocks in a channel.
     pub fn block_count(&self, channel_id: &str) -> StorageResult<usize> {
-        let blocks = self.blocks.lock().unwrap();
+        let blocks = self.blocks.lock().unwrap_or_else(|e| e.into_inner());
         let chain = blocks
             .get(channel_id)
             .ok_or_else(|| StorageError::KeyNotFound(format!("channel '{channel_id}'")))?;
@@ -111,12 +113,20 @@ impl ChannelStore {
 
     /// List all channel IDs.
     pub fn list_channels(&self) -> Vec<String> {
-        self.world_states.lock().unwrap().keys().cloned().collect()
+        self.world_states
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .keys()
+            .cloned()
+            .collect()
     }
 
     /// Whether a channel exists.
     pub fn has_channel(&self, channel_id: &str) -> bool {
-        self.world_states.lock().unwrap().contains_key(channel_id)
+        self.world_states
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(channel_id)
     }
 }
 

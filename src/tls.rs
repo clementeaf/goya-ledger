@@ -384,8 +384,8 @@ pub fn load_client_config_from_env() -> Result<Option<ClientConfig>, TlsConfigEr
     let pins = CertPinConfig::from_env().map_err(TlsConfigError::PinConfig)?;
 
     if mtls {
-        let cert = cert_path.unwrap();
-        let key = key_path.unwrap();
+        let cert = cert_path.expect("guarded by tls_enabled check");
+        let key = key_path.expect("guarded by tls_enabled check");
         let ca = std::env::var("TLS_CA_CERT_PATH").map_err(|_| TlsConfigError::MtlsMissingCa)?;
 
         if pins.is_disabled() {

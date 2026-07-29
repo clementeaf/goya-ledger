@@ -95,7 +95,7 @@ impl EscrowVault {
             return Err(EscrowError::ZeroAmount);
         }
 
-        let mut locked = self.locked.lock().unwrap();
+        let mut locked = self.locked.lock().unwrap_or_else(|e| e.into_inner());
         if locked.contains_key(&message_id) {
             return Err(EscrowError::AlreadyExists(message_id));
         }
@@ -112,7 +112,7 @@ impl EscrowVault {
         };
 
         locked.insert(message_id, entry);
-        *self.total_locked.lock().unwrap() += amount;
+        *self.total_locked.lock().unwrap_or_else(|e| e.into_inner()) += amount;
 
         Ok(())
     }
@@ -123,7 +123,7 @@ impl EscrowVault {
         message_id: &MessageId,
         block_height: u64,
     ) -> Result<EscrowEntry, EscrowError> {
-        let mut locked = self.locked.lock().unwrap();
+        let mut locked = self.locked.lock().unwrap_or_else(|e| e.into_inner());
         let entry = locked
             .get_mut(message_id)
             .ok_or(EscrowError::NotFound(*message_id))?;
@@ -137,7 +137,7 @@ impl EscrowVault {
 
         entry.status = TransferStatus::Completed;
         entry.released_at = Some(block_height);
-        *self.total_locked.lock().unwrap() -= entry.amount;
+        *self.total_locked.lock().unwrap_or_else(|e| e.into_inner()) -= entry.amount;
 
         Ok(entry.clone())
     }
@@ -148,7 +148,7 @@ impl EscrowVault {
         message_id: &MessageId,
         block_height: u64,
     ) -> Result<EscrowEntry, EscrowError> {
-        let mut locked = self.locked.lock().unwrap();
+        let mut locked = self.locked.lock().unwrap_or_else(|e| e.into_inner());
         let entry = locked
             .get_mut(message_id)
             .ok_or(EscrowError::NotFound(*message_id))?;
@@ -162,7 +162,7 @@ impl EscrowVault {
 
         entry.status = TransferStatus::Refunded;
         entry.released_at = Some(block_height);
-        *self.total_locked.lock().unwrap() -= entry.amount;
+        *self.total_locked.lock().unwrap_or_else(|e| e.into_inner()) -= entry.amount;
 
         Ok(entry.clone())
     }
@@ -182,7 +182,7 @@ impl EscrowVault {
         }
 
         let key = (source_chain.0.clone(), denom.to_string());
-        let mut wrapped = self.wrapped.lock().unwrap();
+        let mut wrapped = self.wrapped.lock().unwrap_or_else(|e| e.into_inner());
         let balance = wrapped.entry(key).or_default();
 
         *balance.balances.entry(recipient.to_string()).or_insert(0) += amount;
@@ -204,7 +204,7 @@ impl EscrowVault {
         }
 
         let key = (source_chain.0.clone(), denom.to_string());
-        let mut wrapped = self.wrapped.lock().unwrap();
+        let mut wrapped = self.wrapped.lock().unwrap_or_else(|e| e.into_inner());
         let balance = wrapped
             .get_mut(&key)
             .ok_or(EscrowError::InsufficientBalance {
@@ -237,12 +237,16 @@ impl EscrowVault {
 
     /// Total native tokens locked in escrow.
     pub fn total_locked(&self) -> u64 {
-        *self.total_locked.lock().unwrap()
+        *self.total_locked.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Get an escrow entry by message ID.
     pub fn get_escrow(&self, message_id: &MessageId) -> Option<EscrowEntry> {
-        self.locked.lock().unwrap().get(message_id).cloned()
+        self.locked
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(message_id)
+            .cloned()
     }
 
     /// Get wrapped token balance for an account.
@@ -250,7 +254,7 @@ impl EscrowVault {
         let key = (source_chain.0.clone(), denom.to_string());
         self.wrapped
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(&key)
             .and_then(|b| b.balances.get(account))
             .copied()
@@ -262,7 +266,7 @@ impl EscrowVault {
         let key = (source_chain.0.clone(), denom.to_string());
         self.wrapped
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(&key)
             .map(|b| b.total_supply)
             .unwrap_or(0)

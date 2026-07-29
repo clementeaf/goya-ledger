@@ -95,7 +95,7 @@ impl VoteStore {
             return Err(VotingError::SelfDelegation);
         }
         // Prevent circular delegation
-        let dels = self.delegations.lock().unwrap();
+        let dels = self.delegations.lock().unwrap_or_else(|e| e.into_inner());
         if dels.get(delegate) == Some(&delegator.to_string()) {
             return Err(VotingError::CircularDelegation);
         }
@@ -103,26 +103,33 @@ impl VoteStore {
 
         self.delegations
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(delegator.to_string(), delegate.to_string());
         Ok(())
     }
 
     /// Remove delegation.
     pub fn undelegate(&self, delegator: &str) {
-        self.delegations.lock().unwrap().remove(delegator);
+        self.delegations
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(delegator);
     }
 
     /// Get the delegate for an address, if any.
     pub fn get_delegate(&self, delegator: &str) -> Option<String> {
-        self.delegations.lock().unwrap().get(delegator).cloned()
+        self.delegations
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(delegator)
+            .cloned()
     }
 
     /// Get all delegators who delegated to a given delegate.
     pub fn get_delegators(&self, delegate: &str) -> Vec<String> {
         self.delegations
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .iter()
             .filter(|(_, d)| d.as_str() == delegate)
             .map(|(k, _)| k.clone())
@@ -148,11 +155,16 @@ impl VoteStore {
         }
 
         // Item 4: prevent voting if power is delegated to someone else
-        if self.delegations.lock().unwrap().contains_key(voter) {
+        if self
+            .delegations
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(voter)
+        {
             return Err(VotingError::HasDelegated);
         }
 
-        let mut all = self.votes.lock().unwrap();
+        let mut all = self.votes.lock().unwrap_or_else(|e| e.into_inner());
         let proposal_votes = all.entry(proposal_id).or_default();
 
         if proposal_votes.contains_key(voter) {
@@ -188,7 +200,7 @@ impl VoteStore {
         if let Some(vote) = self
             .votes
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get_mut(&proposal_id)
             .and_then(|m| m.get_mut(voter))
         {
@@ -210,7 +222,7 @@ impl VoteStore {
         quorum_percent: u64,
         pass_threshold_percent: u64,
     ) -> TallyResult {
-        let all = self.votes.lock().unwrap();
+        let all = self.votes.lock().unwrap_or_else(|e| e.into_inner());
         let votes = all.get(&proposal_id);
 
         let (mut yes, mut no, mut abstain) = (0u64, 0u64, 0u64);
@@ -251,7 +263,7 @@ impl VoteStore {
     pub fn get_votes(&self, proposal_id: ProposalId) -> Vec<Vote> {
         self.votes
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(&proposal_id)
             .map(|m| m.values().cloned().collect())
             .unwrap_or_default()
@@ -260,7 +272,7 @@ impl VoteStore {
     /// Load a vote from persistent storage (hydration on startup).
     /// Bypasses validation — the vote was already accepted when first cast.
     pub fn load_vote(&self, vote: Vote) {
-        let mut all = self.votes.lock().unwrap();
+        let mut all = self.votes.lock().unwrap_or_else(|e| e.into_inner());
         let proposal_votes = all.entry(vote.proposal_id).or_default();
         proposal_votes.insert(vote.voter.clone(), vote);
     }
@@ -269,7 +281,7 @@ impl VoteStore {
     pub fn get_vote(&self, proposal_id: ProposalId, voter: &str) -> Option<Vote> {
         self.votes
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(&proposal_id)
             .and_then(|m| m.get(voter).cloned())
     }
@@ -278,7 +290,7 @@ impl VoteStore {
     pub fn votes_by_voter(&self, voter: &str) -> Vec<Vote> {
         self.votes
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter_map(|m| m.get(voter).cloned())
             .collect()
