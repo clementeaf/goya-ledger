@@ -799,6 +799,42 @@ mod tests {
         assert_eq!(bio[1]["evidence_type"], "rut");
     }
 
+    // ── Verify: rejection paths ────────────────────────────────────────
+
+    #[actix_web::test]
+    async fn verify_rejects_invalid_hash() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(verify_notarization)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/notarize/verify/tooshort")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    #[actix_web::test]
+    async fn verify_returns_404_for_unknown_hash() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(verify_notarization)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri(&format!("/api/v1/notarize/verify/{}", "ab".repeat(32)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
     // ── Rejection: Advanced with Ed25519 ─────────────────────────────
 
     #[actix_web::test]
@@ -912,6 +948,176 @@ mod tests {
         assert_eq!(resp.status(), 201);
         let body: serde_json::Value = test::read_body_json(resp).await;
         assert_eq!(body["data"]["signature_level"], "simple");
+    }
+
+    // ── Rejection: invalid content_hash ────────────────────────────────
+
+    #[actix_web::test]
+    async fn submit_rejects_short_content_hash() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_notarization)),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = ed25519_identity();
+        let sig = hex::encode(provider.sign(b"whatever").unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": "tooshort",
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "INVALID_HASH");
+    }
+
+    #[actix_web::test]
+    async fn submit_rejects_non_hex_content_hash() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_notarization)),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = ed25519_identity();
+        let sig = hex::encode(provider.sign(b"whatever").unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": "z".repeat(64),
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "INVALID_HASH");
+    }
+
+    // ── Rejection: signer DID ↔ pubkey mismatch ─────────────────────
+
+    #[actix_web::test]
+    async fn submit_rejects_did_pubkey_mismatch() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_notarization)),
+        )
+        .await;
+
+        let (_did, _pk_hex, provider) = ed25519_identity();
+        let hash = content_hash();
+        let wrong_did = "did:goya:0000000000000000";
+        let pk_hex = hex::encode(provider.public_key());
+        let payload = format!("notarize:{wrong_did}:{hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": wrong_did,
+                "public_key": pk_hex,
+                "signature": sig,
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 401);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "SIGNER_MISMATCH");
+    }
+
+    // ── Rejection: invalid signature ────────────────────────────────
+
+    #[actix_web::test]
+    async fn submit_rejects_invalid_signature() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_notarization)),
+        )
+        .await;
+
+        let (did, pk_hex, _provider) = ed25519_identity();
+        let hash = content_hash();
+        let bad_sig = "aa".repeat(32);
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": bad_sig,
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 401);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "INVALID_SIGNATURE");
+    }
+
+    // ── Rejection: duplicate notarization ────────────────────────────
+
+    #[actix_web::test]
+    async fn submit_rejects_duplicate_content_hash() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_notarization)),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = ed25519_identity();
+        let hash = content_hash();
+        let payload = format!("notarize:{did}:{hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let body_json = serde_json::json!({
+            "content_hash": hash,
+            "signer": did,
+            "public_key": pk_hex,
+            "signature": sig,
+        });
+
+        // First submit — success
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(&body_json)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+
+        // Second submit — conflict
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(&body_json)
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 409);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "ALREADY_NOTARIZED");
     }
 
     // ── E2E: Qualified rejected (QTSP not supported) ──────────────────
