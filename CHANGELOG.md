@@ -62,6 +62,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
   - The 5 remaining are listed individually in `.cargo/audit.toml`, each naming the crate that blocks it: `protobuf` 2.x (pinned by `raft` 0.7, the latest published release), `rustls-webpki` 0.101 ×3 (pinned by `tauri` 2.11.5 → `reqwest` 0.11, reachable only from the desktop app — the node's own P2P TLS uses rustls 0.23), `tracing-subscriber` 0.2 (pinned by `revm` → `ark-bn254` → `ark-relations`). Marked for re-review 2026-10-27
   - 27 `unmaintained` advisories remain as warnings, notably `pqcrypto-mldsa`/`-mlkem`/`-traits` (upstream PQClean being archived) — relevant to the FIPS 204 posture, tracked but not vulnerabilities
 
+### Fixed
+
+- **Dead code cleanup in `rate_limit.rs`** — removed 4 `#[allow(dead_code)]` suppressions and a stale TODO that suggested wiring a global middleware. Rate limiting is per-handler by design. 2 TDD tests guard against regression
+- **PQC test evidence doc corrected** — `PQC-TEST-EVIDENCE.md` had a TODO and an invalid multi-arg `cargo test` command. Replaced with correct commands and updated test count from claimed 12 to actual 74 (2 main + 72 pqc_crypto_module). 2 TDD tests enforce correctness
+- **138 bare `Mutex::lock().unwrap()` replaced with poison-recovering locks** — production code across 7 modules now uses `.unwrap_or_else(|e| e.into_inner())` instead of panicking on mutex poisoning. TDD tests enforce no bare `.unwrap()` in production code
+- **Stripe webhook ponytail formalized** — tier activation deferral tightened to standard `ponytail:` format with upgrade trigger
+
+### Tests
+
+- **71 new tests** (1869 → 1940), covering trust-boundary rejection paths and pure logic:
+  - `signature/verify.rs` (15→21): malformed signature/key rejection — bad hex, wrong length, invalid Ed25519 point, ML-DSA-65 variants
+  - `notarize.rs` (6→22): invalid hash, DID↔pubkey mismatch, invalid signature, duplicate hash, non-owner transfer, FEA validation, sign_fea rejection
+  - `governance.rs` (0→11): empty/null-byte proposer, quorum bounds, voting period zero, empty voter, proposal not found
+  - `inference.rs` (2→23): `resolve_outputs` tolerance modes, `parse_numeric_output`, `parse_vector_output`, `cosine_similarity`, `build_inference_payload`
+  - `contracts.rs` (0→12): ERC-20 rate limiter, param helpers, contract not found, unknown function, missing params
+
 ### Changed
 
 - **Honest naming: "ZKP" → "commitment"** — the commitment-based attribute verification module never was zero-knowledge (the verifier sees the claim value), so the public API now says what it actually is:
