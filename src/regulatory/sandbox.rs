@@ -61,7 +61,7 @@ pub fn run_compliance_checks() -> Vec<CheckResult> {
         category: "Criptografía".into(),
         description: "Estándares NIST vigentes (FIPS 204, 202, 203)".into(),
         status: CheckStatus::Pass,
-        evidence: "ML-DSA-65 (firmas), SHA3-256 (hash), ML-KEM-768 (key exchange). KAT self-tests al inicio.".into(),
+        evidence: "ML-DSA-65 (firmas), SHA3-256 (hash), ML-KEM-768 (TLS híbrido, opt-in via TLS_PQC_KEM). KAT self-tests al inicio.".into(),
     });
 
     results.push(CheckResult {

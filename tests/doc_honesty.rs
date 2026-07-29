@@ -154,6 +154,72 @@ fn compliance_doc_qualifies_aal2_claim() {
     }
 }
 
+// ── Gap 6: ML-KEM-768 honest scope ──────────────────────────────────────
+
+/// Every mention of ML-KEM-768 in active commercial docs must appear on a
+/// line that also qualifies it as TLS-layer or opt-in — not a core crypto
+/// feature that is always active.
+#[test]
+fn commercial_docs_qualify_mlkem_as_tls_opt_in() {
+    let qualifiers = [
+        "tls",
+        "opt-in",
+        "opcional",
+        "TLS_PQC_KEM",
+        "híbrido",
+        "hibrido",
+    ];
+    let commercial_docs = [
+        "docs/commercial/PLATFORM-ARCHITECTURE.md",
+        "docs/commercial/HORIZONTAL-CAPABILITIES-REPORT.md",
+        "docs/commercial/FAQ-ENTERPRISE.md",
+        "docs/commercial/ONE-PAGER-SERVICIOS-API.md",
+        "docs/commercial/COMPLIANCE-LEY-21663-CIBERSEGURIDAD.md",
+    ];
+
+    let mut violations = Vec::new();
+    for doc_path in &commercial_docs {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(doc_path);
+        if !path.exists() {
+            continue;
+        }
+        let content = read_doc(doc_path);
+        for (i, line) in content.lines().enumerate() {
+            let lower = line.to_lowercase();
+            if lower.contains("ml-kem") || lower.contains("mlkem") {
+                let has_qualifier = qualifiers.iter().any(|q| lower.contains(&q.to_lowercase()));
+                if !has_qualifier {
+                    violations.push(format!("{}:{}: {}", doc_path, i + 1, line.trim()));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Commercial docs present ML-KEM-768 without qualifying it as TLS opt-in:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
+/// The regulatory sandbox check that mentions ML-KEM must say it is
+/// TLS-layer opt-in, not a core always-on feature.
+#[test]
+fn regulatory_sandbox_qualifies_mlkem() {
+    let content = read_doc("src/regulatory/sandbox.rs");
+    let mlkem_lines: Vec<&str> = content
+        .lines()
+        .filter(|l| l.to_lowercase().contains("ml-kem"))
+        .collect();
+    assert!(!mlkem_lines.is_empty(), "sandbox.rs should mention ML-KEM");
+    let lower_all = mlkem_lines.join(" ").to_lowercase();
+    assert!(
+        lower_all.contains("tls") || lower_all.contains("opt-in"),
+        "sandbox.rs mentions ML-KEM without TLS/opt-in qualifier: {:?}",
+        mlkem_lines
+    );
+}
+
 /// eIDAS Art. 26(b) "capable of identifying the signatory" must note
 /// that DID-based self-identification differs from identity-verified
 /// credentials from a trusted authority.

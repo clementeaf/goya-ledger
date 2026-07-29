@@ -48,7 +48,7 @@ Lo que protege toda la plataforma.
 |---|---|---|
 | ML-DSA-65 (FIPS 204) | Firmas digitales post-cuánticas | Producción |
 | SHA3-256 (FIPS 202) | Hash de bloques y transacciones | Producción |
-| ML-KEM-768 (FIPS 203) | Intercambio de claves post-cuántico | Producción |
+| ML-KEM-768 (FIPS 203) | Intercambio de claves post-cuántico via TLS híbrido (opt-in: `TLS_PQC_KEM=true`) | Producción |
 | Ed25519 | Firmas clásicas (compatibilidad) | Producción |
 | Dual-signing | Firma simultánea clásica + PQC para migración | Producción |
 | mTLS | Autenticación mutua entre nodos y clientes | Producción |
@@ -245,7 +245,7 @@ Cada línea conecta capacidades existentes con un objetivo de negocio y un sigui
 **Siguiente paso:** Piloto con institución regulada
 
 ### 2. Protección a largo plazo
-**Qué usa:** ML-DSA-65, SHA3-256, ML-KEM-768, dual-signing
+**Qué usa:** ML-DSA-65, SHA3-256, ML-KEM-768 (TLS híbrido opt-in), dual-signing
 **Qué habilita:** Registros válidos por décadas, incluso ante computación cuántica
 **Beneficiario:** Universidades (títulos), registros civiles, contratos a largo plazo
 **Estado:** Producción completa, pre-lab FIPS hecho

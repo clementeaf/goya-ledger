@@ -23,7 +23,7 @@ Documento de referencia para reportes. Cada capacidad es independiente, reutiliz
 
 - ML-DSA-65 (FIPS 204, 2024) — firmas digitales
 - SHA3-256 (FIPS 202) — hashing
-- ML-KEM-768 (FIPS 203) — intercambio de claves
+- ML-KEM-768 (FIPS 203) — intercambio de claves via TLS híbrido (opt-in)
 - Dual-signing — firma clásica + PQC simultánea para migración gradual
 - Módulo criptográfico con self-tests automáticos y zeroización de claves
 

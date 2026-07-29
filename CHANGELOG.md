@@ -90,6 +90,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Changed
 
+- **ML-KEM-768 qualified as TLS opt-in** — commercial docs and regulatory sandbox presented ML-KEM-768 as a core always-on feature. It is actually X25519+ML-KEM-768 hybrid key exchange at the TLS layer, activated only with `TLS_PQC_KEM=true`. Updated: PLATFORM-ARCHITECTURE.md, HORIZONTAL-CAPABILITIES-REPORT.md, COMPLIANCE-LEY-21663-CIBERSEGURIDAD.md, `regulatory/sandbox.rs`. 2 TDD tests in `tests/doc_honesty.rs` enforce the qualifier.
 - **eIDAS Qualified rejected at API level** — `SignatureLevel::Qualified` was accepted by all endpoints but treated identically to Advanced (no QTSP, no qualified certificate, no QSCD). Now rejected with `SignatureError::QualifiedNotSupported` in `validate_fes_fea()`, which all 10 signature-bearing endpoints call. Returns 400 with message "Qualified signature level requires a Qualified Trust Service Provider (QTSP) — not yet supported". The enum variant remains for future use when a certified TSP is integrated.
   - 1 TDD test in `signature::tests`: `validate_fes_fea_rejects_qualified`
   - E2E test `e2e_qualified_notarize_accepted` → `e2e_qualified_notarize_rejected` (asserts 400)

@@ -48,7 +48,7 @@ Cerulean Ledger no es solo compatible con la ley — **fue diseñado para supera
 
 - **ML-DSA-65** (FIPS 204, 2024) — firmas digitales de nueva generación
 - **SHA3-256** (FIPS 202) — algoritmo de hash de última generación
-- **ML-KEM-768** (FIPS 203) — intercambio de claves resistente a computación cuántica
+- **ML-KEM-768** (FIPS 203) — intercambio de claves resistente a computación cuántica (TLS híbrido, opt-in)
 
 Estos son los mismos estándares que están adoptando el Departamento de Defensa de EE.UU. y la Unión Europea para proteger infraestructura crítica.
 
@@ -151,7 +151,7 @@ Depende del alcance. Ofrecemos desde pilotos acotados hasta despliegues multi-or
 | Continuidad operacional | Red distribuida sin punto único de falla | Cumple |
 | Detección de amenazas | Detección automática de manipulación + rate limiting | Cumple |
 | Gobernanza | Votación verificable y auditable entre participantes | Cumple |
-| Protección post-cuántica | ML-DSA-65 + ML-KEM-768 | Excede (no exigido) |
+| Protección post-cuántica | ML-DSA-65 (firmas) + ML-KEM-768 (TLS híbrido opt-in) | Excede (no exigido) |
 
 **Cerulean Ledger no es una solución buscando un problema. Es la respuesta técnica a lo que la ley ya exige — y a lo que va a exigir mañana.**
 
