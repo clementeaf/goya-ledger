@@ -93,3 +93,86 @@ fn platform_architecture_shows_e2e_throughput() {
         "PLATFORM-ARCHITECTURE.md must show the real E2E throughput alongside any motor number"
     );
 }
+
+// ── Gap 3: compliance doc honesty ────────────────────────────────────────
+
+/// The compliance doc must contain a disclaimer stating it is a
+/// self-assessment, not a formal audit or certification.
+#[test]
+fn compliance_doc_has_self_assessment_disclaimer() {
+    let content = read_doc("docs/compliance/ELECTRONIC-SIGNATURE-COMPLIANCE.md");
+    let lower = content.to_lowercase();
+    let has_disclaimer = lower.contains("self-assessment")
+        || lower.contains("autoevaluación")
+        || lower.contains("not a certification")
+        || lower.contains("no constituye certificación");
+    assert!(
+        has_disclaimer,
+        "ELECTRONIC-SIGNATURE-COMPLIANCE.md must contain a self-assessment disclaimer"
+    );
+}
+
+/// The compliance doc must clarify that biometric evidence is unverified
+/// client-asserted data — the system trusts whatever hash the client sends.
+#[test]
+fn compliance_doc_clarifies_biometric_is_unverified() {
+    let content = read_doc("docs/compliance/ELECTRONIC-SIGNATURE-COMPLIANCE.md");
+    let lower = content.to_lowercase();
+    let has_clarification = lower.contains("client-asserted")
+        || lower.contains("unverified")
+        || lower.contains("no verifica")
+        || lower.contains("sin verificación");
+    assert!(
+        has_clarification,
+        "ELECTRONIC-SIGNATURE-COMPLIANCE.md must clarify biometric commitments are \
+         unverified client-asserted data"
+    );
+}
+
+/// The SP 800-63B AAL2 claim must be qualified — AAL2 requires identity
+/// verification through a trusted provider, not self-asserted biometrics.
+#[test]
+fn compliance_doc_qualifies_aal2_claim() {
+    let content = read_doc("docs/compliance/ELECTRONIC-SIGNATURE-COMPLIANCE.md");
+    let lower = content.to_lowercase();
+    // The line mentioning AAL2 must not be a flat claim — it needs a qualifier
+    let has_aal2 = lower.contains("aal2");
+    if has_aal2 {
+        let has_qualifier = lower.contains("approximate")
+            || lower.contains("aspirational")
+            || lower.contains("analogía")
+            || lower.contains("no equivale")
+            || lower.contains("not equivalent")
+            || lower.contains("structural analogy")
+            || lower.contains("requires identity verification")
+            || lower.contains("requiere verificación de identidad");
+        assert!(
+            has_qualifier,
+            "SP 800-63B AAL2 claim must be qualified — AAL2 requires identity verification \
+             through a trusted provider, not self-asserted biometric hashes"
+        );
+    }
+}
+
+/// eIDAS Art. 26(b) "capable of identifying the signatory" must note
+/// that DID-based self-identification differs from identity-verified
+/// credentials from a trusted authority.
+#[test]
+fn compliance_doc_qualifies_art26b() {
+    let content = read_doc("docs/compliance/ELECTRONIC-SIGNATURE-COMPLIANCE.md");
+    // Find the Art. 26(b) section
+    let has_art26 = content.contains("Art. 26") || content.contains("Art 26");
+    assert!(has_art26, "Doc must cover eIDAS Art. 26");
+    let lower = content.to_lowercase();
+    let has_qualifier = lower.contains("self-issued")
+        || lower.contains("self-asserted")
+        || lower.contains("autoemitid")
+        || lower.contains("identity provider")
+        || lower.contains("without external identity verification")
+        || lower.contains("sin verificación externa");
+    assert!(
+        has_qualifier,
+        "eIDAS Art. 26(b) compliance claim must note that DID-based identification \
+         is self-issued, not externally verified"
+    );
+}

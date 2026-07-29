@@ -73,6 +73,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
   - 3 TDD tests enforce the rename: `types_are_named_commitment_not_zk`, `no_false_zk_claims_in_production_code`, `struct_doc_says_commitment_not_zk`
   - **Breaking:** clients using `/identity/zkp/prove` or `/identity/zkp/verify` must update to `/identity/commitment/prove|verify`
 - **Honest throughput claims** — `ONE-PAGER-PRODUCTO.md` presented the 18,700 TX/s Solo ordering micro-benchmark as the system's throughput. Now shows both: motor interno ~18,700 TX/s and measured E2E ~42 TPS (rate-limited) / ~71 TPS single connection. `tests/doc_honesty.rs` (3 tests) enforces that any mention of 18,700 in commercial docs includes a qualifier word (`motor`, `ordering`, `interno`, etc.)
+- **Compliance doc honesty** — `ELECTRONIC-SIGNATURE-COMPLIANCE.md` now carries:
+  - Self-assessment disclaimer: explicitly states this is not a certification or formal audit
+  - Biometric limitation: commitments are unverified, client-asserted SHA-256 hashes — no liveness detection, no template verification, no trusted capture device
+  - eIDAS Art. 26(b) caveat: self-issued DIDs differ from identity-verified credentials; full compliance requires external identity verification
+  - SP 800-63B AAL2: reclassified as structural analogy, not equivalence — AAL2 requires verified biometric enrollment through a trusted provider
+  - 4 new tests in `tests/doc_honesty.rs` enforce these disclaimers going forward
 - Handlers `notarize`, `alias`, `inference`, `invitations`, `governance`, `identity` now use shared `crate::signature::verify_*` — eliminated ~228 lines of duplicated verification code
 - All 10 signature-bearing endpoints validate FES/FEA constraints: level↔algorithm match, biometric evidence required for Advanced, public key size per algorithm, biometric commitment format
 - `alias.rs` and `invitations.rs` use shared `validate_fes_fea()` instead of inline validation (eliminated 4 duplicated ~40-line blocks)

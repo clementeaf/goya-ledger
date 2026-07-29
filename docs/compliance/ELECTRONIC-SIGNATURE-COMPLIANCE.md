@@ -4,6 +4,8 @@ Legal alignment mapping for the GOYA Ledger electronic signature framework.
 
 Covers three jurisdictions: Chile, European Union, and United States.
 
+> **Disclaimer:** This document is a **self-assessment** mapping code features to legal requirements. It is not a certification, legal opinion, or formal audit result. No third-party auditor or legal authority has validated these claims. Organizations should seek independent legal counsel before relying on these mappings for compliance purposes.
+
 ---
 
 ## Signature levels implemented
@@ -15,6 +17,8 @@ Covers three jurisdictions: Chile, European Union, and United States.
 | **Qualified** | ML-DSA-65 | Required | `SignatureLevel::Qualified` (reserved) |
 
 Biometric evidence is stored as SHA-256 commitments only. Raw biometric data never enters the system.
+
+> **Important limitation:** Biometric commitments are **unverified, client-asserted** data. The system accepts whatever SHA-256 hash the client sends and does not verify that the hash corresponds to a real biometric template, a live capture, or the claimed biometric type. There is no liveness detection, no template quality check, and no trusted biometric capture device requirement. This means the biometric binding provides cryptographic integrity (the commitment is bound to the signature) but not identity assurance (anyone with the signing key can submit any hash as "biometric evidence").
 
 ---
 
@@ -67,7 +71,7 @@ Biometric evidence is stored as SHA-256 commitments only. Raw biometric data nev
 | Requirement | GOYA control | Evidence |
 |---|---|---|
 | **(a)** Uniquely linked to the signatory | DID (`did:goya:{pubkey}`) + biometric commitment(s) hashed into signing payload | `compute_biometrics_hash()` bound to payload |
-| **(b)** Capable of identifying the signatory | Biometric evidence: fingerprint, facial recognition, RUT, iris, voice, government ID | `BiometricType` enum, `BiometricEvidence.commitment` |
+| **(b)** Capable of identifying the signatory | Biometric evidence types: fingerprint, facial recognition, RUT, iris, voice, government ID. **Caveat:** identification relies on self-issued DIDs and self-asserted biometric hashes without external identity verification — this differs from eIDAS intent, which assumes credentials from a trusted identity provider. A deployment seeking full Art. 26(b) compliance should integrate an external identity verification service | `BiometricType` enum, `BiometricEvidence.commitment` |
 | **(c)** Created using electronic signature creation data under sole control of the signatory | ML-DSA-65 private key generated client-side, never transmitted. Key encrypted with Argon2id + AES-256-GCM | Client-side key management, `pqc_crypto_module` |
 | **(d)** Linked to the data signed so that any subsequent change is detectable | PQC signature (ML-DSA-65, 3309-byte) covers signer DID + content hash + biometric commitments hash | Signing payload: `"notarize_fea:{s}:{h}:{bio_hash}"` |
 
@@ -126,7 +130,7 @@ Adopted by 49 states + DC + USVI. Provides state-level parity with ESIGN.
 | **FIPS 204** (ML-DSA) | Post-quantum signature algorithm for FEA | ML-DSA-65 (security level 3) via `pqc_crypto_module` |
 | **FIPS 186-5** | Ed25519 for FES | `SoftwareSigningProvider` via `ed25519_dalek` |
 | **FIPS 202** | SHA-3 for alias commitments | SHA3-256 via `pqc_crypto_module` |
-| **SP 800-63B** | Digital identity assurance levels | FES ~ AAL1 (single factor), FEA ~ AAL2 (multi-factor with biometric) |
+| **SP 800-63B** | Digital identity assurance levels | FES ~ AAL1 (single factor). FEA is a structural analogy to AAL2 (cryptographic key + biometric), but not equivalent — AAL2 requires identity verification through a trusted provider and verified biometric enrollment, whereas GOYA accepts self-asserted biometric hashes without external identity proofing |
 | **SP 800-185** | Vault recovery via KDF | HMAC-SHA3-256 blind index for recovery keys |
 
 ---
