@@ -1,6 +1,3 @@
-// TODO: Wire RateLimiter into Actix middleware to replace/complement
-// the sliding-window RateLimitMiddleware in middleware.rs.
-
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
@@ -8,7 +5,6 @@ use std::time::{Duration, Instant};
 
 /// Token bucket for rate limiting
 #[derive(Clone)]
-#[allow(dead_code)]
 struct TokenBucket {
     tokens: f64,
     last_refill: Instant,
@@ -16,7 +12,6 @@ struct TokenBucket {
     refill_rate: f64, // tokens per second
 }
 
-#[allow(dead_code)]
 impl TokenBucket {
     /// Create a new token bucket
     fn new(capacity: f64, refill_rate: f64) -> Self {
@@ -55,7 +50,6 @@ impl TokenBucket {
 }
 
 /// Rate limiter with per-IP token buckets
-#[allow(dead_code)]
 pub struct RateLimiter {
     buckets: Arc<Mutex<HashMap<IpAddr, TokenBucket>>>,
     capacity: f64,
@@ -64,7 +58,6 @@ pub struct RateLimiter {
     last_cleanup: Arc<Mutex<Instant>>,
 }
 
-#[allow(dead_code)]
 impl RateLimiter {
     /// Create a new rate limiter
     /// capacity: maximum tokens per bucket
@@ -278,5 +271,28 @@ mod tests {
         // Reset to simulate cleanup
         limiter.reset();
         assert_eq!(limiter.get_remaining_tokens(ip), 10.0);
+    }
+
+    #[test]
+    fn no_dead_code_suppression_in_rate_limiter() {
+        let source = include_str!("rate_limit.rs");
+        let prod_code = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(
+            !prod_code.contains("allow(dead_code)"),
+            "rate_limit.rs production code must not suppress dead_code warnings"
+        );
+    }
+
+    #[test]
+    fn no_misleading_todo_in_rate_limiter() {
+        let source = include_str!("rate_limit.rs");
+        let has_todo = source.lines().any(|l| {
+            let trimmed = l.trim();
+            trimmed.starts_with("// TODO") && !trimmed.contains("#[cfg(test)]")
+        });
+        assert!(
+            !has_todo,
+            "rate_limit.rs should not have stale TODOs — rate limiting is per-handler by design"
+        );
     }
 }
