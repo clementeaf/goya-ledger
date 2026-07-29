@@ -6,6 +6,12 @@
 #   ./scripts/gauntlet.sh 0        # single tier
 #
 # Thresholds are env-overridable so tightening them is a one-line change.
+#
+# NOTE: tests/service_e2e.rs (13 tests) is deliberately excluded from all
+# tiers. Those tests write to a live node (notarize documents, create
+# on-chain records) and require explicit opt-in:
+#
+#   GOYA_E2E_URL=https://goya-node.fly.dev cargo test --test service_e2e -- --ignored
 set -uo pipefail
 
 # Measured baseline on 2026-07-27: 66.51% lines (58.81% fn, 63.03% region).
@@ -14,7 +20,11 @@ set -uo pipefail
 COV_MIN="${COV_MIN:-66}"            # % line coverage required
 MUTANTS_MIN="${MUTANTS_MIN:-80}"    # % mutants that must be caught
 FUZZ_SECS="${FUZZ_SECS:-60}"        # per fuzz target
-MUTANTS_SCOPE="${MUTANTS_SCOPE:-src/signature src/consensus src/identity}"
+# Mutant counts in this tree: signature 88, identity 266, consensus 736.
+# Each mutant reruns the suite, so the full 1090 is a many-hour job — scoped to
+# the signature core by default (FES/FEA is what carries the legal claims).
+# Widen deliberately: MUTANTS_SCOPE="src/signature src/identity" ./scripts/gauntlet.sh 5
+MUTANTS_SCOPE="${MUTANTS_SCOPE:-src/signature}"
 
 # ── RAM budget ────────────────────────────────────────────────────────────
 # Cargo defaults to one rustc per core; on this tree (wasmtime, revm, rocksdb)
@@ -116,7 +126,9 @@ if want 5; then
     for d in $MUTANTS_SCOPE; do args+=(--file "$d/**/*.rs"); done
     # ponytail: parse the summary line rather than the JSON; upgrade to
     # mutants.out/outcomes.json if per-mutant triage is ever needed.
-    cargo mutants --no-shuffle --jobs 1 --test-tool cargo "${args[@]}" 2>&1 | tee /tmp/mutants.log
+    # `-- --lib` matters: without it every mutant also builds and runs all 36
+    # integration suites, which turns an hour into a week.
+    cargo mutants --no-shuffle --jobs 1 --timeout 300 "${args[@]}" -- --lib 2>&1 | tee /tmp/mutants.log
     local caught missed
     caught=$(grep -oE '[0-9]+ caught' /tmp/mutants.log | tail -1 | grep -oE '[0-9]+') || caught=0
     missed=$(grep -oE '[0-9]+ missed' /tmp/mutants.log | tail -1 | grep -oE '[0-9]+') || missed=0

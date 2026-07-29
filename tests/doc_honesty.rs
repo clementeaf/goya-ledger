@@ -288,6 +288,62 @@ fn no_unqualified_production_ready_claims() {
     );
 }
 
+// ── Gap 8: E2E service tests are documented and safely ignored ───────────
+
+/// Every #[test] in service_e2e.rs must have #[ignore] — these tests write
+/// to a live node and must never run in CI or `cargo test` without opt-in.
+#[test]
+fn service_e2e_all_tests_are_ignored() {
+    let content = read_doc("tests/service_e2e.rs");
+    let lines: Vec<&str> = content.lines().collect();
+    let mut unignored = Vec::new();
+
+    for (i, line) in lines.iter().enumerate() {
+        if line.trim().starts_with("#[tokio::test]") || line.trim() == "#[test]" {
+            // Check that one of the preceding 3 lines has #[ignore
+            let has_ignore = (i.saturating_sub(3)..=i)
+                .chain(i + 1..=(i + 2).min(lines.len() - 1))
+                .any(|j| lines[j].contains("#[ignore"));
+            if !has_ignore {
+                unignored.push(format!("line {}: {}", i + 1, line.trim()));
+            }
+        }
+    }
+
+    assert!(
+        unignored.is_empty(),
+        "service_e2e.rs has tests without #[ignore] — they write to a live node:\n  {}",
+        unignored.join("\n  ")
+    );
+}
+
+/// service_e2e.rs module doc must explain how to run the tests
+/// (GOYA_E2E_URL + --ignored).
+#[test]
+fn service_e2e_has_run_instructions() {
+    let content = read_doc("tests/service_e2e.rs");
+    let lower = content.to_lowercase();
+    assert!(
+        lower.contains("goya_e2e_url"),
+        "service_e2e.rs must document the GOYA_E2E_URL env var"
+    );
+    assert!(
+        lower.contains("--ignored"),
+        "service_e2e.rs must document the --ignored flag"
+    );
+}
+
+/// The gauntlet script must mention that service_e2e tests exist
+/// but are excluded (they write to a live node).
+#[test]
+fn gauntlet_documents_service_e2e_exclusion() {
+    let content = read_doc("scripts/gauntlet.sh");
+    assert!(
+        content.contains("service_e2e"),
+        "gauntlet.sh must mention that service_e2e tests exist but are excluded"
+    );
+}
+
 /// The Fabric comparison doc must not make an unqualified
 /// "production-ready" assertion about the system.
 #[test]
