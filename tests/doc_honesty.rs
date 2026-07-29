@@ -14,6 +14,28 @@ fn read_doc(relative: &str) -> String {
         .unwrap_or_else(|e| panic!("cannot read {relative}: {e}"))
 }
 
+fn walkdir(relative_dir: &str) -> Vec<String> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative_dir);
+    let mut files = Vec::new();
+    fn walk(dir: &Path, base: &Path, out: &mut Vec<String>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    walk(&path, base, out);
+                } else if path.extension().and_then(|e| e.to_str()) == Some("md") {
+                    if let Ok(rel) = path.strip_prefix(base) {
+                        out.push(rel.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    walk(&root, manifest, &mut files);
+    files
+}
+
 /// Every mention of "18,700" or "18700" in active commercial docs must appear
 /// on a line that also contains a qualifier word making clear it is a
 /// component-level measurement, not end-to-end system throughput.
@@ -217,6 +239,69 @@ fn regulatory_sandbox_qualifies_mlkem() {
         lower_all.contains("tls") || lower_all.contains("opt-in"),
         "sandbox.rs mentions ML-KEM without TLS/opt-in qualifier: {:?}",
         mlkem_lines
+    );
+}
+
+// ── Gap 7: no unqualified "production-ready" claims ─────────────────────
+
+/// Any doc (outside docs/archive/) that says "production-ready" or
+/// "enterprise-grade" must qualify it — e.g., "posture", "aspiration",
+/// "when X is met", "for the crypto layer", etc.
+#[test]
+fn no_unqualified_production_ready_claims() {
+    let qualifiers = [
+        "posture", "postura", "minimum", "mínimo", "aspir", "when", "cuando", "not yet", "pending",
+        "roadmap", "target", "objetivo", "for the", "para el", "layer", "capa", "across", "none",
+        "not", "no ",
+    ];
+
+    let mut violations = Vec::new();
+
+    // Walk non-archive docs + src
+    for dir in [
+        "docs/commercial",
+        "docs/compliance",
+        "docs/architecture",
+        "docs/api",
+    ] {
+        let full = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(dir);
+        if !full.exists() {
+            continue;
+        }
+        for entry in walkdir(dir) {
+            let content = read_doc(&entry);
+            for (i, line) in content.lines().enumerate() {
+                let lower = line.to_lowercase();
+                if (lower.contains("production-ready") || lower.contains("production ready"))
+                    && !qualifiers.iter().any(|q| lower.contains(q))
+                {
+                    violations.push(format!("{}:{}: {}", entry, i + 1, line.trim()));
+                }
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "Docs contain unqualified 'production-ready' claims:\n  {}",
+        violations.join("\n  ")
+    );
+}
+
+/// The Fabric comparison doc must not make an unqualified
+/// "production-ready" assertion about the system.
+#[test]
+fn fabric_comparison_no_flat_production_ready() {
+    let path = "docs/archive/comparisons/FABRIC-COMPARISON.md";
+    let full = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
+    if !full.exists() {
+        return;
+    }
+    let content = read_doc(path);
+    let lower = content.to_lowercase();
+    assert!(
+        !lower.contains("rust-bc is production-ready"),
+        "FABRIC-COMPARISON.md still contains unqualified 'rust-bc is production-ready'"
     );
 }
 

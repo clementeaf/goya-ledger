@@ -71,7 +71,7 @@ The full Fabric transaction lifecycle works end-to-end: endorsement with configu
 
 ### As a production enterprise replacement: ~80% parity
 
-No critical gaps remain. The main missing capability is gRPC protocol support, which is only needed for interoperability with existing Fabric networks. As a standalone permissioned blockchain, rust-bc is production-ready.
+No critical gaps remain for core blockchain functionality. The main missing capability is gRPC protocol support, which is only needed for interoperability with existing Fabric networks. As a standalone permissioned blockchain, rust-bc has reached functional completeness for its target use cases. Production deployment readiness depends on operational factors (load testing under real conditions, disaster recovery, SLA enforcement) that are outside the scope of this feature comparison.
 
 ### Recommended next steps
 
