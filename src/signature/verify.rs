@@ -204,6 +204,49 @@ mod tests {
         ));
     }
 
+    // ── Ed25519 signature input rejection ──────────────────────────
+
+    #[test]
+    fn ed25519_bad_sig_hex_fails() {
+        let pk = "aa".repeat(32);
+        assert!(!verify_ed25519(&pk, b"msg", "not_valid_hex"));
+    }
+
+    #[test]
+    fn ed25519_wrong_sig_length_fails() {
+        let pk = "aa".repeat(32);
+        assert!(!verify_ed25519(&pk, b"msg", &"bb".repeat(16)));
+    }
+
+    #[test]
+    fn ed25519_structurally_invalid_pk_fails() {
+        // 32 bytes of 0xff — valid hex, valid length, but not a valid Ed25519 point
+        assert!(!verify_ed25519(&"ff".repeat(32), b"msg", &"aa".repeat(32)));
+    }
+
+    // ── ML-DSA-65 signature input rejection ─────────────────────────
+
+    #[test]
+    fn mldsa65_bad_sig_hex_fails() {
+        let pk = "aa".repeat(1952);
+        assert!(!verify_mldsa65(&pk, b"msg", "not_valid_hex"));
+    }
+
+    #[test]
+    fn mldsa65_wrong_sig_length_fails() {
+        let pk = "aa".repeat(1952);
+        assert!(!verify_mldsa65(&pk, b"msg", &"bb".repeat(100)));
+    }
+
+    #[test]
+    fn mldsa65_bad_pk_hex_fails() {
+        assert!(!verify_mldsa65(
+            "not_hex_at_all",
+            b"msg",
+            &"bb".repeat(3309)
+        ));
+    }
+
     #[test]
     fn validate_pk_ed25519_correct() {
         assert!(validate_public_key(SigningAlgorithm::Ed25519, &"aa".repeat(32)).is_ok());
