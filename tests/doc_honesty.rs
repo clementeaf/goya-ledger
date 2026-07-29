@@ -361,6 +361,53 @@ fn fabric_comparison_no_flat_production_ready() {
     );
 }
 
+// ── Gap 9: PQC test evidence doc must not have stale TODOs ─────────────
+
+/// PQC-TEST-EVIDENCE.md must not contain TODO markers — all claimed
+/// test commands must be valid and counts must match reality.
+#[test]
+fn pqc_test_evidence_no_stale_todos() {
+    let content = read_doc("docs/compliance/PQC-TEST-EVIDENCE.md");
+    let todo_lines: Vec<(usize, &str)> = content
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| l.contains("TODO"))
+        .collect();
+    assert!(
+        todo_lines.is_empty(),
+        "PQC-TEST-EVIDENCE.md has stale TODOs:\n  {}",
+        todo_lines
+            .iter()
+            .map(|(i, l)| format!("line {}: {}", i + 1, l.trim()))
+            .collect::<Vec<_>>()
+            .join("\n  ")
+    );
+}
+
+/// PQC-TEST-EVIDENCE.md must not document invalid cargo test invocations
+/// (cargo test only accepts one test filter argument).
+#[test]
+fn pqc_test_evidence_no_multi_arg_cargo_test() {
+    let content = read_doc("docs/compliance/PQC-TEST-EVIDENCE.md");
+    for (i, line) in content.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("cargo test") && !trimmed.starts_with("cargo test -") {
+            let args: Vec<&str> = trimmed
+                .strip_prefix("cargo test")
+                .unwrap()
+                .split_whitespace()
+                .filter(|a| !a.starts_with('-'))
+                .collect();
+            assert!(
+                args.len() <= 1,
+                "PQC-TEST-EVIDENCE.md line {}: invalid multi-arg cargo test: {}",
+                i + 1,
+                trimmed
+            );
+        }
+    }
+}
+
 /// eIDAS Art. 26(b) "capable of identifying the signatory" must note
 /// that DID-based self-identification differs from identity-verified
 /// credentials from a trusted authority.

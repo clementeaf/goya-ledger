@@ -189,23 +189,14 @@ La selección se logea al arranque. Nodos con diferentes algoritmos coexisten en
 ## Cómo ejecutar toda la suite PQC
 
 ```bash
-# Tests ML-DSA-65 dedicados (8 unitarios + 2 property-based)
+# Tests ML-DSA-65 en crate principal (verify, key validation)
 cargo test mldsa65
 
-# KAT self-tests (Ed25519 + ML-DSA-65 + SHA-256)
-cargo test crypto_self_tests
-
-# Aislamiento entre algoritmos
-cargo test cross_provider
-
-# Property-based (Ed25519 + ML-DSA-65)
-cargo test prop
-
-# TODO JUNTO — 12 tests PQC dedicados
-cargo test mldsa65 crypto_self_tests cross_provider
+# Suite completa del crate PQC (72 tests: KAT, self-tests, aislamiento, property-based)
+cargo test -p pqc_crypto_module
 ```
 
-**Resultado esperado:** 12 tests passed, 0 failed.
+**Resultado esperado:** 74 tests passed (2 main + 72 pqc_crypto_module), 0 failed.
 
 ---
 
