@@ -60,7 +60,8 @@ No es una base de datos mejorada. Es un cambio de paradigma: la integridad deja 
 
 | Métrica | Valor |
 |---|---|
-| Transacciones por segundo | ~18,700 |
+| Throughput motor interno (ordering) | ~18,700 TX/s |
+| Throughput E2E medido (HTTP + RocksDB) | ~42 TPS (rate-limited), ~71 TPS single connection |
 | Tiempo de verificación | Milisegundos |
 | Finalidad | Inmediata y determinística (sin esperas) |
 | Memoria por nodo | ~50 MB |

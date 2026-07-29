@@ -72,6 +72,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
   - ROADMAP: clarifies current state is commitment-based, ZK real (Bulletproofs/PLONK) is future work
   - 3 TDD tests enforce the rename: `types_are_named_commitment_not_zk`, `no_false_zk_claims_in_production_code`, `struct_doc_says_commitment_not_zk`
   - **Breaking:** clients using `/identity/zkp/prove` or `/identity/zkp/verify` must update to `/identity/commitment/prove|verify`
+- **Honest throughput claims** — `ONE-PAGER-PRODUCTO.md` presented the 18,700 TX/s Solo ordering micro-benchmark as the system's throughput. Now shows both: motor interno ~18,700 TX/s and measured E2E ~42 TPS (rate-limited) / ~71 TPS single connection. `tests/doc_honesty.rs` (3 tests) enforces that any mention of 18,700 in commercial docs includes a qualifier word (`motor`, `ordering`, `interno`, etc.)
 - Handlers `notarize`, `alias`, `inference`, `invitations`, `governance`, `identity` now use shared `crate::signature::verify_*` — eliminated ~228 lines of duplicated verification code
 - All 10 signature-bearing endpoints validate FES/FEA constraints: level↔algorithm match, biometric evidence required for Advanced, public key size per algorithm, biometric commitment format
 - `alias.rs` and `invitations.rs` use shared `validate_fes_fea()` instead of inline validation (eliminated 4 duplicated ~40-line blocks)
