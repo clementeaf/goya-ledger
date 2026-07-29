@@ -787,3 +787,159 @@ pub async fn get_nft_token_by_index(
         None => Err(contract_not_found()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{test, App};
+
+    fn make_app_data() -> web::Data<AppState> {
+        web::Data::new(AppState::test_default())
+    }
+
+    // ── Pure function: check_erc20_rate_limit ───────────────────────
+
+    #[actix_web::test]
+    async fn rate_limit_allows_under_threshold() {
+        let caller = "test_contracts_rl_under";
+        for _ in 0..10 {
+            assert!(check_erc20_rate_limit(caller).is_ok());
+        }
+    }
+
+    #[actix_web::test]
+    async fn rate_limit_blocks_over_per_second() {
+        let caller = "test_contracts_rl_over";
+        for _ in 0..10 {
+            let _ = check_erc20_rate_limit(caller);
+        }
+        assert!(check_erc20_rate_limit(caller).is_err());
+    }
+
+    #[actix_web::test]
+    async fn rate_limit_independent_per_caller() {
+        let a = "test_contracts_rl_a";
+        let b = "test_contracts_rl_b";
+        for _ in 0..10 {
+            let _ = check_erc20_rate_limit(a);
+        }
+        assert!(check_erc20_rate_limit(a).is_err());
+        assert!(check_erc20_rate_limit(b).is_ok());
+    }
+
+    // ── Pure function: require_str / require_u64 ────────────────────
+
+    #[actix_web::test]
+    async fn require_str_present() {
+        let v = serde_json::json!({"to": "alice"});
+        assert_eq!(require_str(&v, "to").unwrap(), "alice");
+    }
+
+    #[actix_web::test]
+    async fn require_str_missing() {
+        let v = serde_json::json!({});
+        assert!(require_str(&v, "to").is_err());
+    }
+
+    #[actix_web::test]
+    async fn require_u64_present() {
+        let v = serde_json::json!({"amount": 100});
+        assert_eq!(require_u64(&v, "amount").unwrap(), 100);
+    }
+
+    #[actix_web::test]
+    async fn require_u64_missing() {
+        let v = serde_json::json!({});
+        assert!(require_u64(&v, "amount").is_err());
+    }
+
+    #[actix_web::test]
+    async fn require_u64_wrong_type() {
+        let v = serde_json::json!({"amount": "not_a_number"});
+        assert!(require_u64(&v, "amount").is_err());
+    }
+
+    // ── Handler: get_contract not found ─────────────────────────────
+
+    #[actix_web::test]
+    async fn get_contract_returns_404() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(get_contract)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/contracts/0xdeadbeef")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    // ── Handler: execute requires ACL ──────────────────────────────
+
+    #[actix_web::test]
+    async fn execute_rejects_without_valid_contract() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(execute_contract_function)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/contracts/0xdeadbeef/execute")
+            .set_json(serde_json::json!({
+                "function": "transfer",
+                "params": { "to": "bob", "amount": 100 },
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        let status = resp.status().as_u16();
+        assert!(
+            status == 400 || status == 403 || status == 404,
+            "expected 400/403/404 for nonexistent contract, got {status}"
+        );
+    }
+
+    // ── Handler: list contracts (empty) ─────────────────────────────
+
+    #[actix_web::test]
+    async fn list_contracts_empty() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(get_all_contracts)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/contracts")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+    }
+
+    // ── Handler: balance on nonexistent contract ────────────────────
+
+    #[actix_web::test]
+    async fn balance_nonexistent_contract_returns_404() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(get_contract_balance)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/contracts/0xghost/balance/alice")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+}
