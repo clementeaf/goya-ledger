@@ -118,7 +118,7 @@ impl BlockStore for MemoryStore {
     fn read_block(&self, height: u64) -> StorageResult<Block> {
         self.blocks
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(&height)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("BLK:{height:012}")))
@@ -127,7 +127,7 @@ impl BlockStore for MemoryStore {
     fn write_transaction(&self, tx: &Transaction) -> StorageResult<()> {
         self.transactions
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(tx.id.clone(), tx.clone());
         Ok(())
     }
@@ -135,7 +135,7 @@ impl BlockStore for MemoryStore {
     fn read_transaction(&self, tx_id: &str) -> StorageResult<Transaction> {
         self.transactions
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(tx_id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("TX:{tx_id}")))
@@ -144,7 +144,7 @@ impl BlockStore for MemoryStore {
     fn write_identity(&self, identity: &IdentityRecord) -> StorageResult<()> {
         self.identities
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(identity.did.clone(), identity.clone());
         Ok(())
     }
@@ -152,20 +152,26 @@ impl BlockStore for MemoryStore {
     fn read_identity(&self, did: &str) -> StorageResult<IdentityRecord> {
         self.identities
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(did)
             .cloned()
             .ok_or_else(|| StorageError::IdentityNotFound(did.to_string()))
     }
 
     fn list_identities(&self) -> StorageResult<Vec<IdentityRecord>> {
-        Ok(self.identities.lock().unwrap().values().cloned().collect())
+        Ok(self
+            .identities
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect())
     }
 
     fn write_credential(&self, credential: &Credential) -> StorageResult<()> {
         self.credentials
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(credential.id.clone(), credential.clone());
         Ok(())
     }
@@ -173,14 +179,20 @@ impl BlockStore for MemoryStore {
     fn read_credential(&self, cred_id: &str) -> StorageResult<Credential> {
         self.credentials
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(cred_id)
             .cloned()
             .ok_or_else(|| StorageError::CredentialNotFound(cred_id.to_string()))
     }
 
     fn list_credentials(&self) -> StorageResult<Vec<Credential>> {
-        Ok(self.credentials.lock().unwrap().values().cloned().collect())
+        Ok(self
+            .credentials
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect())
     }
 
     fn write_batch(&self, blocks: &[Block], txs: &[Transaction]) -> StorageResult<()> {
@@ -214,7 +226,7 @@ impl BlockStore for MemoryStore {
         let txs = self
             .transactions
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|tx| tx.block_height == height)
             .cloned()
@@ -226,7 +238,7 @@ impl BlockStore for MemoryStore {
         let creds = self
             .credentials
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|c| c.subject_did == subject_did)
             .cloned()
@@ -238,7 +250,7 @@ impl BlockStore for MemoryStore {
         let creds = self
             .credentials
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|c| c.issuer_did == issuer_did)
             .cloned()
@@ -254,7 +266,7 @@ impl BlockStore for MemoryStore {
     ) -> StorageResult<()> {
         self.proposals
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(proposal.id, proposal.clone());
         Ok(())
     }
@@ -262,14 +274,20 @@ impl BlockStore for MemoryStore {
     fn read_proposal(&self, id: u64) -> StorageResult<crate::governance::proposals::Proposal> {
         self.proposals
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(&id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("PROPOSAL:{id:012}")))
     }
 
     fn list_proposals(&self) -> StorageResult<Vec<crate::governance::proposals::Proposal>> {
-        let mut all: Vec<_> = self.proposals.lock().unwrap().values().cloned().collect();
+        let mut all: Vec<_> = self
+            .proposals
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect();
         all.sort_by_key(|p| p.id);
         Ok(all)
     }
@@ -277,7 +295,7 @@ impl BlockStore for MemoryStore {
     fn write_vote(&self, vote: &crate::governance::voting::Vote) -> StorageResult<()> {
         self.votes
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert((vote.proposal_id, vote.voter.clone()), vote.clone());
         Ok(())
     }
@@ -286,7 +304,7 @@ impl BlockStore for MemoryStore {
         let all: Vec<_> = self
             .votes
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|v| v.proposal_id == proposal_id)
             .cloned()
@@ -297,7 +315,7 @@ impl BlockStore for MemoryStore {
     fn write_vault(&self, did: &str, encrypted_wallet: &serde_json::Value) -> StorageResult<()> {
         self.vault
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(did.to_string(), encrypted_wallet.clone());
         Ok(())
     }
@@ -305,7 +323,7 @@ impl BlockStore for MemoryStore {
     fn read_vault(&self, did: &str) -> StorageResult<serde_json::Value> {
         self.vault
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(did)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("vault:{did}")))
@@ -314,7 +332,7 @@ impl BlockStore for MemoryStore {
     fn write_vault_recovery(&self, blind_index: &str, did: &str) -> StorageResult<()> {
         self.vault_recovery
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(blind_index.to_string(), did.to_string());
         Ok(())
     }
@@ -322,7 +340,7 @@ impl BlockStore for MemoryStore {
     fn read_vault_by_recovery(&self, blind_index: &str) -> StorageResult<String> {
         self.vault_recovery
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(blind_index)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound("vault recovery entry not found".into()))
@@ -333,49 +351,64 @@ impl BlockStore for MemoryStore {
     fn write_scope(&self, scope: &Scope) -> StorageResult<()> {
         self.scopes
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(scope.id.clone(), scope.clone());
         Ok(())
     }
     fn read_scope(&self, id: &str) -> StorageResult<Scope> {
         self.scopes
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("scope:{id}")))
     }
     fn list_scopes(&self) -> StorageResult<Vec<Scope>> {
-        Ok(self.scopes.lock().unwrap().values().cloned().collect())
+        Ok(self
+            .scopes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect())
     }
     fn delete_scope(&self, id: &str) -> StorageResult<()> {
-        self.scopes.lock().unwrap().remove(id);
+        self.scopes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
         Ok(())
     }
 
     fn write_assembly(&self, assembly: &Assembly) -> StorageResult<()> {
         self.assemblies
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(assembly.id.clone(), assembly.clone());
         Ok(())
     }
     fn read_assembly(&self, id: &str) -> StorageResult<Assembly> {
         self.assemblies
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("assembly:{id}")))
     }
     fn list_assemblies(&self) -> StorageResult<Vec<Assembly>> {
-        Ok(self.assemblies.lock().unwrap().values().cloned().collect())
+        Ok(self
+            .assemblies
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect())
     }
     fn list_assemblies_by_scope(&self, scope_id: &str) -> StorageResult<Vec<Assembly>> {
         Ok(self
             .assemblies
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|a| a.scope_id == scope_id)
             .cloned()
@@ -383,21 +416,24 @@ impl BlockStore for MemoryStore {
     }
 
     fn delete_assembly(&self, id: &str) -> StorageResult<()> {
-        self.assemblies.lock().unwrap().remove(id);
+        self.assemblies
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
         Ok(())
     }
 
     fn write_session(&self, session: &Session) -> StorageResult<()> {
         self.sessions
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(session.id.clone(), session.clone());
         Ok(())
     }
     fn read_session(&self, id: &str) -> StorageResult<Session> {
         self.sessions
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("session:{id}")))
@@ -406,7 +442,7 @@ impl BlockStore for MemoryStore {
         Ok(self
             .sessions
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|s| s.assembly_id == assembly_id)
             .cloned()
@@ -414,30 +450,42 @@ impl BlockStore for MemoryStore {
     }
 
     fn delete_session(&self, id: &str) -> StorageResult<()> {
-        self.sessions.lock().unwrap().remove(id);
+        self.sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
         Ok(())
     }
 
     fn write_acta(&self, acta: &Acta) -> StorageResult<()> {
         self.actas
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(acta.id.clone(), acta.clone());
         Ok(())
     }
     fn read_acta(&self, id: &str) -> StorageResult<Acta> {
         self.actas
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("acta:{id}")))
     }
     fn list_actas(&self) -> StorageResult<Vec<Acta>> {
-        Ok(self.actas.lock().unwrap().values().cloned().collect())
+        Ok(self
+            .actas
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect())
     }
     fn delete_acta(&self, id: &str) -> StorageResult<()> {
-        self.actas.lock().unwrap().remove(id);
+        self.actas
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
         Ok(())
     }
 
@@ -446,37 +494,46 @@ impl BlockStore for MemoryStore {
     fn write_asset(&self, asset: &Asset) -> StorageResult<()> {
         self.assets
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(asset.id.clone(), asset.clone());
         Ok(())
     }
     fn read_asset(&self, id: &str) -> StorageResult<Asset> {
         self.assets
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("asset:{id}")))
     }
     fn list_assets(&self) -> StorageResult<Vec<Asset>> {
-        Ok(self.assets.lock().unwrap().values().cloned().collect())
+        Ok(self
+            .assets
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect())
     }
     fn delete_asset(&self, id: &str) -> StorageResult<()> {
-        self.assets.lock().unwrap().remove(id);
+        self.assets
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
         Ok(())
     }
 
     fn write_asset_event(&self, event: &AssetEvent) -> StorageResult<()> {
         self.asset_events
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(event.id.clone(), event.clone());
         Ok(())
     }
     fn read_asset_event(&self, id: &str) -> StorageResult<AssetEvent> {
         self.asset_events
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("asset_event:{id}")))
@@ -485,7 +542,7 @@ impl BlockStore for MemoryStore {
         Ok(self
             .asset_events
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|e| e.asset_id == asset_id)
             .cloned()
@@ -497,14 +554,14 @@ impl BlockStore for MemoryStore {
     fn write_asset_token(&self, token: &AssetToken) -> StorageResult<()> {
         self.asset_tokens
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(token.id.clone(), token.clone());
         Ok(())
     }
     fn read_asset_token(&self, id: &str) -> StorageResult<AssetToken> {
         self.asset_tokens
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("token:{id}")))
@@ -513,13 +570,16 @@ impl BlockStore for MemoryStore {
         Ok(self
             .asset_tokens
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .cloned()
             .collect())
     }
     fn delete_asset_token(&self, id: &str) -> StorageResult<()> {
-        self.asset_tokens.lock().unwrap().remove(id);
+        self.asset_tokens
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
         Ok(())
     }
 
@@ -528,14 +588,14 @@ impl BlockStore for MemoryStore {
     fn write_compliance_rule(&self, rule: &ComplianceRule) -> StorageResult<()> {
         self.compliance_rules
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(rule.id.clone(), rule.clone());
         Ok(())
     }
     fn read_compliance_rule(&self, id: &str) -> StorageResult<ComplianceRule> {
         self.compliance_rules
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("rule:{id}")))
@@ -544,20 +604,23 @@ impl BlockStore for MemoryStore {
         Ok(self
             .compliance_rules
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .cloned()
             .collect())
     }
     fn delete_compliance_rule(&self, id: &str) -> StorageResult<()> {
-        self.compliance_rules.lock().unwrap().remove(id);
+        self.compliance_rules
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
         Ok(())
     }
 
     fn write_compliance_result(&self, result: &ComplianceResult) -> StorageResult<()> {
         self.compliance_results
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(result.id.clone(), result.clone());
         Ok(())
     }
@@ -565,7 +628,7 @@ impl BlockStore for MemoryStore {
         Ok(self
             .compliance_results
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|r| r.asset_id == asset_id)
             .cloned()
@@ -577,7 +640,7 @@ impl BlockStore for MemoryStore {
     fn write_alias(&self, entry: &AliasEntry) -> StorageResult<()> {
         self.aliases
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(entry.commitment.clone(), entry.clone());
         Ok(())
     }
@@ -585,7 +648,7 @@ impl BlockStore for MemoryStore {
     fn read_alias(&self, commitment: &str) -> StorageResult<AliasEntry> {
         self.aliases
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(commitment)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("alias:{commitment}")))
@@ -594,7 +657,7 @@ impl BlockStore for MemoryStore {
     fn read_alias_by_did(&self, did: &str) -> StorageResult<AliasEntry> {
         self.aliases
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .find(|e| e.did == did && e.status == "active")
             .cloned()
@@ -602,7 +665,10 @@ impl BlockStore for MemoryStore {
     }
 
     fn delete_alias(&self, commitment: &str) -> StorageResult<()> {
-        self.aliases.lock().unwrap().remove(commitment);
+        self.aliases
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(commitment);
         Ok(())
     }
 
@@ -611,7 +677,7 @@ impl BlockStore for MemoryStore {
     fn write_inference_claim(&self, claim: &InferenceClaim) -> StorageResult<()> {
         self.inference_claims
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(claim.id.clone(), claim.clone());
         Ok(())
     }
@@ -619,7 +685,7 @@ impl BlockStore for MemoryStore {
     fn read_inference_claim(&self, id: &str) -> StorageResult<InferenceClaim> {
         self.inference_claims
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("inference_claim:{id}")))
@@ -631,7 +697,10 @@ impl BlockStore for MemoryStore {
         oracle_id: Option<&str>,
         model_hash: Option<&str>,
     ) -> StorageResult<Vec<InferenceClaim>> {
-        let claims = self.inference_claims.lock().unwrap();
+        let claims = self
+            .inference_claims
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let results = claims
             .values()
             .filter(|c| status.is_none_or(|s| &c.status == s))
@@ -645,13 +714,16 @@ impl BlockStore for MemoryStore {
     fn write_inference_challenge(&self, challenge: &InferenceChallenge) -> StorageResult<()> {
         self.inference_challenges
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(challenge.id.clone(), challenge.clone());
         Ok(())
     }
 
     fn list_challenges_by_claim(&self, claim_id: &str) -> StorageResult<Vec<InferenceChallenge>> {
-        let challenges = self.inference_challenges.lock().unwrap();
+        let challenges = self
+            .inference_challenges
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let results = challenges
             .values()
             .filter(|c| c.claim_id == claim_id)
@@ -665,7 +737,7 @@ impl BlockStore for MemoryStore {
     fn write_invitation(&self, invitation: &Invitation) -> StorageResult<()> {
         self.invitations
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(invitation.id.clone(), invitation.clone());
         Ok(())
     }
@@ -673,7 +745,7 @@ impl BlockStore for MemoryStore {
     fn read_invitation(&self, id: &str) -> StorageResult<Invitation> {
         self.invitations
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("invitation:{id}")))
@@ -686,7 +758,7 @@ impl BlockStore for MemoryStore {
         Ok(self
             .invitations
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|i| i.to_commitment == to_commitment)
             .cloned()
@@ -697,7 +769,7 @@ impl BlockStore for MemoryStore {
         Ok(self
             .invitations
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|i| i.from_did == from_did)
             .cloned()
@@ -709,7 +781,7 @@ impl BlockStore for MemoryStore {
     fn write_notarization(&self, entry: &NotarizationEntry) -> StorageResult<()> {
         self.notarizations
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .insert(entry.id.clone(), entry.clone());
         Ok(())
     }
@@ -717,7 +789,7 @@ impl BlockStore for MemoryStore {
     fn read_notarization(&self, id: &str) -> StorageResult<NotarizationEntry> {
         self.notarizations
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(id)
             .cloned()
             .ok_or_else(|| StorageError::KeyNotFound(format!("notarization:{id}")))
@@ -726,7 +798,7 @@ impl BlockStore for MemoryStore {
     fn read_notarization_by_hash(&self, content_hash: &str) -> StorageResult<NotarizationEntry> {
         self.notarizations
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .find(|e| e.content_hash == content_hash)
             .cloned()
@@ -734,7 +806,7 @@ impl BlockStore for MemoryStore {
     }
 
     fn list_notarizations(&self, signer: Option<&str>) -> StorageResult<Vec<NotarizationEntry>> {
-        let all = self.notarizations.lock().unwrap();
+        let all = self.notarizations.lock().unwrap_or_else(|e| e.into_inner());
         let mut result: Vec<_> = all
             .values()
             .filter(|e| signer.is_none_or(|s| e.signer == s))
@@ -749,7 +821,7 @@ impl BlockStore for MemoryStore {
     fn write_ownership_transfer(&self, transfer: &OwnershipTransfer) -> StorageResult<()> {
         self.ownership_transfers
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .entry(transfer.content_hash.clone())
             .or_default()
             .push(transfer.clone());
@@ -763,7 +835,7 @@ impl BlockStore for MemoryStore {
         Ok(self
             .ownership_transfers
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .get(content_hash)
             .cloned()
             .unwrap_or_default())
@@ -1250,6 +1322,23 @@ mod tests {
         assert_eq!(transfers.len(), 1);
         assert_eq!(transfers[0].signature_level, SignatureLevel::Advanced);
         assert_eq!(transfers[0].biometric_evidence.len(), 1);
+    }
+
+    #[test]
+    fn no_bare_unwrap_in_production_code() {
+        let source = include_str!("memory.rs");
+        let prod_code = source.split("#[cfg(test)]").next().unwrap_or(source);
+        let violations: Vec<(usize, &str)> = prod_code
+            .lines()
+            .enumerate()
+            .filter(|(_, l)| l.contains(".unwrap()") && !l.trim().starts_with("//"))
+            .collect();
+        assert!(
+            violations.is_empty(),
+            "memory.rs production code has {} bare .unwrap() calls — use .unwrap_or_else(|e| e.into_inner()) for mutex locks:\n  {}",
+            violations.len(),
+            violations.iter().take(5).map(|(i, l)| format!("line {}: {}", i + 1, l.trim())).collect::<Vec<_>>().join("\n  ")
+        );
     }
 
     #[test]
