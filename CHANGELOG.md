@@ -79,6 +79,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
   - eIDAS Art. 26(b) caveat: self-issued DIDs differ from identity-verified credentials; full compliance requires external identity verification
   - SP 800-63B AAL2: reclassified as structural analogy, not equivalence — AAL2 requires verified biometric enrollment through a trusted provider
   - 4 new tests in `tests/doc_honesty.rs` enforce these disclaimers going forward
+
+### Security
+
+- **Stripe webhook HMAC verification** — `POST /api/v1/stripe/webhook` now verifies `Stripe-Signature` header (HMAC-SHA256) before processing events. Previously accepted any POST without verification.
+  - Requires `STRIPE_WEBHOOK_SECRET` env var; returns 503 when not configured (fail-closed, was silently accepting everything)
+  - Returns 401 on signature mismatch with `INVALID_SIGNATURE` error code
+  - `checkout.session.completed` handler logs explicitly that tier activation is NOT IMPLEMENTED — no silent success
+  - 5 TDD tests: missing secret rejected, missing header rejected, invalid HMAC rejected, valid HMAC accepted, tampered payload rejected
+
+### Changed
+
 - Handlers `notarize`, `alias`, `inference`, `invitations`, `governance`, `identity` now use shared `crate::signature::verify_*` — eliminated ~228 lines of duplicated verification code
 - All 10 signature-bearing endpoints validate FES/FEA constraints: level↔algorithm match, biometric evidence required for Advanced, public key size per algorithm, biometric commitment format
 - `alias.rs` and `invitations.rs` use shared `validate_fes_fea()` instead of inline validation (eliminated 4 duplicated ~40-line blocks)
