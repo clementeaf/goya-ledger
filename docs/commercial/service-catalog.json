@@ -41,8 +41,8 @@
         { "method": "GET", "path": "/api/v1/store/credential/{id}", "description": "Obtener credencial" },
         { "method": "GET", "path": "/api/v1/store/credentials", "description": "Listar credenciales" },
         { "method": "GET", "path": "/api/v1/credentials/issuer/{did}", "description": "Credenciales por emisor" },
-        { "method": "POST", "path": "/api/v1/zkp/prove", "description": "Generar ZK proof" },
-        { "method": "POST", "path": "/api/v1/zkp/verify", "description": "Verificar ZK proof" }
+        { "method": "POST", "path": "/api/v1/identity/commitment/prove", "description": "Generar commitment proof" },
+        { "method": "POST", "path": "/api/v1/identity/commitment/verify", "description": "Verificar commitment proof" }
       ],
       "use_cases": [
         "Titulos universitarios verificables",

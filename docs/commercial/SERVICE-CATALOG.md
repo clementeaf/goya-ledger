@@ -43,14 +43,14 @@ Data structure for the frontend that offers Goya Ledger services. Each service i
 
 **slug:** `identity`
 **tagline:** Identidades W3C DID con credenciales verificables
-**description:** Gestion completa de identidades descentralizadas siguiendo el estandar W3C DID. Emision, almacenamiento y verificacion de credenciales verificables con divulgacion selectiva via zero-knowledge proofs.
+**description:** Gestion completa de identidades descentralizadas siguiendo el estandar W3C DID. Emision, almacenamiento y verificacion de credenciales verificables con divulgacion selectiva via commitment-based attribute verification.
 
 **capabilities:**
 - Crear y resolver DIDs (did:goya:*)
 - Emitir Verifiable Credentials (VC Data Model 2.0)
 - Verificar credenciales con firma criptografica
-- ZK proofs para divulgacion selectiva (commitment-based)
-- Alias con compromiso zero-knowledge y revocacion de 15 dias
+- Commitment-based proofs para verificacion de atributos
+- Alias con compromiso criptografico y revocacion de 15 dias
 - Interoperabilidad W3C DID Resolution y JSON-LD export
 
 **endpoints:**
@@ -64,8 +64,8 @@ Data structure for the frontend that offers Goya Ledger services. Each service i
 | GET | `/api/v1/store/credential/{id}` | Obtener credencial por ID |
 | GET | `/api/v1/store/credentials` | Listar credenciales (paginado) |
 | GET | `/api/v1/credentials/issuer/{did}` | Credenciales por emisor |
-| POST | `/api/v1/zkp/prove` | Generar ZK proof |
-| POST | `/api/v1/zkp/verify` | Verificar ZK proof |
+| POST | `/api/v1/identity/commitment/prove` | Generar commitment proof |
+| POST | `/api/v1/identity/commitment/verify` | Verificar commitment proof |
 | POST | `/api/v1/alias` | Crear alias DID |
 | GET | `/api/v1/alias/{alias}` | Resolver alias |
 

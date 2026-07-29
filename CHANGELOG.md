@@ -64,6 +64,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Changed
 
+- **Honest naming: "ZKP" → "commitment"** — the commitment-based attribute verification module never was zero-knowledge (the verifier sees the claim value), so the public API now says what it actually is:
+  - Types: `ZkPresentation` → `CommitmentPresentation`, `ZkProof` → `CommitmentProof`, `ZkpError` → `CommitmentError`
+  - Endpoints: `/api/v1/identity/zkp/prove|verify` → `/api/v1/identity/commitment/prove|verify`
+  - Handler functions: `prove_zkp`/`verify_zkp` → `prove_commitment`/`verify_commitment`
+  - SERVICE-CATALOG.md and service-catalog.json: "zero-knowledge proofs" → "commitment-based attribute verification"
+  - ROADMAP: clarifies current state is commitment-based, ZK real (Bulletproofs/PLONK) is future work
+  - 3 TDD tests enforce the rename: `types_are_named_commitment_not_zk`, `no_false_zk_claims_in_production_code`, `struct_doc_says_commitment_not_zk`
+  - **Breaking:** clients using `/identity/zkp/prove` or `/identity/zkp/verify` must update to `/identity/commitment/prove|verify`
 - Handlers `notarize`, `alias`, `inference`, `invitations`, `governance`, `identity` now use shared `crate::signature::verify_*` — eliminated ~228 lines of duplicated verification code
 - All 10 signature-bearing endpoints validate FES/FEA constraints: level↔algorithm match, biometric evidence required for Advanced, public key size per algorithm, biometric commitment format
 - `alias.rs` and `invitations.rs` use shared `validate_fes_fea()` instead of inline validation (eliminated 4 duplicated ~40-line blocks)

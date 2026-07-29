@@ -170,8 +170,9 @@ impl ApiRoutes {
             .service(governance::close_governance_voting)
             .service(pin::generate_pin)
             .service(pin::verify_pin);
-        // ZKP identity
-        cfg.service(zkp::prove_zkp).service(zkp::verify_zkp);
+        // Commitment-based attribute verification
+        cfg.service(zkp::prove_commitment)
+            .service(zkp::verify_commitment);
         // Oracle, forensic, compliance
         cfg.service(oracle::get_oracle_feed)
             .service(oracle::list_oracle_feeds)
@@ -334,7 +335,7 @@ impl ApiRoutes {
 /// Light client routes — Starter tier only.
 ///
 /// Exposes: notarization, identity, credentials, audit, chain info,
-/// ZKP, health, version, and openapi. Everything else is excluded.
+/// commitment verification, health, version, and openapi. Everything else is excluded.
 pub struct LightRoutes;
 
 impl LightRoutes {
@@ -375,8 +376,9 @@ impl LightRoutes {
         // Audit trail
         cfg.service(audit::list_audit_entries)
             .service(audit::export_audit_csv);
-        // ZKP (selective disclosure)
-        cfg.service(zkp::prove_zkp).service(zkp::verify_zkp);
+        // Commitment-based attribute verification
+        cfg.service(zkp::prove_commitment)
+            .service(zkp::verify_commitment);
         // W3C interop
         cfg.service(interop::resolve_did);
         // Alias

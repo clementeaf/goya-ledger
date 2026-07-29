@@ -182,10 +182,10 @@ fn legal_oracle_query_stores_record_and_emits_audit() {
     assert!(events[0].metadata.as_ref().unwrap().contains("bcn"));
 }
 
-// ── Credential → ZKP Verification ───────────────────────────────────────────
+// ── Credential → Commitment Verification ────────────────────────────────────
 
 #[test]
-fn credential_to_zkp_range_proof_end_to_end() {
+fn credential_to_commitment_range_proof_end_to_end() {
     let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
 
     // 1. Store credential with age claim

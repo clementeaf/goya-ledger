@@ -33,9 +33,9 @@ pub enum Predicate {
     CredentialValidity { credential_id: String },
 }
 
-/// A zero-knowledge presentation: proof + public inputs + credential ref.
+/// A commitment-based presentation: proof + public inputs + credential ref.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ZkPresentation {
+pub struct CommitmentPresentation {
     /// Reference to the credential being proven.
     pub credential_id: String,
     /// The predicate that was proven.
@@ -43,7 +43,7 @@ pub struct ZkPresentation {
     /// The commitment: SHA-256(claim_value || blinding_factor).
     pub commitment: String,
     /// The proof data (scheme-specific).
-    pub proof: ZkProof,
+    pub proof: CommitmentProof,
     /// Timestamp of proof generation.
     pub created_at: u64,
 }
@@ -54,7 +54,7 @@ pub struct ZkPresentation {
 /// revealed to the verifier. This provides integrity (commitment binds the
 /// value) but not privacy. For privacy, replace with Bulletproofs/Schnorr.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ZkProof {
+pub struct CommitmentProof {
     /// The blinding factor (hex-encoded, 32 bytes).
     pub blinding_factor: String,
     /// The actual claim value — visible to the verifier.
@@ -89,15 +89,15 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
-/// Create a ZK proof for a range predicate (value >= threshold).
+/// Create a commitment proof for a range predicate (value >= threshold).
 pub fn prove_range(
     credential_id: &str,
     claim_key: &str,
     claim_value: u64,
     threshold: u64,
-) -> Result<ZkPresentation, ZkpError> {
+) -> Result<CommitmentPresentation, CommitmentError> {
     if claim_value < threshold {
-        return Err(ZkpError::PredicateNotSatisfied(format!(
+        return Err(CommitmentError::PredicateNotSatisfied(format!(
             "{claim_key}: {claim_value} < {threshold}"
         )));
     }
@@ -106,14 +106,14 @@ pub fn prove_range(
     let value_str = claim_value.to_string();
     let commitment = commit(&value_str, &blinding);
 
-    Ok(ZkPresentation {
+    Ok(CommitmentPresentation {
         credential_id: credential_id.to_string(),
         predicate: Predicate::RangeProof {
             claim_key: claim_key.to_string(),
             threshold,
         },
         commitment,
-        proof: ZkProof {
+        proof: CommitmentProof {
             blinding_factor: hex::encode(blinding),
             claim_value: value_str,
         },
@@ -121,15 +121,15 @@ pub fn prove_range(
     })
 }
 
-/// Create a ZK proof for set membership (value in allowed_values).
+/// Create a commitment proof for set membership (value in allowed_values).
 pub fn prove_set_membership(
     credential_id: &str,
     claim_key: &str,
     claim_value: &str,
     allowed_values: &[String],
-) -> Result<ZkPresentation, ZkpError> {
+) -> Result<CommitmentPresentation, CommitmentError> {
     if !allowed_values.iter().any(|v| v == claim_value) {
-        return Err(ZkpError::PredicateNotSatisfied(format!(
+        return Err(CommitmentError::PredicateNotSatisfied(format!(
             "{claim_key}: '{claim_value}' not in allowed set"
         )));
     }
@@ -137,14 +137,14 @@ pub fn prove_set_membership(
     let blinding = random_blinding();
     let commitment = commit(claim_value, &blinding);
 
-    Ok(ZkPresentation {
+    Ok(CommitmentPresentation {
         credential_id: credential_id.to_string(),
         predicate: Predicate::SetMembership {
             claim_key: claim_key.to_string(),
             allowed_values: allowed_values.to_vec(),
         },
         commitment,
-        proof: ZkProof {
+        proof: CommitmentProof {
             blinding_factor: hex::encode(blinding),
             claim_value: claim_value.to_string(),
         },
@@ -152,25 +152,25 @@ pub fn prove_set_membership(
     })
 }
 
-/// Create a ZK proof for credential validity.
+/// Create a commitment proof for credential validity.
 pub fn prove_credential_validity(
     credential_id: &str,
     status: &str,
     expires_at: u64,
     revoked_at: Option<u64>,
-) -> Result<ZkPresentation, ZkpError> {
+) -> Result<CommitmentPresentation, CommitmentError> {
     if status != "active" {
-        return Err(ZkpError::PredicateNotSatisfied(format!(
+        return Err(CommitmentError::PredicateNotSatisfied(format!(
             "credential status is '{status}', not 'active'"
         )));
     }
     if expires_at > 0 && now_secs() > expires_at {
-        return Err(ZkpError::PredicateNotSatisfied(
+        return Err(CommitmentError::PredicateNotSatisfied(
             "credential has expired".to_string(),
         ));
     }
     if revoked_at.is_some() {
-        return Err(ZkpError::PredicateNotSatisfied(
+        return Err(CommitmentError::PredicateNotSatisfied(
             "credential has been revoked".to_string(),
         ));
     }
@@ -179,13 +179,13 @@ pub fn prove_credential_validity(
     let validity_token = format!("valid:{credential_id}:{status}");
     let commitment = commit(&validity_token, &blinding);
 
-    Ok(ZkPresentation {
+    Ok(CommitmentPresentation {
         credential_id: credential_id.to_string(),
         predicate: Predicate::CredentialValidity {
             credential_id: credential_id.to_string(),
         },
         commitment,
-        proof: ZkProof {
+        proof: CommitmentProof {
             blinding_factor: hex::encode(blinding),
             claim_value: validity_token,
         },
@@ -193,13 +193,13 @@ pub fn prove_credential_validity(
     })
 }
 
-/// Verify a ZK presentation.
-pub fn verify_presentation(presentation: &ZkPresentation) -> Result<bool, ZkpError> {
+/// Verify a commitment presentation.
+pub fn verify_presentation(presentation: &CommitmentPresentation) -> Result<bool, CommitmentError> {
     // Decode blinding factor
     let blinding_bytes = hex::decode(&presentation.proof.blinding_factor)
-        .map_err(|e| ZkpError::InvalidProof(format!("bad blinding hex: {e}")))?;
+        .map_err(|e| CommitmentError::InvalidProof(format!("bad blinding hex: {e}")))?;
     if blinding_bytes.len() != 32 {
-        return Err(ZkpError::InvalidProof(
+        return Err(CommitmentError::InvalidProof(
             "blinding must be 32 bytes".to_string(),
         ));
     }
@@ -218,11 +218,9 @@ pub fn verify_presentation(presentation: &ZkPresentation) -> Result<bool, ZkpErr
     // Verify predicate
     match &presentation.predicate {
         Predicate::RangeProof { threshold, .. } => {
-            let value: u64 = presentation
-                .proof
-                .claim_value
-                .parse()
-                .map_err(|_| ZkpError::InvalidProof("claim_value not a number".to_string()))?;
+            let value: u64 = presentation.proof.claim_value.parse().map_err(|_| {
+                CommitmentError::InvalidProof("claim_value not a number".to_string())
+            })?;
             Ok(value >= *threshold)
         }
         Predicate::SetMembership { allowed_values, .. } => {
@@ -236,7 +234,7 @@ pub fn verify_presentation(presentation: &ZkPresentation) -> Result<bool, ZkpErr
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ZkpError {
+pub enum CommitmentError {
     #[error("predicate not satisfied: {0}")]
     PredicateNotSatisfied(String),
     #[error("invalid proof: {0}")]
@@ -264,7 +262,7 @@ mod tests {
     #[test]
     fn range_proof_below_threshold_fails_to_prove() {
         let err = prove_range("cred-1", "age", 16, 18).unwrap_err();
-        assert!(matches!(err, ZkpError::PredicateNotSatisfied(_)));
+        assert!(matches!(err, CommitmentError::PredicateNotSatisfied(_)));
     }
 
     #[test]
@@ -278,7 +276,7 @@ mod tests {
     fn set_membership_not_in_set_fails() {
         let allowed = vec!["CL".to_string(), "AR".to_string()];
         let err = prove_set_membership("cred-1", "nationality", "US", &allowed).unwrap_err();
-        assert!(matches!(err, ZkpError::PredicateNotSatisfied(_)));
+        assert!(matches!(err, CommitmentError::PredicateNotSatisfied(_)));
     }
 
     #[test]
@@ -291,20 +289,20 @@ mod tests {
     fn credential_validity_revoked_fails() {
         let err = prove_credential_validity("cred-1", "active", now_secs() + 3600, Some(1000))
             .unwrap_err();
-        assert!(matches!(err, ZkpError::PredicateNotSatisfied(_)));
+        assert!(matches!(err, CommitmentError::PredicateNotSatisfied(_)));
     }
 
     #[test]
     fn credential_validity_inactive_fails() {
         let err =
             prove_credential_validity("cred-1", "suspended", now_secs() + 3600, None).unwrap_err();
-        assert!(matches!(err, ZkpError::PredicateNotSatisfied(_)));
+        assert!(matches!(err, CommitmentError::PredicateNotSatisfied(_)));
     }
 
     #[test]
     fn credential_validity_expired_fails() {
         let err = prove_credential_validity("cred-1", "active", 1, None).unwrap_err();
-        assert!(matches!(err, ZkpError::PredicateNotSatisfied(_)));
+        assert!(matches!(err, CommitmentError::PredicateNotSatisfied(_)));
     }
 
     #[test]
@@ -335,5 +333,50 @@ mod tests {
         let b1 = [1u8; 32];
         let b2 = [2u8; 32];
         assert_ne!(commit("same", &b1), commit("same", &b2));
+    }
+
+    // ── TDD: honest naming ──────────────────────────────────────────────
+    // These tests assert the public API uses "Commitment", not "Zk".
+    // They fail until the rename is applied.
+
+    #[test]
+    fn types_are_named_commitment_not_zk() {
+        let pres: CommitmentPresentation = prove_range("c", "age", 25, 18).unwrap();
+        let _proof: &CommitmentProof = &pres.proof;
+        let _err: CommitmentError = CommitmentError::InvalidProof("test".into());
+        // If this compiles, the rename is done.
+        assert!(verify_presentation(&pres).unwrap());
+    }
+
+    #[test]
+    fn no_false_zk_claims_in_production_code() {
+        let src = include_str!("zkp.rs");
+        let prod_code = src.split("#[cfg(test)]").next().unwrap();
+        let bad_lines: Vec<&str> = prod_code
+            .lines()
+            .filter(|l| {
+                let lower = l.to_lowercase();
+                lower.contains("zero-knowledge")
+                    && !lower.contains("not zero-knowledge")
+                    && !lower.contains("not a zero-knowledge")
+                    && !lower.contains("replace")
+                    && !lower.contains("for true zkp")
+            })
+            .collect();
+        assert!(
+            bad_lines.is_empty(),
+            "Production code still claims ZK: {:?}",
+            bad_lines
+        );
+    }
+
+    #[test]
+    fn struct_doc_says_commitment_not_zk() {
+        let src = include_str!("zkp.rs");
+        let prod_code = src.split("#[cfg(test)]").next().unwrap();
+        assert!(
+            !prod_code.contains("/// A zero-knowledge presentation"),
+            "CommitmentPresentation doc still says 'zero-knowledge'"
+        );
     }
 }

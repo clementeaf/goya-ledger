@@ -109,13 +109,13 @@ Fecha: 2026-05-11
 - `src/storage/traits.rs` — `Credential` ya tiene claims como `HashMap<String, String>`
 
 **Entregables:**
-1. Investigación: selección de esquema ZKP (Groth16 vs Bulletproofs vs PLONK) basada en: tamaño de prueba, tiempo de verificación, compatibilidad con Wasm
-2. `src/identity/zkp.rs` — trait `ZkpProver` / `ZkpVerifier`
+1. Investigación: selección de esquema ZKP real (Groth16 vs Bulletproofs vs PLONK) basada en: tamaño de prueba, tiempo de verificación, compatibilidad con Wasm
+2. `src/identity/zkp.rs` — actualmente implementa commitment-based verification (no ZK). Trait futuro: `ZkpProver` / `ZkpVerifier`
 3. Predicados soportados iniciales: range proof (edad), set membership (nacionalidad in [lista]), credential validity (sin revelar issuer)
-4. `ZkPresentation` struct: prueba + public inputs + credential reference
-5. Endpoint `POST /api/v1/identity/zkp/prove` + `POST /api/v1/identity/zkp/verify`
+4. `CommitmentPresentation` struct: prueba + public inputs + credential reference (renombrar a `ZkPresentation` cuando se implemente ZK real)
+5. Endpoint `POST /api/v1/identity/commitment/prove` + `POST /api/v1/identity/commitment/verify` (migrar a `/zkp/` cuando se implemente ZK real)
 6. Integración con `SigningProvider` existente (Ed25519 / ML-DSA-65 para firmar la presentación)
-7. `AuditEvent` por cada verificación ZKP (sin datos revelados, solo resultado)
+7. `AuditEvent` por cada verificación (sin datos revelados, solo resultado)
 8. Tests: prueba válida, prueba inválida, predicados fuera de rango, credential revocada
 
 **No incluye:** Circuitos custom, integración con wallets móviles (eso sería Fase 5b).
@@ -145,7 +145,7 @@ Fase 1 es prerequisito de todas. Fases 2-5 pueden paralelizarse después, con la
 | 2. Sandbox | Media | 1 (`chaincode/sandbox.rs`) | 15-20 |
 | 3. Dashboard | Media (frontend) | 3 páginas React | 10 (E2E) |
 | 4. Oráculo | Media-Alta | 2 (`oracle/`) | 20-25 |
-| 5. ZKP | Alta | 2+ (`identity/zkp.rs`) | 25-35 |
+| 5. ZKP real (actualmente commitment-based) | Alta | 2+ (`identity/zkp.rs`) | 25-35 |
 
 ## Notas
 

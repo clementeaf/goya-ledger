@@ -1,6 +1,6 @@
 //! Commitment-based attribute verification endpoints:
-//!   POST /api/v1/identity/zkp/prove   — generate a commitment proof over a credential claim
-//!   POST /api/v1/identity/zkp/verify  — verify a commitment presentation
+//!   POST /api/v1/identity/commitment/prove   — generate a commitment proof over a credential claim
+//!   POST /api/v1/identity/commitment/verify  — verify a commitment presentation
 //!
 //! Note: this is NOT zero-knowledge — the verifier sees the claim value.
 //! See `identity::zkp` module docs for details.
@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 use crate::api::errors::{ApiError, ApiResponse, ApiResult};
 use crate::app_state::AppState;
-use crate::identity::zkp::{self, Predicate, ZkPresentation, ZkpError};
+use crate::identity::zkp::{self, CommitmentError, CommitmentPresentation, Predicate};
 
 #[derive(Deserialize)]
 pub struct ProveRequest {
@@ -26,16 +26,16 @@ pub struct ProveRequest {
     pub credential_revoked_at: Option<u64>,
 }
 
-/// POST /api/v1/identity/zkp/prove — generate a ZK proof for a predicate.
-#[post("/identity/zkp/prove")]
-pub async fn prove_zkp(
+/// POST /api/v1/identity/commitment/prove — generate a commitment proof for a predicate.
+#[post("/identity/commitment/prove")]
+pub async fn prove_commitment(
     state: web::Data<AppState>,
     body: web::Json<ProveRequest>,
     req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
 
-    let result: Result<ZkPresentation, ZkpError> = match &body.predicate {
+    let result: Result<CommitmentPresentation, CommitmentError> = match &body.predicate {
         Predicate::RangeProof {
             claim_key,
             threshold,
@@ -85,7 +85,7 @@ pub async fn prove_zkp(
             );
             Ok(HttpResponse::Ok().json(ApiResponse::success(presentation, trace_id)))
         }
-        Err(ZkpError::PredicateNotSatisfied(reason)) => Err(ApiError::ValidationError {
+        Err(CommitmentError::PredicateNotSatisfied(reason)) => Err(ApiError::ValidationError {
             field: "predicate".to_string(),
             reason,
         }),
@@ -95,11 +95,11 @@ pub async fn prove_zkp(
     }
 }
 
-/// POST /api/v1/identity/zkp/verify — verify a ZK presentation.
-#[post("/identity/zkp/verify")]
-pub async fn verify_zkp(
+/// POST /api/v1/identity/commitment/verify — verify a commitment presentation.
+#[post("/identity/commitment/verify")]
+pub async fn verify_commitment(
     state: web::Data<AppState>,
-    body: web::Json<ZkPresentation>,
+    body: web::Json<CommitmentPresentation>,
     req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();

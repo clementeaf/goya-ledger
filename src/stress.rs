@@ -1202,9 +1202,9 @@ mod tests {
         );
     }
 
-    /// ZKP: 64 threads × 5,000 prove+verify cycles = 320,000 cryptographic ops
+    /// Commitment verification: 64 threads × 5,000 prove+verify cycles = 320,000 ops
     #[test]
-    fn torture_zkp_320k_concurrent() {
+    fn torture_commitment_320k_concurrent() {
         use crate::identity::zkp::{prove_range, verify_presentation};
 
         let threads: Vec<_> = (0..64)
@@ -1230,7 +1230,7 @@ mod tests {
         let total_errors: u64 = threads.into_iter().map(|t| t.join().unwrap()).sum();
         assert_eq!(
             total_errors, 0,
-            "ZKP torture: {total_errors} errors in 320K prove+verify"
+            "commitment torture: {total_errors} errors in 320K prove+verify"
         );
     }
 
