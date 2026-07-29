@@ -71,12 +71,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Tests
 
-- **71 new tests** (1869 → 1940), covering trust-boundary rejection paths and pure logic:
+- **82 new tests** (1869 → 1951), covering trust-boundary rejection paths and pure logic:
   - `signature/verify.rs` (15→21): malformed signature/key rejection — bad hex, wrong length, invalid Ed25519 point, ML-DSA-65 variants
   - `notarize.rs` (6→22): invalid hash, DID↔pubkey mismatch, invalid signature, duplicate hash, non-owner transfer, FEA validation, sign_fea rejection
   - `governance.rs` (0→11): empty/null-byte proposer, quorum bounds, voting period zero, empty voter, proposal not found
   - `inference.rs` (2→23): `resolve_outputs` tolerance modes, `parse_numeric_output`, `parse_vector_output`, `cosine_similarity`, `build_inference_payload`
   - `contracts.rs` (0→12): ERC-20 rate limiter, param helpers, contract not found, unknown function, missing params
+  - `invitations.rs` (0→6): empty/excess proposals, unknown alias, missing voter param, unknown invitation, list empty
+  - `alias.rs` (1→6): invalid commitment/salt format, resolve/by-did/revoke not found
 
 ### Changed
 
