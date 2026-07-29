@@ -332,9 +332,116 @@ pub async fn store_list_credentials(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use actix_web::{test, App};
 
-    #[test]
-    fn store_credential_handlers_are_public() {
+    fn make_app_data() -> web::Data<AppState> {
+        web::Data::new(AppState::test_default())
+    }
+
+    #[actix_web::test]
+    async fn store_credential_handlers_are_public() {
         let _ = (store_write_credential, store_get_credential);
+    }
+
+    // ── get_credential: not found ───────────────────────────────────
+
+    #[actix_web::test]
+    async fn get_credential_returns_404() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(get_credential)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/credentials/nonexistent")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    // ── verify_credential: not found ────────────────────────────────
+
+    #[actix_web::test]
+    async fn verify_credential_returns_404() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(verify_credential)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/credentials/ghost/verify")
+            .set_json(serde_json::json!({}))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    // ── revoke_credential: not found ────────────────────────────────
+
+    #[actix_web::test]
+    async fn revoke_credential_returns_404() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(revoke_credential)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/credentials/ghost/revoke")
+            .set_json(serde_json::json!({"reason": "compromised"}))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    // ── issue_credential: issuer not found ──────────────────────────
+
+    #[actix_web::test]
+    async fn issue_rejects_unknown_issuer() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(issue_credential)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/credentials/issue")
+            .set_json(serde_json::json!({
+                "issuer_did": "did:goya:unknown",
+                "subject_did": "did:goya:subject",
+                "claims": { "name": "Alice" },
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    // ── store_get_credential: not found ─────────────────────────────
+
+    #[actix_web::test]
+    async fn store_get_returns_404() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(store_get_credential)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/store/credentials/ghost")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
     }
 }
