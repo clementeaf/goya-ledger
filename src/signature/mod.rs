@@ -273,6 +273,9 @@ pub fn validate_fes_fea(
     evidence: &[BiometricEvidence],
     public_key_hex: &str,
 ) -> Result<(), SignatureError> {
+    if level == SignatureLevel::Qualified {
+        return Err(SignatureError::QualifiedNotSupported);
+    }
     if !level.algorithm_satisfies(algorithm) {
         return Err(SignatureError::AlgorithmMismatch {
             level,
@@ -313,6 +316,9 @@ pub enum SignatureError {
 
     #[error("signature verification failed: {0}")]
     VerificationFailed(String),
+
+    #[error("Qualified signature level requires a Qualified Trust Service Provider (QTSP) — not yet supported")]
+    QualifiedNotSupported,
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -927,16 +933,21 @@ mod tests {
         assert!(matches!(err, SignatureError::InvalidBiometric(_)));
     }
 
+    // ── TDD: Qualified rejected at API level ──────────────────────
     #[test]
-    fn validate_fes_fea_qualified_same_as_advanced() {
+    fn validate_fes_fea_rejects_qualified() {
         let pk = "aa".repeat(1952);
         let bio = vec![dummy_bio(BiometricType::GovernmentId)];
-        assert!(validate_fes_fea(
+        let err = validate_fes_fea(
             SignatureLevel::Qualified,
             SigningAlgorithm::MlDsa65,
             &bio,
-            &pk
+            &pk,
         )
-        .is_ok());
+        .unwrap_err();
+        assert!(
+            matches!(err, SignatureError::QualifiedNotSupported),
+            "Qualified must be rejected with QualifiedNotSupported, got: {err}"
+        );
     }
 }

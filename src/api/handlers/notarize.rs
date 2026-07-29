@@ -914,17 +914,15 @@ mod tests {
         assert_eq!(body["data"]["signature_level"], "simple");
     }
 
-    // ── E2E: Qualified with ML-DSA-65 + biometric ────────────────────
+    // ── E2E: Qualified rejected (QTSP not supported) ──────────────────
 
     #[actix_web::test]
-    async fn e2e_qualified_notarize_accepted() {
+    async fn e2e_qualified_notarize_rejected() {
         let state = make_app_data();
         let app = test::init_service(
-            App::new().app_data(state).service(
-                web::scope("/api/v1")
-                    .service(submit_notarization)
-                    .service(verify_notarization),
-            ),
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_notarization)),
         )
         .await;
 
@@ -959,21 +957,12 @@ mod tests {
             .to_request();
 
         let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), 201);
+        assert_eq!(resp.status(), 400);
         let body: serde_json::Value = test::read_body_json(resp).await;
-        assert_eq!(body["data"]["signature_level"], "qualified");
-        assert_eq!(body["data"]["signature_algorithm"], "MlDsa65");
-
-        // Verify persisted
-        let req = test::TestRequest::get()
-            .uri(&format!("/api/v1/notarize/verify/{hash}"))
-            .to_request();
-        let resp = test::call_service(&app, req).await;
-        let body: serde_json::Value = test::read_body_json(resp).await;
-        assert_eq!(body["data"]["signature_level"], "qualified");
-        assert_eq!(
-            body["data"]["biometric_evidence"][0]["evidence_type"],
-            "government_id"
+        let msg = body["error"]["message"].as_str().unwrap_or("");
+        assert!(
+            msg.contains("Qualified") && msg.contains("not yet supported"),
+            "Expected QTSP rejection message, got: {msg}"
         );
     }
 }

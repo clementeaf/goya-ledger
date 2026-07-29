@@ -90,6 +90,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Changed
 
+- **eIDAS Qualified rejected at API level** — `SignatureLevel::Qualified` was accepted by all endpoints but treated identically to Advanced (no QTSP, no qualified certificate, no QSCD). Now rejected with `SignatureError::QualifiedNotSupported` in `validate_fes_fea()`, which all 10 signature-bearing endpoints call. Returns 400 with message "Qualified signature level requires a Qualified Trust Service Provider (QTSP) — not yet supported". The enum variant remains for future use when a certified TSP is integrated.
+  - 1 TDD test in `signature::tests`: `validate_fes_fea_rejects_qualified`
+  - E2E test `e2e_qualified_notarize_accepted` → `e2e_qualified_notarize_rejected` (asserts 400)
 - Handlers `notarize`, `alias`, `inference`, `invitations`, `governance`, `identity` now use shared `crate::signature::verify_*` — eliminated ~228 lines of duplicated verification code
 - All 10 signature-bearing endpoints validate FES/FEA constraints: level↔algorithm match, biometric evidence required for Advanced, public key size per algorithm, biometric commitment format
 - `alias.rs` and `invitations.rs` use shared `validate_fes_fea()` instead of inline validation (eliminated 4 duplicated ~40-line blocks)
