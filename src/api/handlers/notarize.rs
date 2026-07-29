@@ -1120,6 +1120,311 @@ mod tests {
         assert_eq!(body["error"]["code"], "ALREADY_NOTARIZED");
     }
 
+    // ── Transfer: rejection paths ──────────────────────────────────────
+
+    fn notarize_json(
+        did: &str,
+        pk_hex: &str,
+        provider: &SoftwareSigningProvider,
+        hash: &str,
+    ) -> serde_json::Value {
+        let payload = format!("notarize:{did}:{hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+        serde_json::json!({
+            "content_hash": hash,
+            "signer": did,
+            "public_key": pk_hex,
+            "signature": sig,
+        })
+    }
+
+    #[actix_web::test]
+    async fn transfer_rejects_invalid_hash() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(transfer_document)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/tooshort/transfer")
+            .set_json(serde_json::json!({
+                "from_did": "did:goya:aaa",
+                "to_did": "did:goya:bbb",
+                "public_key": "aa".repeat(32),
+                "signature": "bb".repeat(32),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    #[actix_web::test]
+    async fn transfer_rejects_nonexistent_document() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(transfer_document)),
+        )
+        .await;
+
+        let hash = "ab".repeat(32);
+        let req = test::TestRequest::post()
+            .uri(&format!("/api/v1/notarize/{hash}/transfer"))
+            .set_json(serde_json::json!({
+                "from_did": "did:goya:aaa",
+                "to_did": "did:goya:bbb",
+                "public_key": "aa".repeat(32),
+                "signature": "bb".repeat(32),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    #[actix_web::test]
+    async fn transfer_rejects_did_mismatch() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state.clone()).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(transfer_document),
+            ),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = ed25519_identity();
+        let hash = content_hash();
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(notarize_json(&did, &pk_hex, &provider, &hash))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+        let wrong_did = "did:goya:0000000000000000";
+        let transfer_payload = format!("transfer_doc:{hash}:{wrong_did}:did:goya:recipient");
+        let sig = hex::encode(provider.sign(transfer_payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/api/v1/notarize/{hash}/transfer"))
+            .set_json(serde_json::json!({
+                "from_did": wrong_did,
+                "to_did": "did:goya:recipient",
+                "public_key": pk_hex,
+                "signature": sig,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 401);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "SIGNER_MISMATCH");
+    }
+
+    #[actix_web::test]
+    async fn transfer_rejects_bad_signature() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state.clone()).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(transfer_document),
+            ),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = ed25519_identity();
+        let hash = content_hash();
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(notarize_json(&did, &pk_hex, &provider, &hash))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/api/v1/notarize/{hash}/transfer"))
+            .set_json(serde_json::json!({
+                "from_did": did,
+                "to_did": "did:goya:recipient",
+                "public_key": pk_hex,
+                "signature": "aa".repeat(32),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 401);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "INVALID_SIGNATURE");
+    }
+
+    #[actix_web::test]
+    async fn transfer_rejects_non_owner() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state.clone()).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(transfer_document),
+            ),
+        )
+        .await;
+
+        // Alice notarizes
+        let (alice_did, alice_pk, alice_provider) = ed25519_identity();
+        let hash = content_hash();
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(notarize_json(&alice_did, &alice_pk, &alice_provider, &hash))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+        // Bob tries to transfer Alice's document
+        let (bob_did, bob_pk, bob_provider) = ed25519_identity();
+        let transfer_payload = format!("transfer_doc:{hash}:{bob_did}:did:goya:thief");
+        let sig = hex::encode(bob_provider.sign(transfer_payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri(&format!("/api/v1/notarize/{hash}/transfer"))
+            .set_json(serde_json::json!({
+                "from_did": bob_did,
+                "to_did": "did:goya:thief",
+                "public_key": bob_pk,
+                "signature": sig,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 403);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "NOT_OWNER");
+    }
+
+    #[actix_web::test]
+    async fn transfer_rejects_advanced_with_ed25519() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state.clone()).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(transfer_document),
+            ),
+        )
+        .await;
+
+        let (did, pk_hex, provider) = ed25519_identity();
+        let hash = content_hash();
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(notarize_json(&did, &pk_hex, &provider, &hash))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+        let sig = hex::encode(provider.sign(b"whatever").unwrap());
+        let req = test::TestRequest::post()
+            .uri(&format!("/api/v1/notarize/{hash}/transfer"))
+            .set_json(serde_json::json!({
+                "from_did": did,
+                "to_did": "did:goya:recipient",
+                "public_key": pk_hex,
+                "signature": sig,
+                "signature_level": "advanced",
+                "signature_algorithm": "Ed25519",
+                "biometric_evidence": [{
+                    "evidence_type": "fingerprint",
+                    "commitment": "a".repeat(64),
+                    "captured_at": 1700000000u64,
+                }],
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "VALIDATION");
+    }
+
+    // ── sign_fea: rejection paths ───────────────────────────────────────
+
+    #[actix_web::test]
+    async fn sign_fea_rejects_invalid_hash() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(sign_fea)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/sign/fea")
+            .set_json(serde_json::json!({
+                "content_hash": "short",
+                "signer": "did:goya:test",
+                "biometric_evidence": [{
+                    "evidence_type": "fingerprint",
+                    "commitment": "a".repeat(64),
+                    "captured_at": 1700000000u64,
+                }],
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "INVALID_HASH");
+    }
+
+    #[actix_web::test]
+    async fn sign_fea_rejects_empty_biometrics() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(sign_fea)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/sign/fea")
+            .set_json(serde_json::json!({
+                "content_hash": "a".repeat(64),
+                "signer": "did:goya:test",
+                "biometric_evidence": [],
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "BIOMETRIC_REQUIRED");
+    }
+
+    #[actix_web::test]
+    async fn sign_fea_rejects_invalid_biometric() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(sign_fea)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/sign/fea")
+            .set_json(serde_json::json!({
+                "content_hash": "a".repeat(64),
+                "signer": "did:goya:test",
+                "biometric_evidence": [{
+                    "evidence_type": "fingerprint",
+                    "commitment": "tooshort",
+                    "captured_at": 1700000000u64,
+                }],
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "INVALID_BIOMETRIC");
+    }
+
     // ── E2E: Qualified rejected (QTSP not supported) ──────────────────
 
     #[actix_web::test]
