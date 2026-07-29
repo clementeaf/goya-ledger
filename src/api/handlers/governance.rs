@@ -1057,3 +1057,274 @@ pub async fn close_governance_voting(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{test, App};
+
+    fn make_app_data() -> web::Data<AppState> {
+        web::Data::new(AppState::test_default())
+    }
+
+    // ── submit_governance_proposal: input validation ──────────────────
+
+    #[actix_web::test]
+    async fn submit_rejects_empty_proposer() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_governance_proposal)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/proposals")
+            .set_json(serde_json::json!({
+                "proposer": "",
+                "description": "test",
+                "deposit": 10000,
+                "action": { "type": "text", "title": "T", "description": "D" },
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "VALIDATION_ERROR");
+    }
+
+    #[actix_web::test]
+    async fn submit_rejects_null_bytes_in_proposer() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_governance_proposal)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/proposals")
+            .set_json(serde_json::json!({
+                "proposer": "alice\u{0000}bob",
+                "description": "test",
+                "deposit": 10000,
+                "action": { "type": "text", "title": "T", "description": "D" },
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert!(body["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("null bytes"));
+    }
+
+    #[actix_web::test]
+    async fn submit_rejects_quorum_percent_zero() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_governance_proposal)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/proposals")
+            .set_json(serde_json::json!({
+                "proposer": "alice",
+                "description": "test",
+                "deposit": 10000,
+                "action": {
+                    "type": "param_change",
+                    "changes": [{ "key": "quorum_percent", "value": 0 }],
+                },
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert!(body["error"]["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("between 1 and 100"));
+    }
+
+    #[actix_web::test]
+    async fn submit_rejects_quorum_percent_over_100() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_governance_proposal)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/proposals")
+            .set_json(serde_json::json!({
+                "proposer": "alice",
+                "description": "test",
+                "deposit": 10000,
+                "action": {
+                    "type": "param_change",
+                    "changes": [{ "key": "quorum_percent", "value": 101 }],
+                },
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    #[actix_web::test]
+    async fn submit_rejects_voting_period_zero() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(submit_governance_proposal)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/proposals")
+            .set_json(serde_json::json!({
+                "proposer": "alice",
+                "description": "test",
+                "deposit": 10000,
+                "action": {
+                    "type": "param_change",
+                    "changes": [{ "key": "voting_period_blocks", "value": 0 }],
+                },
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    // ── cast_governance_vote: input validation ───────────────────────
+
+    #[actix_web::test]
+    async fn vote_rejects_empty_voter() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(cast_governance_vote)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/proposals/1/vote")
+            .set_json(serde_json::json!({
+                "voter": "",
+                "option": "Yes",
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "VALIDATION_ERROR");
+    }
+
+    #[actix_web::test]
+    async fn vote_returns_503_when_governance_not_configured() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(cast_governance_vote)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/proposals/9999/vote")
+            .set_json(serde_json::json!({
+                "voter": "alice",
+                "option": "Yes",
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 503);
+    }
+
+    // ── get_governance_proposal: not found ───────────────────────────
+
+    #[actix_web::test]
+    async fn get_proposal_not_found() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(get_governance_proposal)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/governance/proposals/9999")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    // ── list_governance_proposals: invalid status ────────────────────
+
+    #[actix_web::test]
+    async fn list_proposals_returns_empty_when_not_configured() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(list_governance_proposals)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/governance/proposals")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+    }
+
+    // ── veto: input validation ──────────────────────────────────────
+
+    #[actix_web::test]
+    async fn veto_rejects_empty_caller() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(veto_governance_proposal)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/proposals/1/veto")
+            .set_json(serde_json::json!({ "caller": "" }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    // ── voter_history: missing voter param ──────────────────────────
+
+    #[actix_web::test]
+    async fn voter_history_rejects_empty_voter() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(get_voter_history)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/governance/votes?voter=")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+}
