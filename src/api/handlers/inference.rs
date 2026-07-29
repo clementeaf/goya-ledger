@@ -1018,6 +1018,212 @@ mod tests {
         assert_eq!(parse_status("pending"), Some(ClaimStatus::Pending));
         assert_eq!(parse_status("Finalized"), Some(ClaimStatus::Finalized));
         assert_eq!(parse_status("DISPUTED"), Some(ClaimStatus::Disputed));
+        assert_eq!(parse_status("slashed"), Some(ClaimStatus::Slashed));
+        assert_eq!(parse_status("rejected"), Some(ClaimStatus::Rejected));
         assert_eq!(parse_status("unknown"), None);
+    }
+
+    // ── parse_numeric_output ────────────────────────────────────────
+
+    #[test]
+    fn parse_numeric_direct() {
+        assert_eq!(parse_numeric_output("42.5"), Some(42.5));
+    }
+
+    #[test]
+    fn parse_numeric_json_result_field() {
+        assert_eq!(parse_numeric_output(r#"{"result": 7.25}"#), Some(7.25));
+    }
+
+    #[test]
+    fn parse_numeric_json_root() {
+        assert_eq!(parse_numeric_output("99"), Some(99.0));
+    }
+
+    #[test]
+    fn parse_numeric_unparseable() {
+        assert_eq!(parse_numeric_output("not a number"), None);
+    }
+
+    // ── parse_vector_output ─────────────────────────────────────────
+
+    #[test]
+    fn parse_vector_direct_array() {
+        assert_eq!(
+            parse_vector_output("[1.0, 2.0, 3.0]"),
+            Some(vec![1.0, 2.0, 3.0])
+        );
+    }
+
+    #[test]
+    fn parse_vector_embedding_field() {
+        let json = r#"{"embedding": [0.1, 0.2]}"#;
+        assert_eq!(parse_vector_output(json), Some(vec![0.1, 0.2]));
+    }
+
+    #[test]
+    fn parse_vector_vector_field() {
+        let json = r#"{"vector": [4.0, 5.0]}"#;
+        assert_eq!(parse_vector_output(json), Some(vec![4.0, 5.0]));
+    }
+
+    #[test]
+    fn parse_vector_unparseable() {
+        assert_eq!(parse_vector_output("not a vector"), None);
+    }
+
+    // ── cosine_similarity ───────────────────────────────────────────
+
+    #[test]
+    fn cosine_identical_vectors() {
+        let v = vec![1.0, 2.0, 3.0];
+        assert!((cosine_similarity(&v, &v) - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn cosine_orthogonal_vectors() {
+        let a = vec![1.0, 0.0];
+        let b = vec![0.0, 1.0];
+        assert!(cosine_similarity(&a, &b).abs() < 1e-10);
+    }
+
+    #[test]
+    fn cosine_zero_magnitude_returns_zero() {
+        let zero = vec![0.0, 0.0];
+        let v = vec![1.0, 2.0];
+        assert_eq!(cosine_similarity(&zero, &v), 0.0);
+    }
+
+    // ── resolve_outputs ─────────────────────────────────────────────
+
+    #[test]
+    fn resolve_exact_match() {
+        assert!(resolve_outputs(
+            &OutputTolerance::Exact,
+            "out",
+            "aabb",
+            "out2",
+            "aabb"
+        ));
+    }
+
+    #[test]
+    fn resolve_exact_mismatch() {
+        assert!(!resolve_outputs(
+            &OutputTolerance::Exact,
+            "out",
+            "aabb",
+            "out2",
+            "ccdd"
+        ));
+    }
+
+    #[test]
+    fn resolve_numeric_within_threshold() {
+        assert!(resolve_outputs(
+            &OutputTolerance::Numeric { threshold: 0.5 },
+            "10.0",
+            "h1",
+            "10.3",
+            "h2"
+        ));
+    }
+
+    #[test]
+    fn resolve_numeric_outside_threshold() {
+        assert!(!resolve_outputs(
+            &OutputTolerance::Numeric { threshold: 0.1 },
+            "10.0",
+            "h1",
+            "11.0",
+            "h2"
+        ));
+    }
+
+    #[test]
+    fn resolve_numeric_unparseable_falls_back_to_exact() {
+        assert!(resolve_outputs(
+            &OutputTolerance::Numeric { threshold: 1.0 },
+            "text",
+            "same",
+            "text2",
+            "same"
+        ));
+        assert!(!resolve_outputs(
+            &OutputTolerance::Numeric { threshold: 1.0 },
+            "text",
+            "aaa",
+            "text2",
+            "bbb"
+        ));
+    }
+
+    #[test]
+    fn resolve_cosine_above_threshold() {
+        assert!(resolve_outputs(
+            &OutputTolerance::Cosine {
+                min_similarity: 0.99
+            },
+            "[1.0, 2.0, 3.0]",
+            "h1",
+            "[1.0, 2.0, 3.0]",
+            "h2"
+        ));
+    }
+
+    #[test]
+    fn resolve_cosine_below_threshold() {
+        assert!(!resolve_outputs(
+            &OutputTolerance::Cosine {
+                min_similarity: 0.99
+            },
+            "[1.0, 0.0]",
+            "h1",
+            "[0.0, 1.0]",
+            "h2"
+        ));
+    }
+
+    #[test]
+    fn resolve_cosine_different_lengths_falls_back() {
+        assert!(resolve_outputs(
+            &OutputTolerance::Cosine {
+                min_similarity: 0.5
+            },
+            "[1.0, 2.0]",
+            "same",
+            "[1.0]",
+            "same"
+        ));
+        assert!(!resolve_outputs(
+            &OutputTolerance::Cosine {
+                min_similarity: 0.5
+            },
+            "[1.0, 2.0]",
+            "aaa",
+            "[1.0]",
+            "bbb"
+        ));
+    }
+
+    // ── build_inference_payload ──────────────────────────────────────
+
+    #[test]
+    fn payload_simple_no_bio_hash() {
+        let p = build_inference_payload(SignatureLevel::Simple, "base", &[]);
+        assert_eq!(p, "base");
+    }
+
+    #[test]
+    fn payload_advanced_appends_bio_hash() {
+        let bio = vec![crate::signature::BiometricEvidence {
+            evidence_type: crate::signature::BiometricType::Fingerprint,
+            commitment: "a".repeat(64),
+            captured_at: 1700000000,
+            capture_device: None,
+        }];
+        let p = build_inference_payload(SignatureLevel::Advanced, "base", &bio);
+        assert!(p.starts_with("base:"));
+        assert_eq!(p.len(), "base:".len() + 64);
     }
 }
