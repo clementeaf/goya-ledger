@@ -322,3 +322,165 @@ pub async fn respond_invitation(
         trace,
     )))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{test, App};
+
+    fn make_app_data() -> web::Data<AppState> {
+        web::Data::new(AppState::test_default())
+    }
+
+    fn dummy_sig() -> String {
+        "aa".repeat(32)
+    }
+
+    // ── create_invitation: input validation ─────────────────────────
+
+    #[actix_web::test]
+    async fn create_rejects_empty_proposal_ids() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(create_invitation)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/invitations")
+            .set_json(serde_json::json!({
+                "from_did": "did:goya:alice",
+                "public_key": "aa".repeat(32),
+                "to_commitment": "bb".repeat(32),
+                "proposal_ids": [],
+                "signature": dummy_sig(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "INVALID_PROPOSALS");
+    }
+
+    #[actix_web::test]
+    async fn create_rejects_too_many_proposals() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(create_invitation)),
+        )
+        .await;
+
+        let ids: Vec<u64> = (1..=21).collect();
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/invitations")
+            .set_json(serde_json::json!({
+                "from_did": "did:goya:alice",
+                "public_key": "aa".repeat(32),
+                "to_commitment": "bb".repeat(32),
+                "proposal_ids": ids,
+                "signature": dummy_sig(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "TOO_MANY_PROPOSALS");
+    }
+
+    #[actix_web::test]
+    async fn create_rejects_unknown_alias() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(create_invitation)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/invitations")
+            .set_json(serde_json::json!({
+                "from_did": "did:goya:alice",
+                "public_key": "aa".repeat(32),
+                "to_commitment": "cc".repeat(32),
+                "proposal_ids": [1],
+                "signature": dummy_sig(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "ALIAS_NOT_FOUND");
+    }
+
+    // ── list_invitations: missing param ─────────────────────────────
+
+    #[actix_web::test]
+    async fn list_rejects_missing_voter() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(list_invitations)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/governance/invitations")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "MISSING_PARAM");
+    }
+
+    // ── respond_invitation: not found ───────────────────────────────
+
+    #[actix_web::test]
+    async fn respond_rejects_unknown_invitation() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(respond_invitation)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/governance/invitations/respond")
+            .set_json(serde_json::json!({
+                "invitation_id": "nonexistent",
+                "public_key": "aa".repeat(32),
+                "accepted": true,
+                "signature": dummy_sig(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "NOT_FOUND");
+    }
+
+    // ── list with voter returns empty ───────────────────────────────
+
+    #[actix_web::test]
+    async fn list_with_voter_returns_empty() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(list_invitations)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/governance/invitations?voter=somecommitment")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+    }
+}

@@ -404,10 +404,143 @@ pub async fn alias_revoke(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use actix_web::{test, App};
 
-    #[test]
-    fn now_secs_returns_reasonable_value() {
+    fn make_app_data() -> web::Data<AppState> {
+        web::Data::new(AppState::test_default())
+    }
+
+    fn dummy_sig() -> String {
+        "aa".repeat(32)
+    }
+
+    #[actix_web::test]
+    async fn now_secs_returns_reasonable_value() {
         let t = now_secs();
-        assert!(t > 1_700_000_000); // After 2023
+        assert!(t > 1_700_000_000);
+    }
+
+    // ── register: input validation ──────────────────────────────────
+
+    #[actix_web::test]
+    async fn register_rejects_short_commitment() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(alias_register)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/alias/register")
+            .set_json(serde_json::json!({
+                "did": "did:goya:test",
+                "public_key": "aa".repeat(32),
+                "commitment": "tooshort",
+                "salt": "bb".repeat(16),
+                "encrypted_alias": "ciphertext",
+                "signature": dummy_sig(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "INVALID_COMMITMENT");
+    }
+
+    #[actix_web::test]
+    async fn register_rejects_invalid_salt() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(alias_register)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/alias/register")
+            .set_json(serde_json::json!({
+                "did": "did:goya:test",
+                "public_key": "aa".repeat(32),
+                "commitment": "cc".repeat(32),
+                "salt": "short",
+                "encrypted_alias": "ciphertext",
+                "signature": dummy_sig(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "INVALID_SALT");
+    }
+
+    // ── resolve: not found ──────────────────────────────────────────
+
+    #[actix_web::test]
+    async fn resolve_returns_404_for_unknown() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(alias_resolve)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/alias/resolve")
+            .set_json(serde_json::json!({
+                "commitment": "dd".repeat(32),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "NOT_FOUND");
+    }
+
+    // ── by-did: not found ───────────────────────────────────────────
+
+    #[actix_web::test]
+    async fn by_did_returns_404_for_unknown() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(alias_by_did)),
+        )
+        .await;
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/alias/by-did/did:goya:ghost")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    // ── revoke: not found ───────────────────────────────────────────
+
+    #[actix_web::test]
+    async fn revoke_returns_404_for_unknown() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(alias_revoke)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/alias/revoke")
+            .set_json(serde_json::json!({
+                "did": "did:goya:test",
+                "public_key": "aa".repeat(32),
+                "commitment": "ee".repeat(32),
+                "signature": dummy_sig(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
     }
 }
