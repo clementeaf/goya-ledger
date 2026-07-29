@@ -273,9 +273,7 @@ pub async fn stripe_webhook(req: HttpRequest, body: web::Bytes) -> ApiResult<Htt
             let subscription_id = payload["data"]["object"]["subscription"]
                 .as_str()
                 .unwrap_or("none");
-            // ponytail: log only — tier activation not implemented.
-            // To wire: look up customer by email, map subscription to tier,
-            // update BillingManager. Until then, this is receive-and-log.
+            // ponytail: log only — no tier activation. Wire BillingManager when first paying customer onboards.
             log::warn!(
                 "Stripe checkout completed but tier activation NOT IMPLEMENTED: \
                  email={}, subscription={}",
@@ -350,6 +348,20 @@ mod tests {
 
         let result = verify_stripe_signature(secret, payload, &header);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ponytail_tier_activation_documented() {
+        let source = include_str!("stripe.rs");
+        let prod_code = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(
+            prod_code.contains("ponytail:"),
+            "tier activation deferral must carry a ponytail: comment"
+        );
+        assert!(
+            prod_code.contains("NOT IMPLEMENTED"),
+            "webhook must log that tier activation is not implemented"
+        );
     }
 
     #[test]
