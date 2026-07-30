@@ -71,7 +71,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Tests
 
-- **82 new tests** (1869 → 1951), covering trust-boundary rejection paths and pure logic:
+- **93 new tests** (1869 → 1962), covering trust-boundary rejection paths, pure logic, and real-world use cases:
   - `signature/verify.rs` (15→21): malformed signature/key rejection — bad hex, wrong length, invalid Ed25519 point, ML-DSA-65 variants
   - `notarize.rs` (6→22): invalid hash, DID↔pubkey mismatch, invalid signature, duplicate hash, non-owner transfer, FEA validation, sign_fea rejection
   - `governance.rs` (0→11): empty/null-byte proposer, quorum bounds, voting period zero, empty voter, proposal not found
@@ -79,6 +79,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
   - `contracts.rs` (0→12): ERC-20 rate limiter, param helpers, contract not found, unknown function, missing params
   - `invitations.rs` (0→6): empty/excess proposals, unknown alias, missing voter param, unknown invitation, list empty
   - `alias.rs` (1→6): invalid commitment/salt format, resolve/by-did/revoke not found
+  - `credentials.rs` (1→6): get/verify/revoke not found, unknown issuer, store_get not found
+  - `use_cases.rs` (new, 6 E2E): real-world vertical tests proving functional PQC DLT — document notarization (FES), firma electrónica simple (Ed25519), firma electrónica avanzada (ML-DSA-65 + fingerprint + RUT biometric), governance proposal lifecycle, credential issue→verify→revoke→verify(invalid), ownership transfer with provenance chain
 
 ### Changed
 
