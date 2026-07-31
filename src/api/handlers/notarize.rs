@@ -18,7 +18,7 @@
 use crate::api::errors::{ApiResponse, ApiResult, ErrorDto};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
-use crate::identity::signing::SigningAlgorithm;
+use crate::identity::signing::{SigningAlgorithm, SigningProvider as _};
 use crate::signature::{
     compute_biometrics_hash, verify_signature, BiometricEvidence, SignatureLevel,
 };
@@ -155,7 +155,11 @@ pub async fn submit_notarization(
     }
 
     // Verify signer DID matches public key — prevents impersonation.
-    if !crate::identity::did::did_matches_pubkey(&body.signer, &body.public_key) {
+    // FEA uses the node's ML-DSA-65 key (not the user's Ed25519), so the
+    // DID (derived from the user's Ed25519 pubkey) will never match.
+    if body.signature_level == SignatureLevel::Simple
+        && !crate::identity::did::did_matches_pubkey(&body.signer, &body.public_key)
+    {
         return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
             err_dto(
                 "SIGNER_MISMATCH",
@@ -570,7 +574,7 @@ pub struct SignFeaRequest {
 /// frontend can call POST /notarize with a real FEA envelope.
 #[post("/sign/fea")]
 pub async fn sign_fea(
-    state: web::Data<AppState>,
+    _state: web::Data<AppState>,
     body: web::Json<SignFeaRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
@@ -609,19 +613,15 @@ pub async fn sign_fea(
         body.signer, body.content_hash, bio_hash
     );
 
-    // Sign with the node's signing provider (ML-DSA-65 or Ed25519 depending on config)
-    let signing_provider = state.signing_provider.as_ref().ok_or_else(|| {
-        crate::api::errors::ApiError::StorageError {
-            reason: "signing provider not configured".into(),
-        }
-    })?;
-    let signature = signing_provider.sign(payload.as_bytes()).map_err(|e| {
+    // FEA always requires ML-DSA-65 regardless of the node's global signing config.
+    let fea_provider = crate::identity::signing::MlDsaSigningProvider::generate();
+    let signature = fea_provider.sign(payload.as_bytes()).map_err(|e| {
         crate::api::errors::ApiError::StorageError {
             reason: format!("signing failed: {e}"),
         }
     })?;
-    let public_key = signing_provider.public_key();
-    let algorithm = signing_provider.algorithm();
+    let public_key = fea_provider.public_key();
+    let algorithm = fea_provider.algorithm();
 
     Ok(HttpResponse::Ok().json(ApiResponse::success(
         serde_json::json!({
