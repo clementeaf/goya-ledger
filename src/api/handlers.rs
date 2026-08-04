@@ -36,6 +36,7 @@ pub mod oracle;
 pub mod organizations;
 pub mod pentest;
 pub mod pin;
+pub mod policy;
 pub mod private_data;
 pub mod proposals;
 pub mod ra;

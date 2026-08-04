@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **Certificate Policy / CPS — RFC 3647 / ETSI TS 102 042** (`src/pki_policy.rs`, `src/api/handlers/policy.rs`)
+  - OID namespace under Goya PEN: CP (`1.3.6.1.4.1.99999.2.1`), CPS (`.2.2`), TSA (`.1.1`), Signature Policy (`.3.1`)
+  - `CertificatePolicy` with legal framework (Ley 19.799, DS 181, Decreto 24), subscriber/CA/RA obligations, assurance levels, algorithms, revocation mechanisms
+  - `CertificationPracticeStatement` with identity proofing policy, key management, certificate profiles (FES/FEA/TSA), audit policy, compliance references
+  - API endpoints: `GET /api/v1/policy/cp`, `GET /api/v1/policy/cps`, `GET /api/v1/policy/oids`
+  - 17 tests (14 unit + 3 E2E endpoint)
 - **Registration Authority (RA) — Ley 19.799 Art. 15** (`src/identity/ra.rs`, `src/api/handlers/ra.rs`)
   - `RaStore` with identity proofing lifecycle: Pending → Verified / Rejected
   - Chilean RUT validation (modulo 11 check digit, format normalization)

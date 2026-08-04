@@ -6,9 +6,9 @@ use crate::api::handlers::{
     acl, airdrop, alias, audit, billing, blocks, bridge, chain, chaincode, channels, compliance,
     compliance_auto, contact, contracts, credentials, discovery, events, forensic, gateway,
     governance, governance_entities, identity, inference, intelligence, interop, invitations,
-    legal_oracle, msp, network, notarize, oracle, organizations, pentest, pin, private_data,
-    proposals, ra, registry, regulatory, snapshots, staking, stats, stress, stripe, tokenization,
-    transactions, tsa, utilities, vault, wallets, zkp,
+    legal_oracle, msp, network, notarize, oracle, organizations, pentest, pin, policy,
+    private_data, proposals, ra, registry, regulatory, snapshots, staking, stats, stress, stripe,
+    tokenization, transactions, tsa, utilities, vault, wallets, zkp,
 };
 
 /// API routes configuration
@@ -259,6 +259,10 @@ impl ApiRoutes {
             .service(ra::approve_proof)
             .service(ra::reject_proof)
             .service(ra::get_proof_status);
+        // CP/CPS Policy (RFC 3647 / ETSI TS 102 042)
+        cfg.service(policy::get_cp)
+            .service(policy::get_cps)
+            .service(policy::get_oids);
         // Invitations (governance proposal invitations via alias)
         cfg.service(invitations::create_invitation)
             .service(invitations::list_invitations)

@@ -57,6 +57,7 @@ pub mod msp;
 pub mod ordering;
 pub mod pin;
 pub mod pki;
+pub mod pki_policy;
 pub mod private_data;
 pub mod registry;
 pub mod regulatory;
