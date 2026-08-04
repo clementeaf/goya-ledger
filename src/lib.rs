@@ -38,6 +38,7 @@ pub mod chaincode;
 pub mod channel;
 pub mod compliance;
 pub mod discovery;
+pub mod document;
 pub mod endorsement;
 pub mod events;
 #[cfg(feature = "evm")]

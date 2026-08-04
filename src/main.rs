@@ -16,6 +16,7 @@ mod compliance;
 mod consensus;
 mod crypto;
 mod discovery;
+mod document;
 mod endorsement;
 mod events;
 #[cfg(feature = "evm")]

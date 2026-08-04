@@ -8,6 +8,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **Document integrity verification** — canonical fingerprinting layer (`src/document/`)
+  - `DocumentFingerprint`: decomposes a document into 5 hashable dimensions (content, structure, tables, images, metadata) with a merkle root as `canonical_hash`
+  - `VerificationReport`: dimensional comparison producing `identical`, `content_match`, `partial_match`, or `no_match` verdicts
+  - `POST /api/v1/notarize/verify-document` — compares a candidate fingerprint against a registered notarization, returns per-dimension report with human-readable conclusion
+  - Backward compatible: existing hash-based notarization unchanged; fingerprint stored in `NotarizationEntry.metadata.fingerprint`
+  - 22 unit tests (merkle root, integrity, all verdict paths, serialization) + 6 E2E tests (endpoint: identical, content_match, partial_match, no_match, 404, 422)
+
+### Fixed
+
+- 31 comprehensive storage tests using hardcoded `/tmp/test_*` paths replaced with `temp_store()` (TempDir auto-cleanup) — fixes RocksDB corruption from stale SST/MANIFEST files between runs
+
+### Changed
+
 - `scripts/gauntlet.sh` — tiered quality gate that runs every existing check as one command, so agent-written code is constrained by tests rather than by review
   - T0 static (`fmt`, `clippy --all-targets`, crypto boundary) · T1 unit + doc · T2 integration suite · T3 coverage threshold · T4 supply chain (`audit`, `deny`) · T5 mutation score · T6 fuzz targets
   - `./scripts/gauntlet.sh` runs T0–T4; `full` adds mutation and fuzzing; a bare tier number runs one tier

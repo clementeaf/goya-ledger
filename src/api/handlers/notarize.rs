@@ -18,6 +18,7 @@
 use crate::api::errors::{ApiResponse, ApiResult, ErrorDto};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
+use crate::document::DocumentFingerprint;
 use crate::identity::signing::{SigningAlgorithm, SigningProvider as _};
 use crate::signature::{
     compute_biometrics_hash, verify_signature, BiometricEvidence, SignatureLevel,
@@ -629,6 +630,122 @@ pub async fn sign_fea(
             "public_key": hex::encode(&public_key),
             "signature_algorithm": algorithm,
             "signing_payload": payload,
+        }),
+        trace,
+    )))
+}
+
+// ── Document integrity verification ─────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct VerifyDocumentRequest {
+    pub fingerprint: DocumentFingerprint,
+    /// The canonical_hash used when notarizing (lookup key).
+    pub registered_hash: String,
+}
+
+/// Compare a candidate document fingerprint against a registered notarization.
+///
+/// The client decomposes the candidate document into its canonical dimensions
+/// and submits the fingerprint. The server looks up the original fingerprint
+/// (stored in `metadata.fingerprint`) and produces a dimensional comparison.
+#[post("/notarize/verify-document")]
+pub async fn verify_document(
+    state: web::Data<AppState>,
+    body: web::Json<VerifyDocumentRequest>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, channel)?;
+
+    if body.registered_hash.len() != 64 || hex::decode(&body.registered_hash).is_err() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_HASH", "registered_hash must be 64 hex characters"),
+            400,
+        )));
+    }
+
+    let entry = match store.read_notarization_by_hash(&body.registered_hash) {
+        Ok(e) => e,
+        Err(_) => {
+            return Ok(HttpResponse::NotFound().json(ApiResponse::<()>::error(
+                err_dto("NOT_FOUND", "no notarization found for this hash"),
+                404,
+            )));
+        }
+    };
+
+    let reference: DocumentFingerprint =
+        match &entry.metadata {
+            Some(meta) => match meta.get("fingerprint") {
+                Some(fp_val) => match serde_json::from_value(fp_val.clone()) {
+                    Ok(fp) => fp,
+                    Err(_) => {
+                        return Ok(HttpResponse::UnprocessableEntity().json(ApiResponse::<()>::error(
+                        err_dto(
+                            "NO_FINGERPRINT",
+                            "notarization exists but was registered without a document fingerprint",
+                        ),
+                        422,
+                    )));
+                    }
+                },
+                None => {
+                    return Ok(HttpResponse::UnprocessableEntity().json(ApiResponse::<()>::error(
+                    err_dto(
+                        "NO_FINGERPRINT",
+                        "notarization exists but was registered without a document fingerprint",
+                    ),
+                    422,
+                )));
+                }
+            },
+            None => {
+                return Ok(
+                    HttpResponse::UnprocessableEntity().json(ApiResponse::<()>::error(
+                        err_dto(
+                            "NO_FINGERPRINT",
+                            "notarization exists but was registered without a document fingerprint",
+                        ),
+                        422,
+                    )),
+                );
+            }
+        };
+
+    let report = body.fingerprint.verify_against(&reference);
+
+    let conclusion = match report.verdict {
+        crate::document::VerificationVerdict::Identical => {
+            "Este documento es idéntico al documento original registrado en Goya."
+        }
+        crate::document::VerificationVerdict::ContentMatch => {
+            "Este documento corresponde fielmente al documento original registrado en Goya. \
+             Las diferencias detectadas corresponden únicamente a cambios de formato/metadata \
+             y no alteran el contenido documental."
+        }
+        crate::document::VerificationVerdict::PartialMatch => {
+            "Este documento comparte elementos con el documento original registrado, \
+             pero se detectaron modificaciones en algunas dimensiones."
+        }
+        crate::document::VerificationVerdict::NoMatch => {
+            "Este documento no corresponde al documento original registrado en Goya."
+        }
+    };
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        serde_json::json!({
+            "notarization_id": entry.id,
+            "registered_hash": entry.content_hash,
+            "verdict": report.verdict,
+            "file_identical": report.file_identical,
+            "match_ratio": report.match_ratio,
+            "dimensions": report.dimensions,
+            "conclusion": conclusion,
+            "signer": entry.signer,
+            "notarized_at": entry.notarized_at,
+            "signature_level": entry.signature_level,
         }),
         trace,
     )))
@@ -1475,5 +1592,223 @@ mod tests {
             msg.contains("Qualified") && msg.contains("not yet supported"),
             "Expected QTSP rejection message, got: {msg}"
         );
+    }
+
+    // ── Document integrity verification (verify-document) ──────────────
+
+    fn make_fingerprint(content_seed: &[u8], structure_seed: &[u8]) -> DocumentFingerprint {
+        use crate::crypto::hasher::{hash_with, HashAlgorithm};
+        let ch = hex::encode(hash_with(HashAlgorithm::Sha256, content_seed));
+        let sh = hex::encode(hash_with(HashAlgorithm::Sha256, structure_seed));
+        let canonical = DocumentFingerprint::compute_canonical_hash(
+            &ch,
+            &sh,
+            None,
+            None,
+            None,
+            HashAlgorithm::Sha256,
+        );
+        DocumentFingerprint {
+            content_hash: ch,
+            structure_hash: sh,
+            tables_hash: None,
+            images_hash: None,
+            metadata_hash: None,
+            canonical_hash: canonical,
+        }
+    }
+
+    macro_rules! notarize_fp {
+        ($app:expr, $fp:expr) => {{
+            let (did, pk_hex, provider) = ed25519_identity();
+            let hash = &$fp.canonical_hash;
+            let payload = format!("notarize:{did}:{hash}");
+            let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+            let req = test::TestRequest::post()
+                .uri("/api/v1/notarize")
+                .set_json(serde_json::json!({
+                    "content_hash": hash,
+                    "signer": did,
+                    "public_key": pk_hex,
+                    "signature": sig,
+                    "metadata": { "fingerprint": $fp },
+                }))
+                .to_request();
+            let resp = test::call_service(&$app, req).await;
+            assert_eq!(resp.status(), 201);
+            hash.clone()
+        }};
+    }
+
+    macro_rules! verify_doc_app {
+        () => {{
+            let state = make_app_data();
+            test::init_service(
+                App::new().app_data(state).service(
+                    web::scope("/api/v1")
+                        .service(submit_notarization)
+                        .service(verify_document),
+                ),
+            )
+            .await
+        }};
+    }
+
+    #[actix_web::test]
+    async fn verify_document_identical_fingerprint() {
+        let app = verify_doc_app!();
+        let fp = make_fingerprint(b"contract text", b"heading;paragraph;signature");
+        let hash = notarize_fp!(app, fp);
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/verify-document")
+            .set_json(serde_json::json!({
+                "registered_hash": hash,
+                "fingerprint": fp,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["verdict"], "identical");
+        assert_eq!(body["data"]["file_identical"], true);
+        assert_eq!(body["data"]["match_ratio"], 1.0);
+    }
+
+    #[actix_web::test]
+    async fn verify_document_content_match_different_canonical() {
+        let app = verify_doc_app!();
+        let fp = make_fingerprint(b"contract text", b"heading;paragraph;signature");
+        let hash = notarize_fp!(app, fp);
+
+        let mut candidate = fp.clone();
+        candidate.canonical_hash = "ff".repeat(32);
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/verify-document")
+            .set_json(serde_json::json!({
+                "registered_hash": hash,
+                "fingerprint": candidate,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["verdict"], "content_match");
+        assert_eq!(body["data"]["file_identical"], false);
+        assert!(body["data"]["conclusion"]
+            .as_str()
+            .unwrap()
+            .contains("corresponde fielmente"));
+    }
+
+    #[actix_web::test]
+    async fn verify_document_partial_match() {
+        let app = verify_doc_app!();
+        let fp = make_fingerprint(b"contract text", b"heading;paragraph;signature");
+        let hash = notarize_fp!(app, fp);
+
+        let modified = make_fingerprint(b"contract text", b"different structure");
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/verify-document")
+            .set_json(serde_json::json!({
+                "registered_hash": hash,
+                "fingerprint": modified,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["verdict"], "partial_match");
+        assert_eq!(body["data"]["match_ratio"], 0.5);
+    }
+
+    #[actix_web::test]
+    async fn verify_document_no_match() {
+        let app = verify_doc_app!();
+        let fp = make_fingerprint(b"contract text", b"heading;paragraph;signature");
+        let hash = notarize_fp!(app, fp);
+
+        let different = make_fingerprint(b"totally different", b"other structure");
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/verify-document")
+            .set_json(serde_json::json!({
+                "registered_hash": hash,
+                "fingerprint": different,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["verdict"], "no_match");
+        assert_eq!(body["data"]["match_ratio"], 0.0);
+    }
+
+    #[actix_web::test]
+    async fn verify_document_404_for_unknown_hash() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(verify_document)),
+        )
+        .await;
+
+        let fp = make_fingerprint(b"anything", b"anything");
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/verify-document")
+            .set_json(serde_json::json!({
+                "registered_hash": "ab".repeat(32),
+                "fingerprint": fp,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    #[actix_web::test]
+    async fn verify_document_422_when_no_fingerprint_in_metadata() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(verify_document),
+            ),
+        )
+        .await;
+
+        // Notarize without fingerprint in metadata
+        let (did, pk_hex, provider) = ed25519_identity();
+        let hash = content_hash();
+        let payload = format!("notarize:{did}:{hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+            }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), 201);
+
+        // Try verify-document against it
+        let fp = make_fingerprint(b"anything", b"anything");
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/verify-document")
+            .set_json(serde_json::json!({
+                "registered_hash": hash,
+                "fingerprint": fp,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 422);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "NO_FINGERPRINT");
     }
 }
