@@ -52,6 +52,7 @@ mod stress;
 mod tls;
 mod transaction;
 mod transaction_validation;
+mod tsa;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;
@@ -859,6 +860,7 @@ async fn async_main_inner() -> std::io::Result<()> {
         vault_rate_limiter: Arc::new(crate::api::handlers::vault::RecoveryRateLimiter::new()),
         bridge_engine: Arc::new(crate::bridge::protocol::BridgeEngine::new()),
         proof_verifier: Arc::new(inference::proof::MultiVerifier::new()),
+        tsa_provider: None,
     };
 
     // Log vault recovery secret fingerprint for rotation verification.

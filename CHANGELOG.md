@@ -8,6 +8,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **Time Stamping Authority (TSA) — RFC 3161** (`src/tsa/`, `src/api/handlers/tsa.rs`)
+  - `TsaProvider` with monotonic serial counter (`AtomicU64`), configurable accuracy, policy OID
+  - `TstInfo` with all RFC 3161 fields: version, policy, hash algorithm, message imprint, serial number, genTime, accuracy, ordering, nonce, TSA name
+  - Signing via `SigningProvider` trait — supports Ed25519 and ML-DSA-65 (post-quantum)
+  - `verify_token()` cryptographic verification of timestamp tokens
+  - API endpoints: `POST /api/v1/tsa/timestamp`, `GET /api/v1/tsa/policy`, `POST /api/v1/tsa/verify`
+  - `AppState.tsa_provider` integration, disabled by default
+  - 22 tests (16 unit + 6 E2E endpoint)
 - **Document integrity verification** — canonical fingerprinting layer (`src/document/`)
   - `DocumentFingerprint`: decomposes a document into 5 hashable dimensions (content, structure, tables, images, metadata) with a merkle root as `canonical_hash`
   - `VerificationReport`: dimensional comparison producing `identical`, `content_match`, `partial_match`, or `no_match` verdicts

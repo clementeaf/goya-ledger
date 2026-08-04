@@ -107,6 +107,8 @@ pub struct AppState {
     pub bridge_engine: Arc<crate::bridge::protocol::BridgeEngine>,
     /// Pluggable proof verifier for zkML inference claims.
     pub proof_verifier: Arc<dyn crate::inference::proof::ProofVerifier>,
+    /// RFC 3161 Time Stamping Authority provider.
+    pub tsa_provider: Option<Arc<crate::tsa::TsaProvider>>,
 }
 
 impl AppState {
@@ -171,6 +173,7 @@ impl AppState {
             vault_rate_limiter: Arc::new(crate::api::handlers::vault::RecoveryRateLimiter::new()),
             bridge_engine: Arc::new(crate::bridge::protocol::BridgeEngine::new()),
             proof_verifier: Arc::new(crate::inference::proof::MultiVerifier::new()),
+            tsa_provider: None,
         }
     }
 }

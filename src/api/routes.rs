@@ -8,7 +8,7 @@ use crate::api::handlers::{
     governance, governance_entities, identity, inference, intelligence, interop, invitations,
     legal_oracle, msp, network, notarize, oracle, organizations, pentest, pin, private_data,
     proposals, registry, regulatory, snapshots, staking, stats, stress, stripe, tokenization,
-    transactions, utilities, vault, wallets, zkp,
+    transactions, tsa, utilities, vault, wallets, zkp,
 };
 
 /// API routes configuration
@@ -250,6 +250,10 @@ impl ApiRoutes {
             .service(notarize::get_document_owner)
             .service(notarize::get_document_provenance)
             .service(notarize::sign_fea);
+        // TSA (Time Stamping Authority — RFC 3161)
+        cfg.service(tsa::request_timestamp)
+            .service(tsa::tsa_policy)
+            .service(tsa::verify_timestamp);
         // Invitations (governance proposal invitations via alias)
         cfg.service(invitations::create_invitation)
             .service(invitations::list_invitations)

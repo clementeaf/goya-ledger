@@ -66,5 +66,6 @@ pub mod testnet;
 pub mod tls;
 pub mod tokenomics;
 pub mod transaction;
+pub mod tsa;
 
 pub use app_state::AppState;
