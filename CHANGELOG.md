@@ -8,6 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **OCSP Responder — RFC 6960** (`src/msp/ocsp.rs`, `src/api/handlers/ocsp.rs`)
+  - `OcspResponder` queries CRL store for certificate status (Good/Revoked/Unknown)
+  - Signed responses with Ed25519 or ML-DSA-65, nonce echo, configurable validity
+  - `verify_ocsp_response()` cryptographic verification
+  - API endpoints: `POST /api/v1/ocsp/query`, `GET /api/v1/ocsp/status/{msp_id}/{serial}`
+  - `AppState.ocsp_responder` integration, disabled by default
+  - 19 tests (14 unit + 5 E2E endpoint)
 - **CRL RFC 5280 generation** (`src/msp/crl_rfc5280.rs`)
   - `generate_crl_der()` and `generate_crl_pem()` via rcgen — proper DER/PEM X.509 CRL signed by node CA
   - `NodeCaConfig::cert()` / `key()` accessors for CRL signing

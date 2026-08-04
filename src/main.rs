@@ -863,6 +863,7 @@ async fn async_main_inner() -> std::io::Result<()> {
         proof_verifier: Arc::new(inference::proof::MultiVerifier::new()),
         tsa_provider: None,
         ra_store: None,
+        ocsp_responder: None,
     };
 
     // Log vault recovery secret fingerprint for rotation verification.

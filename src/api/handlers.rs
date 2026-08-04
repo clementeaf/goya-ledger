@@ -32,6 +32,7 @@ pub mod legal_oracle;
 pub mod msp;
 pub mod network;
 pub mod notarize;
+pub mod ocsp;
 pub mod oracle;
 pub mod organizations;
 pub mod pentest;
