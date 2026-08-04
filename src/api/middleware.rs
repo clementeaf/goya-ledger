@@ -294,6 +294,8 @@ where
                 trace_id,
                 duration_ms,
                 metadata: None,
+                previous_hash: String::new(),
+                entry_hash: String::new(),
             };
 
             // Fire-and-forget — never block the response for audit logging.

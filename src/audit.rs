@@ -9,6 +9,7 @@
 //! Records are append-only. The `action` field distinguishes domain events
 //! from raw HTTP request logs (`action = "http_request"`).
 
+use crate::crypto::hasher::{hash_with, HashAlgorithm};
 use crate::storage::errors::StorageResult;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -76,6 +77,62 @@ pub struct AuditEntry {
     /// Optional domain-specific metadata (e.g., block height, DID, chaincode ID).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<String>,
+    /// SHA-256 hash of the previous entry (hex). Empty string for the first entry.
+    #[serde(default)]
+    pub previous_hash: String,
+    /// SHA-256(previous_hash + canonical entry data). Forms a tamper-evident chain.
+    #[serde(default)]
+    pub entry_hash: String,
+}
+
+impl AuditEntry {
+    /// Canonical data for hashing (excludes previous_hash and entry_hash).
+    fn canonical_data(&self) -> String {
+        format!(
+            "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+            self.timestamp,
+            self.action,
+            self.method,
+            self.path,
+            self.org_id,
+            self.source_ip,
+            self.status_code,
+            self.trace_id,
+            self.duration_ms,
+            self.metadata.as_deref().unwrap_or(""),
+        )
+    }
+
+    /// Compute the entry hash: SHA-256(previous_hash + canonical_data).
+    pub fn compute_hash(&self) -> String {
+        let input = format!("{}|{}", self.previous_hash, self.canonical_data());
+        hex::encode(hash_with(HashAlgorithm::Sha256, input.as_bytes()))
+    }
+
+    /// Seal this entry with its hash chain link.
+    pub fn seal(&mut self, previous_hash: &str) {
+        self.previous_hash = previous_hash.to_string();
+        self.entry_hash = self.compute_hash();
+    }
+
+    /// Verify this entry's hash is consistent with its data and previous_hash.
+    pub fn verify(&self) -> bool {
+        !self.entry_hash.is_empty() && self.entry_hash == self.compute_hash()
+    }
+}
+
+/// Verify the integrity of an ordered sequence of audit entries.
+/// Returns Ok(()) if the chain is valid, or Err with the index of the first broken link.
+pub fn verify_audit_chain(entries: &[AuditEntry]) -> Result<(), usize> {
+    for (i, entry) in entries.iter().enumerate() {
+        if !entry.verify() {
+            return Err(i);
+        }
+        if i > 0 && entry.previous_hash != entries[i - 1].entry_hash {
+            return Err(i);
+        }
+    }
+    Ok(())
 }
 
 /// Helper to emit a domain audit event without needing HTTP context.
@@ -96,6 +153,8 @@ pub fn emit_domain_event(
         trace_id: uuid::Uuid::new_v4().to_string(),
         duration_ms: 0,
         metadata,
+        previous_hash: String::new(),
+        entry_hash: String::new(),
     };
     if let Err(e) = store.append(&entry) {
         log::error!("audit domain event failed: {e}");
@@ -174,10 +233,11 @@ impl Default for MemoryAuditStore {
 
 impl AuditStore for MemoryAuditStore {
     fn append(&self, entry: &AuditEntry) -> StorageResult<()> {
-        self.entries
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(entry.clone());
+        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        let mut sealed = entry.clone();
+        let prev_hash = entries.last().map(|e| e.entry_hash.as_str()).unwrap_or("");
+        sealed.seal(prev_hash);
+        entries.push(sealed);
         Ok(())
     }
 
@@ -238,6 +298,8 @@ mod tests {
             trace_id: "trace-1".to_string(),
             duration_ms: 5,
             metadata: None,
+            previous_hash: String::new(),
+            entry_hash: String::new(),
         }
     }
 
@@ -253,6 +315,8 @@ mod tests {
             trace_id: "trace-d".to_string(),
             duration_ms: 0,
             metadata: Some(meta.to_string()),
+            previous_hash: String::new(),
+            entry_hash: String::new(),
         }
     }
 
@@ -473,5 +537,130 @@ mod tests {
             AuditAction::ChaincodeInstalled.to_string(),
             "chaincode_installed"
         );
+    }
+
+    // ── Hash chain tamper evidence ──────────────────────────────────
+
+    #[test]
+    fn appended_entries_are_sealed() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_entry("2026-01-01T00:00:00Z", "org1", "/a"))
+            .unwrap();
+        let entries = store.query(None, None, None, None, 10).unwrap();
+        assert!(!entries[0].entry_hash.is_empty());
+        assert!(entries[0].previous_hash.is_empty());
+    }
+
+    #[test]
+    fn hash_chain_links_entries() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_entry("2026-01-01T00:00:00Z", "org1", "/a"))
+            .unwrap();
+        store
+            .append(&make_entry("2026-01-01T00:01:00Z", "org1", "/b"))
+            .unwrap();
+        store
+            .append(&make_entry("2026-01-01T00:02:00Z", "org1", "/c"))
+            .unwrap();
+
+        let entries = store.query(None, None, None, None, 10).unwrap();
+        assert_eq!(entries[1].previous_hash, entries[0].entry_hash);
+        assert_eq!(entries[2].previous_hash, entries[1].entry_hash);
+    }
+
+    #[test]
+    fn valid_chain_verifies() {
+        let store = MemoryAuditStore::new();
+        for i in 0..5 {
+            store
+                .append(&make_entry(
+                    &format!("2026-01-01T00:{i:02}:00Z"),
+                    "org1",
+                    "/x",
+                ))
+                .unwrap();
+        }
+        let entries = store.query(None, None, None, None, 100).unwrap();
+        assert!(verify_audit_chain(&entries).is_ok());
+    }
+
+    #[test]
+    fn tampered_entry_detected() {
+        let store = MemoryAuditStore::new();
+        for i in 0..3 {
+            store
+                .append(&make_entry(
+                    &format!("2026-01-01T00:{i:02}:00Z"),
+                    "org1",
+                    "/x",
+                ))
+                .unwrap();
+        }
+        let mut entries = store.query(None, None, None, None, 100).unwrap();
+        entries[1].path = "/TAMPERED".to_string();
+        assert_eq!(verify_audit_chain(&entries), Err(1));
+    }
+
+    #[test]
+    fn broken_chain_link_detected() {
+        let store = MemoryAuditStore::new();
+        for i in 0..3 {
+            store
+                .append(&make_entry(
+                    &format!("2026-01-01T00:{i:02}:00Z"),
+                    "org1",
+                    "/x",
+                ))
+                .unwrap();
+        }
+        let mut entries = store.query(None, None, None, None, 100).unwrap();
+        entries[2].previous_hash = "ff".repeat(32);
+        entries[2].entry_hash = entries[2].compute_hash();
+        assert_eq!(verify_audit_chain(&entries), Err(2));
+    }
+
+    #[test]
+    fn single_entry_verifies() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_entry("2026-01-01T00:00:00Z", "org1", "/a"))
+            .unwrap();
+        let entries = store.query(None, None, None, None, 10).unwrap();
+        assert!(verify_audit_chain(&entries).is_ok());
+    }
+
+    #[test]
+    fn empty_chain_verifies() {
+        let entries: Vec<AuditEntry> = vec![];
+        assert!(verify_audit_chain(&entries).is_ok());
+    }
+
+    #[test]
+    fn entry_hash_is_deterministic() {
+        let mut e1 = make_entry("2026-01-01T00:00:00Z", "org1", "/a");
+        e1.seal("");
+        let mut e2 = make_entry("2026-01-01T00:00:00Z", "org1", "/a");
+        e2.seal("");
+        assert_eq!(e1.entry_hash, e2.entry_hash);
+    }
+
+    #[test]
+    fn different_data_different_hash() {
+        let mut e1 = make_entry("2026-01-01T00:00:00Z", "org1", "/a");
+        e1.seal("");
+        let mut e2 = make_entry("2026-01-01T00:00:00Z", "org1", "/b");
+        e2.seal("");
+        assert_ne!(e1.entry_hash, e2.entry_hash);
+    }
+
+    #[test]
+    fn entry_verify_method() {
+        let mut entry = make_entry("2026-01-01T00:00:00Z", "org1", "/a");
+        entry.seal("");
+        assert!(entry.verify());
+        entry.status_code = 500;
+        assert!(!entry.verify());
     }
 }

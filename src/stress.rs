@@ -380,6 +380,8 @@ pub fn stress_forensic(ops: u64) -> ModuleStressResult {
             trace_id: format!("trace-{i}"),
             duration_ms: 5,
             metadata: None,
+            previous_hash: String::new(),
+            entry_hash: String::new(),
         }]);
         let _ = engine.build_timeline();
 
@@ -1376,6 +1378,8 @@ mod tests {
                                 trace_id: format!("trace-{t}-{i}-{j}"),
                                 duration_ms: 5,
                                 metadata: None,
+                                previous_hash: String::new(),
+                                entry_hash: String::new(),
                             })
                             .collect();
                         engine.ingest_audit(&entries);

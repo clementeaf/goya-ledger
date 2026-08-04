@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **Audit tamper-evidence hash chain** (`src/audit.rs`)
+  - `AuditEntry` extended with `previous_hash` and `entry_hash` (SHA-256 chain)
+  - `seal()`, `verify()`, `compute_hash()` per entry; `verify_audit_chain()` for full chain validation
+  - `MemoryAuditStore.append()` auto-seals entries with previous hash link
+  - Tampering any entry invalidates all subsequent hashes — detectable in O(n)
+  - 10 new tests (chain linking, tamper detection, broken link, determinism, edge cases)
 - **Certificate Policy / CPS — RFC 3647 / ETSI TS 102 042** (`src/pki_policy.rs`, `src/api/handlers/policy.rs`)
   - OID namespace under Goya PEN: CP (`1.3.6.1.4.1.99999.2.1`), CPS (`.2.2`), TSA (`.1.1`), Signature Policy (`.3.1`)
   - `CertificatePolicy` with legal framework (Ley 19.799, DS 181, Decreto 24), subscriber/CA/RA obligations, assurance levels, algorithms, revocation mechanisms

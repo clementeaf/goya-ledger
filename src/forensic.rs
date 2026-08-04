@@ -451,6 +451,8 @@ mod tests {
             trace_id: trace.to_string(),
             duration_ms: 12,
             metadata: None,
+            previous_hash: String::new(),
+            entry_hash: String::new(),
         }
     }
 

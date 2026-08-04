@@ -89,6 +89,8 @@ fn emit_vault_audit(state: &AppState, operation: &str, did: &str, trace: &str, r
             trace_id: trace.to_string(),
             duration_ms: 0,
             metadata: Some(serde_json::json!({ "operation": operation, "did": did }).to_string()),
+            previous_hash: String::new(),
+            entry_hash: String::new(),
         };
         store.append(&entry).ok();
     });
