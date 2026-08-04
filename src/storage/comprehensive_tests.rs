@@ -27,7 +27,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_create_block_basic() {
-        let store = RocksDbBlockStore::new("/tmp/test_block_basic").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -48,7 +48,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_create_transaction_basic() {
-        let store = RocksDbBlockStore::new("/tmp/test_tx_basic").unwrap();
+        let (store, _dir) = temp_store();
         let tx = Transaction {
             id: "tx1".to_string(),
             block_height: 1,
@@ -63,7 +63,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_create_identity_basic() {
-        let store = RocksDbBlockStore::new("/tmp/test_identity_basic").unwrap();
+        let (store, _dir) = temp_store();
         let identity = IdentityRecord {
             did: "did:bc:1".to_string(),
             public_key: String::new(),
@@ -76,7 +76,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_create_credential_basic() {
-        let store = RocksDbBlockStore::new("/tmp/test_cred_basic").unwrap();
+        let (store, _dir) = temp_store();
         let cred = Credential {
             id: "cred1".to_string(),
             issuer_did: "did:bc:issuer".to_string(),
@@ -91,38 +91,38 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_read_block_not_found() {
-        let store = RocksDbBlockStore::new("/tmp/test_read_block_404").unwrap();
+        let (store, _dir) = temp_store();
         assert!(store.read_block(999).is_err());
     }
 
     #[test]
     fn test_read_transaction_not_found() {
-        let store = RocksDbBlockStore::new("/tmp/test_read_tx_404").unwrap();
+        let (store, _dir) = temp_store();
         assert!(store.read_transaction("nonexistent").is_err());
     }
 
     #[test]
     fn test_read_identity_not_found() {
-        let store = RocksDbBlockStore::new("/tmp/test_read_id_404").unwrap();
+        let (store, _dir) = temp_store();
         assert!(store.read_identity("did:bc:notfound").is_err());
     }
 
     #[test]
     fn test_read_credential_not_found() {
-        let store = RocksDbBlockStore::new("/tmp/test_read_cred_404").unwrap();
+        let (store, _dir) = temp_store();
         assert!(store.read_credential("crednotfound").is_err());
     }
 
     #[test]
     fn test_block_exists_false() {
-        let store = RocksDbBlockStore::new("/tmp/test_block_exists").unwrap();
+        let (store, _dir) = temp_store();
         let exists = store.block_exists(999).unwrap();
         assert!(!exists);
     }
 
     #[test]
     fn test_multiple_blocks_write() {
-        let store = RocksDbBlockStore::new("/tmp/test_multi_blocks").unwrap();
+        let (store, _dir) = temp_store();
         for i in 1..=10 {
             let block = Block {
                 height: i,
@@ -148,7 +148,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_update_identity_status() {
-        let store = RocksDbBlockStore::new("/tmp/test_update_id").unwrap();
+        let (store, _dir) = temp_store();
         let mut identity = IdentityRecord {
             did: "did:bc:1".to_string(),
             public_key: String::new(),
@@ -416,7 +416,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_large_block_data() {
-        let store = RocksDbBlockStore::new("/tmp/test_large_block").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -437,7 +437,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_zero_height_block() {
-        let store = RocksDbBlockStore::new("/tmp/test_zero_height").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 0,
             timestamp: 0,
@@ -458,7 +458,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_max_height_block() {
-        let store = RocksDbBlockStore::new("/tmp/test_max_height").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: u64::MAX,
             timestamp: u64::MAX,
@@ -479,7 +479,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_empty_transaction_list() {
-        let store = RocksDbBlockStore::new("/tmp/test_empty_txs").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -500,7 +500,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_long_did_string() {
-        let store = RocksDbBlockStore::new("/tmp/test_long_did").unwrap();
+        let (store, _dir) = temp_store();
         let long_did = format!("did:bc:{}", "x".repeat(1000));
         let identity = IdentityRecord {
             did: long_did,
@@ -514,7 +514,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_special_chars_in_proposer() {
-        let store = RocksDbBlockStore::new("/tmp/test_special_proposer").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -535,7 +535,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_unicode_in_proposer() {
-        let store = RocksDbBlockStore::new("/tmp/test_unicode_proposer").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -556,7 +556,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_credential_with_revocation() {
-        let store = RocksDbBlockStore::new("/tmp/test_revoked_cred").unwrap();
+        let (store, _dir) = temp_store();
         let cred = Credential {
             id: "cred1".to_string(),
             issuer_did: "did:bc:issuer".to_string(),
@@ -572,7 +572,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_expired_credential() {
-        let store = RocksDbBlockStore::new("/tmp/test_expired_cred").unwrap();
+        let (store, _dir) = temp_store();
         let cred = Credential {
             id: "cred1".to_string(),
             issuer_did: "did:bc:issuer".to_string(),
@@ -587,7 +587,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_transaction_zero_amount() {
-        let store = RocksDbBlockStore::new("/tmp/test_tx_zero_amount").unwrap();
+        let (store, _dir) = temp_store();
         let tx = Transaction {
             id: "tx1".to_string(),
             block_height: 1,
@@ -602,7 +602,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_transaction_max_amount() {
-        let store = RocksDbBlockStore::new("/tmp/test_tx_max_amount").unwrap();
+        let (store, _dir) = temp_store();
         let tx = Transaction {
             id: "tx1".to_string(),
             block_height: 1,
@@ -617,7 +617,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_transaction_pending_state() {
-        let store = RocksDbBlockStore::new("/tmp/test_tx_pending").unwrap();
+        let (store, _dir) = temp_store();
         let tx = Transaction {
             id: "tx1".to_string(),
             block_height: 0,
@@ -632,7 +632,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_transaction_failed_state() {
-        let store = RocksDbBlockStore::new("/tmp/test_tx_failed").unwrap();
+        let (store, _dir) = temp_store();
         let tx = Transaction {
             id: "tx1".to_string(),
             block_height: 1,
@@ -647,7 +647,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_identity_suspended_status() {
-        let store = RocksDbBlockStore::new("/tmp/test_id_suspended").unwrap();
+        let (store, _dir) = temp_store();
         let identity = IdentityRecord {
             did: "did:bc:1".to_string(),
             public_key: String::new(),
@@ -660,7 +660,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_identity_revoked_status() {
-        let store = RocksDbBlockStore::new("/tmp/test_id_revoked").unwrap();
+        let (store, _dir) = temp_store();
         let identity = IdentityRecord {
             did: "did:bc:1".to_string(),
             public_key: String::new(),
@@ -675,7 +675,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_schema_version_tracking() {
-        let store = RocksDbBlockStore::new("/tmp/test_schema_v1").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -696,7 +696,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_backwards_compatibility() {
-        let store = RocksDbBlockStore::new("/tmp/test_compat").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -737,7 +737,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_write_latency_single_block() {
-        let store = RocksDbBlockStore::new("/tmp/test_perf_write").unwrap();
+        let (store, _dir) = temp_store();
         let block = Block {
             height: 1,
             timestamp: 1000,
@@ -762,7 +762,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_throughput_100_blocks() {
-        let store = RocksDbBlockStore::new("/tmp/test_perf_100").unwrap();
+        let (store, _dir) = temp_store();
         let start = Instant::now();
         for i in 1..=100 {
             let block = Block {
@@ -788,7 +788,7 @@ mod comprehensive_storage_tests {
 
     #[test]
     fn test_throughput_1000_transactions() {
-        let store = RocksDbBlockStore::new("/tmp/test_perf_1000_tx").unwrap();
+        let (store, _dir) = temp_store();
         let start = Instant::now();
         for i in 1..=1000 {
             let tx = Transaction {
