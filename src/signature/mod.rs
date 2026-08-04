@@ -21,6 +21,7 @@
 //! cryptographically covers the signer's biometric identity.
 
 pub mod verify;
+pub mod xades;
 
 use crate::identity::signing::SigningAlgorithm;
 use serde::{Deserialize, Serialize};

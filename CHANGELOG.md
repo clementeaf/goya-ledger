@@ -8,6 +8,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **XAdES-BES electronic signatures** — ETSI TS 101 903 (`src/signature/xades.rs`)
+  - `to_xades_bes()` generates compliant XML envelopes from `SignedEnvelope`
+  - `parse_xades_fields()` extracts and validates core fields from XAdES XML
+  - SignedProperties: SigningTime (ISO 8601), SigningCertificateV2, ClaimedRole (FES/FEA/FEQ), DataObjectFormat, SignerDID
+  - W3C algorithm URIs for Ed25519 and ML-DSA-65 (post-quantum)
+  - SignedInfo with document digest reference + SignedProperties digest reference
+  - No external XML crate — template-based generation, output in canonical form
+  - 20 tests (structure, namespaces, roundtrip, determinism, ISO 8601, base64, algorithms)
 - **Time Stamping Authority (TSA) — RFC 3161** (`src/tsa/`, `src/api/handlers/tsa.rs`)
   - `TsaProvider` with monotonic serial counter (`AtomicU64`), configurable accuracy, policy OID
   - `TstInfo` with all RFC 3161 fields: version, policy, hash algorithm, message imprint, serial number, genTime, accuracy, ordering, nonce, TSA name
