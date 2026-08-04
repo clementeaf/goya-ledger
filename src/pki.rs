@@ -101,6 +101,16 @@ impl std::fmt::Debug for NodeCaConfig {
 }
 
 impl NodeCaConfig {
+    /// Access the CA certificate (for CRL signing, cert issuance).
+    pub fn cert(&self) -> &rcgen::Certificate {
+        &self.ca_cert
+    }
+
+    /// Access the CA key pair (for CRL signing, cert issuance).
+    pub fn key(&self) -> &KeyPair {
+        &self.ca_key
+    }
+
     #[allow(dead_code)]
     /// Load a CA from PEM key file, reconstructing the rcgen signing cert.
     ///

@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **CRL RFC 5280 generation** (`src/msp/crl_rfc5280.rs`)
+  - `generate_crl_der()` and `generate_crl_pem()` via rcgen — proper DER/PEM X.509 CRL signed by node CA
+  - `NodeCaConfig::cert()` / `key()` accessors for CRL signing
+  - Validated with x509-parser roundtrip (generate DER → parse → verify revoked cert count)
+  - Zero new dependencies — uses existing rcgen 0.13 CRL support
+  - 9 tests (empty CRL, revoked serials, CRL numbers, PEM markers, invalid hex skip, large CRL, x509-parser roundtrip)
 - **Audit tamper-evidence hash chain** (`src/audit.rs`)
   - `AuditEntry` extended with `previous_hash` and `entry_hash` (SHA-256 chain)
   - `seal()`, `verify()`, `compute_hash()` per entry; `verify_audit_chain()` for full chain validation
