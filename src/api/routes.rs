@@ -7,7 +7,7 @@ use crate::api::handlers::{
     compliance_auto, contact, contracts, credentials, discovery, events, forensic, gateway,
     governance, governance_entities, identity, inference, intelligence, interop, invitations,
     legal_oracle, msp, network, notarize, oracle, organizations, pentest, pin, private_data,
-    proposals, registry, regulatory, snapshots, staking, stats, stress, stripe, tokenization,
+    proposals, ra, registry, regulatory, snapshots, staking, stats, stress, stripe, tokenization,
     transactions, tsa, utilities, vault, wallets, zkp,
 };
 
@@ -254,6 +254,11 @@ impl ApiRoutes {
         cfg.service(tsa::request_timestamp)
             .service(tsa::tsa_policy)
             .service(tsa::verify_timestamp);
+        // Registration Authority (Ley 19.799 Art. 15)
+        cfg.service(ra::submit_proof)
+            .service(ra::approve_proof)
+            .service(ra::reject_proof)
+            .service(ra::get_proof_status);
         // Invitations (governance proposal invitations via alias)
         cfg.service(invitations::create_invitation)
             .service(invitations::list_invitations)

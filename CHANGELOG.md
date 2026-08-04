@@ -8,6 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **Registration Authority (RA) — Ley 19.799 Art. 15** (`src/identity/ra.rs`, `src/api/handlers/ra.rs`)
+  - `RaStore` with identity proofing lifecycle: Pending → Verified / Rejected
+  - Chilean RUT validation (modulo 11 check digit, format normalization)
+  - `IdentityProofing` record: DID, RUT, legal name, proofing method (in-person / video / remote), officer DID, timestamps, rejection reason
+  - API endpoints: `POST /api/v1/identity/proof`, `POST .../approve`, `POST .../reject`, `GET .../proof/{did}`
+  - `AppState.ra_store` integration, disabled by default
+  - 27 tests (11 RUT validation + 11 RA lifecycle + 5 E2E endpoint)
 - **XAdES-BES electronic signatures** — ETSI TS 101 903 (`src/signature/xades.rs`)
   - `to_xades_bes()` generates compliant XML envelopes from `SignedEnvelope`
   - `parse_xades_fields()` extracts and validates core fields from XAdES XML

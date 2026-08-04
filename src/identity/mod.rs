@@ -10,6 +10,7 @@ pub mod dual_signing;
 pub mod hsm;
 pub mod keys;
 pub mod pqc_policy;
+pub mod ra;
 pub mod signing;
 pub mod zkp;
 

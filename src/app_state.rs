@@ -109,6 +109,8 @@ pub struct AppState {
     pub proof_verifier: Arc<dyn crate::inference::proof::ProofVerifier>,
     /// RFC 3161 Time Stamping Authority provider.
     pub tsa_provider: Option<Arc<crate::tsa::TsaProvider>>,
+    /// Registration Authority store (Ley 19.799 Art. 15).
+    pub ra_store: Option<Arc<crate::identity::ra::RaStore>>,
 }
 
 impl AppState {
@@ -174,6 +176,7 @@ impl AppState {
             bridge_engine: Arc::new(crate::bridge::protocol::BridgeEngine::new()),
             proof_verifier: Arc::new(crate::inference::proof::MultiVerifier::new()),
             tsa_provider: None,
+            ra_store: None,
         }
     }
 }

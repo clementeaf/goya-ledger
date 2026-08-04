@@ -861,6 +861,7 @@ async fn async_main_inner() -> std::io::Result<()> {
         bridge_engine: Arc::new(crate::bridge::protocol::BridgeEngine::new()),
         proof_verifier: Arc::new(inference::proof::MultiVerifier::new()),
         tsa_provider: None,
+        ra_store: None,
     };
 
     // Log vault recovery secret fingerprint for rotation verification.
