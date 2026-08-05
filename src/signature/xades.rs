@@ -207,7 +207,7 @@ fn level_to_claimed_role(level: SignatureLevel) -> &'static str {
     }
 }
 
-fn timestamp_to_iso8601(unix_secs: u64) -> String {
+pub(crate) fn timestamp_to_iso8601(unix_secs: u64) -> String {
     let secs = unix_secs as i64;
     let days = secs / 86400;
     let rem = secs % 86400;

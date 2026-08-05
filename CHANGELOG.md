@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **CAdES-BES electronic signatures** — ETSI TS 101 733 (`src/signature/cades.rs`)
+  - `CadesEnvelope` with CMS SignedData structure, SignerInfo, signed attributes (content type, message digest, signing time, signing certificate v2, commitment type FES/FEA/FEQ)
+  - `extract_cades_fields()` for verification
+  - 12 tests (structure, OIDs, attributes, commitment types, determinism, serialization)
+- **PAdES-BES electronic signatures** — ETSI TS 102 778 (`src/signature/pades.rs`)
+  - `PadesSignature` with PDF signature dictionary fields (filter, sub-filter, name, location, reason, contact, document digest, certificate digest, signature level)
+  - `PadesOptions` for location/reason/contact metadata
+  - `extract_pades_fields()` for verification
+  - 15 tests (filter, sub-filter, options, levels, none-skipping in JSON, determinism, serialization)
 - **Key Ceremony framework** (`src/pki_ceremony.rs`)
   - `KeyCeremony` builder with formal steps: EnvironmentCheck, KeyGeneration, WitnessAttestation, KeySplit, ShareDistribution, KeyVerification, Activation
   - `CeremonyConfig` with M-of-N threshold, notary requirement, minimum witnesses

@@ -20,6 +20,8 @@
 //! The commitment is bound into the signing payload so the signature
 //! cryptographically covers the signer's biometric identity.
 
+pub mod cades;
+pub mod pades;
 pub mod verify;
 pub mod xades;
 
