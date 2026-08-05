@@ -8,6 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **Key Ceremony framework** (`src/pki_ceremony.rs`)
+  - `KeyCeremony` builder with formal steps: EnvironmentCheck, KeyGeneration, WitnessAttestation, KeySplit, ShareDistribution, KeyVerification, Activation
+  - `CeremonyConfig` with M-of-N threshold, notary requirement, minimum witnesses
+  - `CeremonyRecord` with SHA-256 tamper-evident hash, `verify_record()` for integrity
+  - Validation enforces required participants (custodians, witnesses, notary) and steps before finalization
+  - Abort flow with reason recording
+  - 17 tests (full ceremony, validation failures, abort, tamper detection, serialization)
 - **Trusted time source abstraction** (`src/time_source.rs`)
   - `TimeSource` trait with `SystemTimeSource`, `NtpTimeSource`, `SimulatedTimeSource`
   - `NtpTimeSource` validates NTP sync status and drift tolerance (configurable max)
