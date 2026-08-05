@@ -5,6 +5,7 @@ mod api;
 mod api_legacy;
 mod app_state;
 mod audit;
+mod audit_retention;
 mod billing;
 mod block_creation;
 mod bridge;
@@ -56,6 +57,7 @@ mod tls;
 mod transaction;
 mod transaction_validation;
 mod tsa;
+mod tsl;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;

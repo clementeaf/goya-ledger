@@ -32,6 +32,7 @@ pub mod acl;
 pub mod api;
 pub mod app_state;
 pub mod audit;
+pub mod audit_retention;
 pub mod block_creation;
 pub mod bridge;
 pub mod chaincode;
@@ -70,5 +71,6 @@ pub mod tls;
 pub mod tokenomics;
 pub mod transaction;
 pub mod tsa;
+pub mod tsl;
 
 pub use app_state::AppState;

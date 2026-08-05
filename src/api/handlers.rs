@@ -51,6 +51,7 @@ pub mod stripe;
 pub mod tokenization;
 pub mod transactions;
 pub mod tsa;
+pub mod tsl;
 pub mod utilities;
 pub mod validation;
 pub mod vault;

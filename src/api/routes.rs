@@ -8,7 +8,7 @@ use crate::api::handlers::{
     governance, governance_entities, identity, inference, intelligence, interop, invitations,
     legal_oracle, msp, network, notarize, ocsp, oracle, organizations, pentest, pin, policy,
     private_data, proposals, ra, registry, regulatory, snapshots, staking, stats, stress, stripe,
-    tokenization, transactions, tsa, utilities, vault, wallets, zkp,
+    tokenization, transactions, tsa, tsl, utilities, vault, wallets, zkp,
 };
 
 /// API routes configuration
@@ -265,6 +265,8 @@ impl ApiRoutes {
             .service(policy::get_oids);
         // OCSP Responder (RFC 6960)
         cfg.service(ocsp::ocsp_query).service(ocsp::ocsp_status);
+        // Trust Service List (ETSI TS 119 612)
+        cfg.service(tsl::get_tsl);
         // Invitations (governance proposal invitations via alias)
         cfg.service(invitations::create_invitation)
             .service(invitations::list_invitations)

@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **Audit log retention enforcement** (`src/audit_retention.rs`)
+  - `AuditRetentionPolicy` with configurable min/max retention (default 7 years per Chilean regulation)
+  - `is_retained()`, `is_purgeable()`, `filter_retained()`, `count_purgeable()` for lifecycle management
+  - 12 tests (defaults, boundary, filtering, purge counting, serialization)
+- **Trust Service List (TSL) — ETSI TS 119 612** (`src/tsl.rs`, `src/api/handlers/tsl.rs`)
+  - `TrustServiceList` with 5 service entries: CA, TSA, OCSP, RA, Electronic Signature
+  - Each service includes type, status, policy OID, algorithms, formats, endpoint
+  - API endpoint: `GET /api/v1/tsl`
+  - 15 unit tests + 1 E2E endpoint test
 - **ETSI audit event categories** (`src/audit.rs`)
   - 24 new `AuditAction` variants covering ETSI TS 102 042 requirements: key lifecycle (Generated/Activated/Deactivated/Destroyed/BackedUp/Restored), certificate lifecycle (Issued/Renewed/Suspended/Revoked), revocation services (CrlPublished/OcspResponseGenerated), TSA operations (TimestampIssued/TsaKeyRollover), RA actions (IdentityProofingSubmitted/Approved/Rejected), security officer actions (Login/ConfigChange/RoleAssigned), system events (Startup/Shutdown/AuditLogVerified)
   - All variants queryable, serializable, and integrated with tamper-evident hash chain
