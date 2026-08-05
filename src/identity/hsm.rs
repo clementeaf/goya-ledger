@@ -182,29 +182,289 @@ impl super::signing::SigningProvider for HsmSigningProvider {
     }
 }
 
+// ── Simulated HSM Provider ────────────────────────────────────────────────
+
+/// Software-backed HSM simulator for testing and development.
+///
+/// Implements `SigningProvider` with the same lifecycle as a real HSM
+/// (config, session open, key lookup by label) but uses in-memory Ed25519.
+/// Allows full integration testing without hardware.
+pub struct SimulatedHsmProvider {
+    config: HsmConfig,
+    signing_key: ed25519_dalek::SigningKey,
+    session_open: bool,
+}
+
+impl SimulatedHsmProvider {
+    /// Create a simulated HSM with a generated key.
+    pub fn new(config: HsmConfig) -> Result<Self, HsmError> {
+        if config.pin.is_empty() {
+            return Err(HsmError::AuthFailed);
+        }
+        if config.key_label.is_empty() {
+            return Err(HsmError::KeyNotFound("empty label".into()));
+        }
+        use pqc_crypto_module::legacy::rng::OsRng;
+        Ok(Self {
+            config,
+            signing_key: ed25519_dalek::SigningKey::generate(&mut OsRng),
+            session_open: true,
+        })
+    }
+
+    /// Create from environment variables.
+    pub fn from_env() -> Result<Self, HsmError> {
+        let config = HsmConfig::from_env()?;
+        Self::new(config)
+    }
+
+    /// Close the simulated session.
+    pub fn close_session(&mut self) {
+        self.session_open = false;
+    }
+
+    /// Re-open the simulated session (requires PIN).
+    pub fn reopen_session(&mut self, pin: &str) -> Result<(), HsmError> {
+        if pin != self.config.pin {
+            return Err(HsmError::AuthFailed);
+        }
+        self.session_open = true;
+        Ok(())
+    }
+
+    /// Check if the session is open.
+    pub fn is_session_open(&self) -> bool {
+        self.session_open
+    }
+
+    /// Get the key label.
+    pub fn key_label(&self) -> &str {
+        &self.config.key_label
+    }
+
+    fn require_session(&self) -> Result<(), super::signing::SigningError> {
+        if !self.session_open {
+            return Err(super::signing::SigningError::SignFailed(
+                "HSM session is closed".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl super::signing::SigningProvider for SimulatedHsmProvider {
+    fn algorithm(&self) -> super::signing::SigningAlgorithm {
+        super::signing::SigningAlgorithm::Ed25519
+    }
+
+    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, super::signing::SigningError> {
+        self.require_session()?;
+        use pqc_crypto_module::legacy::ed25519::Signer;
+        let sig = self.signing_key.sign(data);
+        Ok(sig.to_bytes().to_vec())
+    }
+
+    fn public_key(&self) -> Vec<u8> {
+        self.signing_key.verifying_key().to_bytes().to_vec()
+    }
+
+    fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, super::signing::SigningError> {
+        use pqc_crypto_module::legacy::ed25519::{Signature, Verifier};
+        let sig_bytes: [u8; 64] = sig.try_into().map_err(|_| {
+            super::signing::SigningError::VerifyFailed("Ed25519 signature must be 64 bytes".into())
+        })?;
+        let signature = Signature::from_bytes(&sig_bytes);
+        Ok(self
+            .signing_key
+            .verifying_key()
+            .verify(data, &signature)
+            .is_ok())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identity::signing::SigningProvider;
 
-    #[test]
-    fn hsm_config_fields() {
-        let cfg = HsmConfig {
+    fn test_config() -> HsmConfig {
+        HsmConfig {
             pkcs11_lib: "/usr/lib/softhsm/libsofthsm2.so".into(),
             slot_id: 0,
             pin: "1234".into(),
-            key_label: "mykey".into(),
-        };
+            key_label: "ed25519-key".into(),
+        }
+    }
+
+    #[test]
+    fn hsm_config_fields() {
+        let cfg = test_config();
         assert_eq!(cfg.slot_id, 0);
-        assert_eq!(cfg.key_label, "mykey");
+        assert_eq!(cfg.key_label, "ed25519-key");
     }
 
     #[test]
     fn hsm_provider_not_enabled_without_feature() {
-        // Without the hsm feature, construction should fail with NotEnabled.
         #[cfg(not(feature = "hsm"))]
         {
             let result = HsmSigningProvider::new("/lib.so", 0, "pin", "label");
             assert!(matches!(result, Err(HsmError::NotEnabled)));
         }
+    }
+
+    // ── SimulatedHsmProvider ──────────────────────────────────────────
+
+    #[test]
+    fn sim_creates_with_valid_config() {
+        let provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        assert!(provider.is_session_open());
+        assert_eq!(provider.key_label(), "ed25519-key");
+    }
+
+    #[test]
+    fn sim_rejects_empty_pin() {
+        let mut cfg = test_config();
+        cfg.pin = String::new();
+        let result = SimulatedHsmProvider::new(cfg);
+        assert!(matches!(result, Err(HsmError::AuthFailed)));
+    }
+
+    #[test]
+    fn sim_rejects_empty_key_label() {
+        let mut cfg = test_config();
+        cfg.key_label = String::new();
+        let result = SimulatedHsmProvider::new(cfg);
+        assert!(matches!(result, Err(HsmError::KeyNotFound(_))));
+    }
+
+    #[test]
+    fn sim_sign_and_verify() {
+        let provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        let data = b"test message";
+        let sig = provider.sign(data).unwrap();
+        assert_eq!(sig.len(), 64);
+        assert!(provider.verify(data, &sig).unwrap());
+    }
+
+    #[test]
+    fn sim_sign_different_data_different_sig() {
+        let provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        let sig1 = provider.sign(b"msg1").unwrap();
+        let sig2 = provider.sign(b"msg2").unwrap();
+        assert_ne!(sig1, sig2);
+    }
+
+    #[test]
+    fn sim_verify_rejects_wrong_data() {
+        let provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        let sig = provider.sign(b"original").unwrap();
+        assert!(!provider.verify(b"tampered", &sig).unwrap());
+    }
+
+    #[test]
+    fn sim_verify_rejects_wrong_sig() {
+        let provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        let bad_sig = vec![0u8; 64];
+        assert!(!provider.verify(b"data", &bad_sig).unwrap());
+    }
+
+    #[test]
+    fn sim_verify_rejects_short_sig() {
+        let provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        let result = provider.verify(b"data", &[0u8; 32]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sim_public_key_is_32_bytes() {
+        let provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        assert_eq!(provider.public_key().len(), 32);
+    }
+
+    #[test]
+    fn sim_algorithm_is_ed25519() {
+        let provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        assert_eq!(
+            provider.algorithm(),
+            crate::identity::signing::SigningAlgorithm::Ed25519
+        );
+    }
+
+    #[test]
+    fn sim_close_session_prevents_signing() {
+        let mut provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        provider.close_session();
+        assert!(!provider.is_session_open());
+        let result = provider.sign(b"data");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sim_reopen_session_with_correct_pin() {
+        let mut provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        provider.close_session();
+        provider.reopen_session("1234").unwrap();
+        assert!(provider.is_session_open());
+        assert!(provider.sign(b"data").is_ok());
+    }
+
+    #[test]
+    fn sim_reopen_session_with_wrong_pin_fails() {
+        let mut provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        provider.close_session();
+        let result = provider.reopen_session("wrong");
+        assert!(matches!(result, Err(HsmError::AuthFailed)));
+        assert!(!provider.is_session_open());
+    }
+
+    #[test]
+    fn sim_verify_works_with_closed_session() {
+        let mut provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        let sig = provider.sign(b"data").unwrap();
+        provider.close_session();
+        assert!(provider.verify(b"data", &sig).unwrap());
+    }
+
+    #[test]
+    fn sim_implements_signing_provider_trait() {
+        let provider = SimulatedHsmProvider::new(test_config()).unwrap();
+        let boxed: Box<dyn SigningProvider> = Box::new(provider);
+        let sig = boxed.sign(b"trait test").unwrap();
+        assert!(boxed.verify(b"trait test", &sig).unwrap());
+    }
+
+    #[test]
+    fn sim_cross_verify_with_software_provider() {
+        let hsm = SimulatedHsmProvider::new(test_config()).unwrap();
+        let data = b"cross-verify test";
+        let sig = hsm.sign(data).unwrap();
+        let pk_hex = hex::encode(hsm.public_key());
+        let sig_hex = hex::encode(&sig);
+        assert!(crate::signature::verify_signature(
+            crate::identity::signing::SigningAlgorithm::Ed25519,
+            &pk_hex,
+            data,
+            &sig_hex,
+        ));
+    }
+
+    #[test]
+    fn sim_usable_as_tsa_signer() {
+        use std::sync::Arc;
+        let hsm = SimulatedHsmProvider::new(test_config()).unwrap();
+        let signer: Arc<dyn SigningProvider> = Arc::new(hsm);
+        let tsa = crate::tsa::TsaProvider::new(signer, "did:goya:hsm-tsa".into());
+        let req = crate::tsa::TimeStampRequest {
+            hash_algorithm: crate::crypto::hasher::HashAlgorithm::Sha256,
+            message_imprint: hex::encode(crate::crypto::hasher::hash_with(
+                crate::crypto::hasher::HashAlgorithm::Sha256,
+                b"hsm test",
+            )),
+            nonce: Some(1),
+            require_ordering: false,
+        };
+        let resp = tsa.issue(&req);
+        assert_eq!(resp.status, 0);
+        assert!(crate::tsa::verify_token(&resp.token.unwrap()));
     }
 }

@@ -8,6 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **HSM signing — SimulatedHsmProvider** (`src/identity/hsm.rs`)
+  - `SimulatedHsmProvider` implements `SigningProvider` with full HSM lifecycle (config, session open/close/reopen, PIN auth, key lookup by label)
+  - Session-gated signing: close session prevents signing, reopen with correct PIN restores it
+  - Compatible as signer for TSA, OCSP, CRL (integration tested)
+  - Cross-verification with `verify_signature` module confirmed
+  - Ready for hardware HSM swap — same interface, replace `SimulatedHsmProvider` with `HsmSigningProvider`
+  - 17 tests (config, auth, sign/verify, session lifecycle, trait compat, TSA integration, cross-verify)
 - **CA Hierarchy — root + intermediate** (`src/pki.rs`)
   - `CaHierarchy` with offline root CA + operational intermediate CA (`pathLenConstraint=0`)
   - `generate()` creates both tiers in memory, intermediate signed by root
