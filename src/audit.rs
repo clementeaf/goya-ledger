@@ -50,6 +50,60 @@ pub enum AuditAction {
     ProposalVoted,
     /// A vault operation (store, get, recover).
     VaultOperation,
+
+    // ── ETSI TS 102 042 audit event categories ────────────────────
+    /// CA key pair generated (key ceremony).
+    KeyGenerated,
+    /// CA key activated for operational use.
+    KeyActivated,
+    /// CA key deactivated or suspended.
+    KeyDeactivated,
+    /// CA key destroyed / zeroized.
+    KeyDestroyed,
+    /// CA key backed up to HSM or custodian shares.
+    KeyBackedUp,
+    /// CA key restored from backup.
+    KeyRestored,
+
+    /// Certificate issued to a subscriber.
+    CertificateIssued,
+    /// Certificate renewed.
+    CertificateRenewed,
+    /// Certificate suspended.
+    CertificateSuspended,
+    /// Certificate revoked and added to CRL.
+    CertificateRevoked,
+
+    /// CRL published.
+    CrlPublished,
+    /// OCSP response generated.
+    OcspResponseGenerated,
+
+    /// Timestamp token issued (TSA operation).
+    TimestampIssued,
+    /// TSA key rollover.
+    TsaKeyRollover,
+
+    /// Identity proofing request submitted (RA).
+    IdentityProofingSubmitted,
+    /// Identity proofing approved by RA officer.
+    IdentityProofingApproved,
+    /// Identity proofing rejected by RA officer.
+    IdentityProofingRejected,
+
+    /// Security officer login.
+    SecurityOfficerLogin,
+    /// Security officer configuration change.
+    SecurityOfficerConfigChange,
+    /// Security officer role assignment.
+    SecurityOfficerRoleAssigned,
+
+    /// System startup.
+    SystemStartup,
+    /// System shutdown.
+    SystemShutdown,
+    /// Audit log integrity verification performed.
+    AuditLogVerified,
 }
 
 impl std::fmt::Display for AuditAction {
@@ -537,6 +591,192 @@ mod tests {
             AuditAction::ChaincodeInstalled.to_string(),
             "chaincode_installed"
         );
+    }
+
+    // ── ETSI audit event categories ────────────────────────────────
+
+    #[test]
+    fn etsi_key_lifecycle_actions_display() {
+        assert_eq!(AuditAction::KeyGenerated.to_string(), "key_generated");
+        assert_eq!(AuditAction::KeyActivated.to_string(), "key_activated");
+        assert_eq!(AuditAction::KeyDeactivated.to_string(), "key_deactivated");
+        assert_eq!(AuditAction::KeyDestroyed.to_string(), "key_destroyed");
+        assert_eq!(AuditAction::KeyBackedUp.to_string(), "key_backed_up");
+        assert_eq!(AuditAction::KeyRestored.to_string(), "key_restored");
+    }
+
+    #[test]
+    fn etsi_certificate_actions_display() {
+        assert_eq!(
+            AuditAction::CertificateIssued.to_string(),
+            "certificate_issued"
+        );
+        assert_eq!(
+            AuditAction::CertificateRenewed.to_string(),
+            "certificate_renewed"
+        );
+        assert_eq!(
+            AuditAction::CertificateSuspended.to_string(),
+            "certificate_suspended"
+        );
+        assert_eq!(
+            AuditAction::CertificateRevoked.to_string(),
+            "certificate_revoked"
+        );
+    }
+
+    #[test]
+    fn etsi_revocation_service_actions_display() {
+        assert_eq!(AuditAction::CrlPublished.to_string(), "crl_published");
+        assert_eq!(
+            AuditAction::OcspResponseGenerated.to_string(),
+            "ocsp_response_generated"
+        );
+    }
+
+    #[test]
+    fn etsi_tsa_actions_display() {
+        assert_eq!(AuditAction::TimestampIssued.to_string(), "timestamp_issued");
+        assert_eq!(AuditAction::TsaKeyRollover.to_string(), "tsa_key_rollover");
+    }
+
+    #[test]
+    fn etsi_ra_actions_display() {
+        assert_eq!(
+            AuditAction::IdentityProofingSubmitted.to_string(),
+            "identity_proofing_submitted"
+        );
+        assert_eq!(
+            AuditAction::IdentityProofingApproved.to_string(),
+            "identity_proofing_approved"
+        );
+        assert_eq!(
+            AuditAction::IdentityProofingRejected.to_string(),
+            "identity_proofing_rejected"
+        );
+    }
+
+    #[test]
+    fn etsi_security_officer_actions_display() {
+        assert_eq!(
+            AuditAction::SecurityOfficerLogin.to_string(),
+            "security_officer_login"
+        );
+        assert_eq!(
+            AuditAction::SecurityOfficerConfigChange.to_string(),
+            "security_officer_config_change"
+        );
+        assert_eq!(
+            AuditAction::SecurityOfficerRoleAssigned.to_string(),
+            "security_officer_role_assigned"
+        );
+    }
+
+    #[test]
+    fn etsi_system_actions_display() {
+        assert_eq!(AuditAction::SystemStartup.to_string(), "system_startup");
+        assert_eq!(AuditAction::SystemShutdown.to_string(), "system_shutdown");
+        assert_eq!(
+            AuditAction::AuditLogVerified.to_string(),
+            "audit_log_verified"
+        );
+    }
+
+    #[test]
+    fn etsi_actions_queryable() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_domain_entry(
+                "2026-01-01T00:00:00Z",
+                "org1",
+                AuditAction::KeyGenerated,
+                "algo=Ed25519",
+            ))
+            .unwrap();
+        store
+            .append(&make_domain_entry(
+                "2026-01-01T00:01:00Z",
+                "org1",
+                AuditAction::CertificateIssued,
+                "did:goya:sub1",
+            ))
+            .unwrap();
+        store
+            .append(&make_domain_entry(
+                "2026-01-01T00:02:00Z",
+                "org1",
+                AuditAction::TimestampIssued,
+                "serial=42",
+            ))
+            .unwrap();
+
+        let keys = store
+            .query(None, None, None, Some(&AuditAction::KeyGenerated), 100)
+            .unwrap();
+        assert_eq!(keys.len(), 1);
+        assert_eq!(keys[0].metadata.as_deref(), Some("algo=Ed25519"));
+
+        let certs = store
+            .query(None, None, None, Some(&AuditAction::CertificateIssued), 100)
+            .unwrap();
+        assert_eq!(certs.len(), 1);
+
+        let tsa = store
+            .query(None, None, None, Some(&AuditAction::TimestampIssued), 100)
+            .unwrap();
+        assert_eq!(tsa.len(), 1);
+    }
+
+    #[test]
+    fn etsi_actions_in_hash_chain() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_domain_entry(
+                "2026-01-01T00:00:00Z",
+                "org1",
+                AuditAction::SecurityOfficerLogin,
+                "officer=admin",
+            ))
+            .unwrap();
+        store
+            .append(&make_domain_entry(
+                "2026-01-01T00:01:00Z",
+                "org1",
+                AuditAction::KeyGenerated,
+                "root_ca",
+            ))
+            .unwrap();
+        store
+            .append(&make_domain_entry(
+                "2026-01-01T00:02:00Z",
+                "org1",
+                AuditAction::CertificateIssued,
+                "sub=did:goya:x",
+            ))
+            .unwrap();
+
+        let entries = store.query(None, None, None, None, 100).unwrap();
+        assert!(verify_audit_chain(&entries).is_ok());
+    }
+
+    #[test]
+    fn etsi_actions_serialization_roundtrip() {
+        let actions = vec![
+            AuditAction::KeyGenerated,
+            AuditAction::CertificateIssued,
+            AuditAction::CrlPublished,
+            AuditAction::OcspResponseGenerated,
+            AuditAction::TimestampIssued,
+            AuditAction::IdentityProofingApproved,
+            AuditAction::SecurityOfficerLogin,
+            AuditAction::SystemStartup,
+            AuditAction::AuditLogVerified,
+        ];
+        for action in &actions {
+            let json = serde_json::to_string(action).unwrap();
+            let parsed: AuditAction = serde_json::from_str(&json).unwrap();
+            assert_eq!(&parsed, action);
+        }
     }
 
     // ── Hash chain tamper evidence ──────────────────────────────────

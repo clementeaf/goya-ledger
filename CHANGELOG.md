@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **ETSI audit event categories** (`src/audit.rs`)
+  - 24 new `AuditAction` variants covering ETSI TS 102 042 requirements: key lifecycle (Generated/Activated/Deactivated/Destroyed/BackedUp/Restored), certificate lifecycle (Issued/Renewed/Suspended/Revoked), revocation services (CrlPublished/OcspResponseGenerated), TSA operations (TimestampIssued/TsaKeyRollover), RA actions (IdentityProofingSubmitted/Approved/Rejected), security officer actions (Login/ConfigChange/RoleAssigned), system events (Startup/Shutdown/AuditLogVerified)
+  - All variants queryable, serializable, and integrated with tamper-evident hash chain
+  - 10 tests (display, queryability, hash chain integration, serialization roundtrip)
 - **CAdES-BES electronic signatures** — ETSI TS 101 733 (`src/signature/cades.rs`)
   - `CadesEnvelope` with CMS SignedData structure, SignerInfo, signed attributes (content type, message digest, signing time, signing certificate v2, commitment type FES/FEA/FEQ)
   - `extract_cades_fields()` for verification
