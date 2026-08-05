@@ -43,6 +43,7 @@ mod ordering;
 mod pin;
 mod pki;
 mod pki_ceremony;
+mod pki_lifecycle;
 mod pki_policy;
 mod private_data;
 mod registry;

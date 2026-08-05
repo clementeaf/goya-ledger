@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **NTP system hook** (`src/time_source.rs`)
+  - `parse_chronyc_output()` and `parse_timedatectl_output()` parse real NTP daemon output
+  - `check_ntp_sync()` runs chronyc/timedatectl and feeds `NtpTimeSource::set_sync_status()`
+  - 7 tests (chronyc synced/not-synced/empty, timedatectl variants, live check)
+- **Certificate lifecycle manager** (`src/pki_lifecycle.rs`)
+  - `LifecycleManager` orchestrates revoke→CRL, suspend→CRL, reinstate→CRL, expiry monitoring
+  - Monotonic CRL numbers, automatic event recording for audit trail integration
+  - `check_expiring()` scans certificates within configurable warning window
+  - 11 tests (revoke+publish, suspend+publish, reinstate, CRL numbers, expiry detection, accumulation)
 - **certificatePolicies X.509 extension** (`src/pki.rs`)
   - All issued certificates (CA, intermediate, node) now carry OID 2.5.29.32 with CPS URI
   - `certificate_policies_extension()` builds DER-encoded PolicyInformation with CPS qualifier

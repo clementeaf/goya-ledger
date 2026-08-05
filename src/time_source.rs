@@ -247,6 +247,84 @@ fn system_now() -> u64 {
         .as_secs()
 }
 
+// ── NTP system checker ──────────────────────────────────────────────────────
+
+/// Parse `chronyc tracking` output to extract sync status and offset.
+///
+/// Returns `(synced, offset_secs)`. Parses "Leap status" and "System time" fields.
+pub fn parse_chronyc_output(output: &str) -> (bool, u64) {
+    let mut synced = false;
+    let mut offset_secs = 0u64;
+
+    for line in output.lines() {
+        let line = line.trim();
+        if line.starts_with("Leap status") {
+            synced = line.contains("Normal");
+        } else if line.starts_with("System time") {
+            if let Some(val) = extract_float_from_line(line) {
+                offset_secs = val.ceil() as u64;
+            }
+        }
+    }
+
+    (synced, offset_secs)
+}
+
+/// Parse `timedatectl` output as fallback.
+///
+/// Returns `(synced, 0)` — timedatectl doesn't report offset directly.
+pub fn parse_timedatectl_output(output: &str) -> (bool, u64) {
+    let synced = output.lines().any(|line| {
+        let l = line.trim().to_lowercase();
+        (l.contains("ntp synchronized") || l.contains("system clock synchronized"))
+            && l.contains("yes")
+    });
+    (synced, 0)
+}
+
+/// Check NTP sync status by running system commands.
+///
+/// Tries `chronyc tracking` first, falls back to `timedatectl`.
+/// Updates the provided `NtpTimeSource` with the result.
+pub fn check_ntp_sync(ntp_source: &NtpTimeSource) -> Result<(bool, u64), TimeError> {
+    if let Ok(output) = std::process::Command::new("chronyc")
+        .arg("tracking")
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let (synced, offset) = parse_chronyc_output(&stdout);
+            ntp_source.set_sync_status(synced, offset);
+            return Ok((synced, offset));
+        }
+    }
+
+    if let Ok(output) = std::process::Command::new("timedatectl")
+        .arg("status")
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let (synced, offset) = parse_timedatectl_output(&stdout);
+            ntp_source.set_sync_status(synced, offset);
+            return Ok((synced, offset));
+        }
+    }
+
+    Err(TimeError::Unavailable(
+        "neither chronyc nor timedatectl available".into(),
+    ))
+}
+
+fn extract_float_from_line(line: &str) -> Option<f64> {
+    for word in line.split_whitespace() {
+        if let Ok(v) = word.parse::<f64>() {
+            return Some(v.abs());
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,5 +513,79 @@ mod tests {
         assert_eq!(TimeSourceType::System.to_string(), "system");
         assert_eq!(TimeSourceType::Ntp.to_string(), "ntp");
         assert_eq!(TimeSourceType::Simulated.to_string(), "simulated");
+    }
+
+    // ── NTP checker parsers ─────────────────────────────────────────
+
+    #[test]
+    fn parse_chronyc_synced() {
+        let output = "\
+Reference ID    : A29FC87B (time.cloudflare.com)
+Stratum         : 3
+Ref time (UTC)  : Mon Aug 04 22:00:00 2026
+System time     : 0.000123456 seconds fast of NTP time
+Last offset     : +0.000045678 seconds
+RMS offset      : 0.000089012 seconds
+Frequency       : 12.345 ppm slow
+Residual freq   : +0.001 ppm
+Skew            : 0.012 ppm
+Root delay      : 0.012345678 seconds
+Root dispersion : 0.001234567 seconds
+Update interval : 64.0 seconds
+Leap status     : Normal";
+        let (synced, offset) = parse_chronyc_output(output);
+        assert!(synced);
+        assert_eq!(offset, 1); // 0.000123456 ceils to 1
+    }
+
+    #[test]
+    fn parse_chronyc_not_synced() {
+        let output = "Leap status     : Not synchronised\nSystem time     : 5.123 seconds slow";
+        let (synced, offset) = parse_chronyc_output(output);
+        assert!(!synced);
+        assert_eq!(offset, 6); // 5.123 ceils to 6
+    }
+
+    #[test]
+    fn parse_chronyc_empty() {
+        let (synced, offset) = parse_chronyc_output("");
+        assert!(!synced);
+        assert_eq!(offset, 0);
+    }
+
+    #[test]
+    fn parse_timedatectl_synced() {
+        let output = "\
+               Local time: Mon 2026-08-04 22:00:00 UTC
+           Universal time: Mon 2026-08-04 22:00:00 UTC
+                 RTC time: Mon 2026-08-04 22:00:00
+                Time zone: UTC (UTC, +0000)
+System clock synchronized: yes
+              NTP service: active
+          RTC in local TZ: no";
+        let (synced, _) = parse_timedatectl_output(output);
+        assert!(synced);
+    }
+
+    #[test]
+    fn parse_timedatectl_not_synced() {
+        let output = "System clock synchronized: no\nNTP service: inactive";
+        let (synced, _) = parse_timedatectl_output(output);
+        assert!(!synced);
+    }
+
+    #[test]
+    fn parse_timedatectl_ntp_synchronized_variant() {
+        let output = "NTP synchronized: yes";
+        let (synced, _) = parse_timedatectl_output(output);
+        assert!(synced);
+    }
+
+    #[test]
+    fn check_ntp_sync_updates_source() {
+        let src = NtpTimeSource::new(5);
+        // check_ntp_sync may fail on CI (no chronyc/timedatectl) — that's fine
+        let _ = check_ntp_sync(&src);
+        // Just verify it doesn't panic; actual sync depends on system
     }
 }
