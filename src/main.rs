@@ -50,6 +50,7 @@ mod smart_contracts;
 mod staking;
 mod storage;
 mod stress;
+mod time_source;
 mod tls;
 mod transaction;
 mod transaction_validation;

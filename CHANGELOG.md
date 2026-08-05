@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **Trusted time source abstraction** (`src/time_source.rs`)
+  - `TimeSource` trait with `SystemTimeSource`, `NtpTimeSource`, `SimulatedTimeSource`
+  - `NtpTimeSource` validates NTP sync status and drift tolerance (configurable max)
+  - `SimulatedTimeSource` for deterministic testing with `advance()` / `set()`
+  - `TrustedTimestamp` records source type and accuracy for audit trails
+  - 21 tests (system, NTP sync/drift, simulated, trait objects, serialization)
 - **HSM signing — SimulatedHsmProvider** (`src/identity/hsm.rs`)
   - `SimulatedHsmProvider` implements `SigningProvider` with full HSM lifecycle (config, session open/close/reopen, PIN auth, key lookup by label)
   - Session-gated signing: close session prevents signing, reopen with correct PIN restores it
