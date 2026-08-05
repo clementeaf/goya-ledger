@@ -4,6 +4,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.4.0] — 2026-08-05
+
+### Added — Regulatory gaps closed
+
+- **ASN.1/DER native CAdES/PAdES** (`src/signature/cades_der.rs`, `pades_der.rs`)
+  - Standards-compliant CMS SignedData (RFC 5652) DER binary output
+  - Signature covers DER-encoded SignedAttributes per §5.4
+  - Zero new ASN.1 deps — pre-computed OIDs, inline DER encoder/parser
+  - Build + verify roundtrip with Ed25519, ML-DSA-65, and RSA
+  - PAdES reuses CAdES CMS blob (PDF embedding is frontend concern)
+  - 12 tests
+- **RSA SigningProvider** (`rsa` crate 0.9)
+  - `SigningAlgorithm::Rsa` variant — RSA-2048 PKCS#1 v1.5 SHA-256
+  - `RsaSigningProvider` implementing `SigningProvider` trait
+  - `verify_rsa()` in verify dispatcher, all match arms updated
+  - RSA KAT added to FIPS 140-3 self-tests
+  - XAdES/CAdES/PAdES OIDs for sha256WithRSAEncryption
+  - 10 tests
+- **ISO 19794-2 fingerprint minutiae template parsing** (`src/signature/iso19794.rs`)
+  - `parse_fingerprint_template()` validates magic, version, record length, minutiae structure
+  - `validate_fingerprint_template()` for pre-commitment validation
+  - `BiometricEvidence::validate_with_template()` binds raw template to commitment hash
+  - 18 tests
+- **Crypto boundary allowlist** updated for RSA signing files
+
+### Changed
+
+- `SigningAlgorithm` enum: added `Rsa` variant (Ed25519, MlDsa65, Rsa)
+- `sha2` dependency: added `oid` feature for RSA PKCS#1v1.5 compatibility
+- Algorithms section: Ed25519, ML-DSA-65, **RSA-2048**, ML-KEM-768, SHA-256, SHA3-256
+
+### Stats
+
+- 36 new tests — suite total: 4928 passed, 0 failed
+- 3 regulatory gaps moved from "partial" to "implemented"
+
 ## [Unreleased]
 
 ### Added
