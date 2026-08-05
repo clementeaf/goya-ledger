@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **CA Hierarchy — root + intermediate** (`src/pki.rs`)
+  - `CaHierarchy` with offline root CA + operational intermediate CA (`pathLenConstraint=0`)
+  - `generate()` creates both tiers in memory, intermediate signed by root
+  - `sign_node_cert()` issues certs from intermediate, `chain_pem()` for full chain
+  - Compatible with CRL generation via intermediate CA
+  - 9 tests (generation, key separation, chain PEM, trust store, CRL compat)
 - **OCSP Responder — RFC 6960** (`src/msp/ocsp.rs`, `src/api/handlers/ocsp.rs`)
   - `OcspResponder` queries CRL store for certificate status (Good/Revoked/Unknown)
   - Signed responses with Ed25519 or ML-DSA-65, nonce echo, configurable validity

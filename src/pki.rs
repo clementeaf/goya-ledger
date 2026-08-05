@@ -164,6 +164,102 @@ fn make_ca_cert_params() -> Result<CertificateParams, PkiError> {
     Ok(params)
 }
 
+// ── CA Hierarchy (Root + Intermediate) ────────────────────────────────────
+
+/// Common Name for the intermediate CA.
+pub const INTERMEDIATE_CA_CN: &str = "Goya Ledger Intermediate CA";
+
+/// Two-tier CA: offline root + operational intermediate.
+///
+/// The root CA signs the intermediate. The intermediate signs node certs
+/// and CRLs. Root key should be stored offline in production.
+pub struct CaHierarchy {
+    root: NodeCaConfig,
+    root_cert_pem: String,
+    intermediate: NodeCaConfig,
+    intermediate_cert_pem: String,
+}
+
+impl std::fmt::Debug for CaHierarchy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CaHierarchy")
+            .field("root_cn", &INTERNAL_CA_CN)
+            .field("intermediate_cn", &INTERMEDIATE_CA_CN)
+            .finish_non_exhaustive()
+    }
+}
+
+impl CaHierarchy {
+    /// Generate a new two-tier CA hierarchy in memory.
+    pub fn generate() -> Result<Self, PkiError> {
+        let root_key = KeyPair::generate()?;
+        let root_cert = make_ca_cert_params()?.self_signed(&root_key)?;
+        let root_cert_pem = root_cert.pem();
+
+        let intermediate_key = KeyPair::generate()?;
+        let intermediate_cert_params = make_intermediate_params()?;
+        let intermediate_cert =
+            intermediate_cert_params.signed_by(&intermediate_key, &root_cert, &root_key)?;
+        let intermediate_cert_pem = der_to_pem_cert(intermediate_cert.der().as_ref());
+
+        Ok(Self {
+            root: NodeCaConfig {
+                ca_cert: root_cert,
+                ca_key: root_key,
+            },
+            root_cert_pem,
+            intermediate: NodeCaConfig {
+                ca_cert: intermediate_cert,
+                ca_key: intermediate_key,
+            },
+            intermediate_cert_pem,
+        })
+    }
+
+    /// The root CA (offline — use only for signing intermediates).
+    pub fn root(&self) -> &NodeCaConfig {
+        &self.root
+    }
+
+    /// The intermediate CA (operational — signs node certs, CRLs, OCSP).
+    pub fn intermediate(&self) -> &NodeCaConfig {
+        &self.intermediate
+    }
+
+    /// Root CA certificate PEM.
+    pub fn root_cert_pem(&self) -> &str {
+        &self.root_cert_pem
+    }
+
+    /// Intermediate CA certificate PEM.
+    pub fn intermediate_cert_pem(&self) -> &str {
+        &self.intermediate_cert_pem
+    }
+
+    /// Full chain PEM (intermediate + root) for TLS configuration.
+    pub fn chain_pem(&self) -> String {
+        format!("{}{}", self.intermediate_cert_pem, self.root_cert_pem)
+    }
+
+    /// Issue a node certificate signed by the intermediate CA.
+    pub fn sign_node_cert(&self, node_id: &str, ttl_days: u32) -> Result<IssuedNodeCert, PkiError> {
+        sign_node_cert(node_id, &self.intermediate, ttl_days)
+    }
+}
+
+/// Build `CertificateParams` for the intermediate CA.
+fn make_intermediate_params() -> Result<CertificateParams, PkiError> {
+    let mut params = CertificateParams::new(vec![])?;
+    params
+        .distinguished_name
+        .push(DnType::CommonName, INTERMEDIATE_CA_CN);
+    params.is_ca = IsCa::Ca(BasicConstraints::Constrained(0));
+    let now = time::OffsetDateTime::now_utc();
+    params.not_before = now;
+    params.not_after = now + time::Duration::days(365 * 5);
+    Ok(params)
+}
+
 // ── sign_node_cert ─────────────────────────────────────────────────────────
 
 #[allow(dead_code)]
@@ -565,5 +661,96 @@ mod tests {
 
         let result = provision_node_cert_if_absent("node", &cert_path, &key_path, 365);
         assert!(matches!(result, Err(PkiError::MissingCaCert)));
+    }
+
+    // ── CaHierarchy ───────────────────────────────────────────────────────
+
+    #[test]
+    fn hierarchy_generates_root_and_intermediate() {
+        let h = CaHierarchy::generate().unwrap();
+        assert!(h.root_cert_pem().contains("BEGIN CERTIFICATE"));
+        assert!(h.intermediate_cert_pem().contains("BEGIN CERTIFICATE"));
+    }
+
+    #[test]
+    fn hierarchy_root_and_intermediate_are_different_keys() {
+        let h = CaHierarchy::generate().unwrap();
+        assert_ne!(
+            h.root().key().serialize_pem(),
+            h.intermediate().key().serialize_pem()
+        );
+    }
+
+    #[test]
+    fn hierarchy_chain_pem_contains_both() {
+        let h = CaHierarchy::generate().unwrap();
+        let chain = h.chain_pem();
+        let count = chain.matches("BEGIN CERTIFICATE").count();
+        assert_eq!(count, 2, "chain should contain root + intermediate");
+    }
+
+    #[test]
+    fn hierarchy_sign_node_cert() {
+        let h = CaHierarchy::generate().unwrap();
+        let issued = h.sign_node_cert("node-hier-1", 365).unwrap();
+        assert!(issued.cert_pem.contains("BEGIN CERTIFICATE"));
+        assert!(!issued.cert_der.as_ref().is_empty());
+    }
+
+    #[test]
+    fn hierarchy_node_cert_signed_by_intermediate() {
+        let h = CaHierarchy::generate().unwrap();
+        let issued = h.sign_node_cert("node-hier-2", 365).unwrap();
+
+        let mut reader = std::io::BufReader::new(h.intermediate_cert_pem().as_bytes());
+        let inter_certs: Vec<_> = rustls_pemfile::certs(&mut reader)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(inter_certs.len(), 1);
+        assert!(!inter_certs[0].as_ref().is_empty());
+        assert!(!issued.cert_der.as_ref().is_empty());
+    }
+
+    #[test]
+    fn hierarchy_intermediate_accepted_by_root_trust_store() {
+        let h = CaHierarchy::generate().unwrap();
+
+        let mut reader = std::io::BufReader::new(h.root_cert_pem().as_bytes());
+        let root_certs: Vec<_> = rustls_pemfile::certs(&mut reader)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let root_der = root_certs.into_iter().next().unwrap();
+
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.add(root_der).unwrap();
+
+        use rustls::server::WebPkiClientVerifier;
+        let verifier = WebPkiClientVerifier::builder(std::sync::Arc::new(root_store)).build();
+        assert!(verifier.is_ok(), "root cert accepted by WebPKI");
+    }
+
+    #[test]
+    fn hierarchy_multiple_node_certs_different_keys() {
+        let h = CaHierarchy::generate().unwrap();
+        let c1 = h.sign_node_cert("node-a", 30).unwrap();
+        let c2 = h.sign_node_cert("node-b", 30).unwrap();
+        assert_ne!(c1.key_pem, c2.key_pem);
+    }
+
+    #[test]
+    fn hierarchy_crl_signed_by_intermediate() {
+        use crate::msp::crl_rfc5280::generate_crl_der;
+        let h = CaHierarchy::generate().unwrap();
+        let serials = vec![hex::encode([1u8; 8])];
+        let der = generate_crl_der(&serials, h.intermediate(), 1, 7).unwrap();
+        assert_eq!(der[0], 0x30);
+    }
+
+    #[test]
+    fn hierarchy_debug_format() {
+        let h = CaHierarchy::generate().unwrap();
+        let dbg = format!("{h:?}");
+        assert!(dbg.contains("Goya Ledger Intermediate CA"));
+        assert!(dbg.contains(INTERNAL_CA_CN));
     }
 }
