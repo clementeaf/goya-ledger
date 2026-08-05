@@ -21,6 +21,8 @@ pub enum MspError {
     #[allow(dead_code)]
     #[error("key with serial {serial} has been revoked")]
     Revoked { serial: String },
+    #[error("key with serial {serial} is suspended")]
+    Suspended { serial: String },
 }
 
 /// Membership Service Provider: represents one organization's trust anchor.
@@ -31,6 +33,9 @@ pub struct Msp {
     pub msp_id: String,
     pub root_public_keys: Vec<[u8; 32]>,
     pub revoked_serials: Vec<String>,
+    /// Temporarily suspended serials (certificateHold per RFC 5280).
+    #[serde(default)]
+    pub suspended_serials: Vec<String>,
     pub org_id: String,
 }
 
@@ -42,20 +47,53 @@ impl Msp {
             org_id: org_id.into(),
             root_public_keys: Vec::new(),
             revoked_serials: Vec::new(),
+            suspended_serials: Vec::new(),
         }
     }
 
     #[allow(dead_code)]
     /// Revoke a key by its serial (hex-encoded public key bytes).
     pub fn revoke(&mut self, serial: &str) {
+        self.suspended_serials.retain(|s| s != serial);
         if !self.revoked_serials.iter().any(|s| s == serial) {
             self.revoked_serials.push(serial.to_string());
         }
     }
 
     #[allow(dead_code)]
+    /// Suspend a key temporarily (certificateHold per RFC 5280).
+    pub fn suspend(&mut self, serial: &str) -> Result<(), MspError> {
+        if self.revoked_serials.contains(&serial.to_string()) {
+            return Err(MspError::Revoked {
+                serial: serial.to_string(),
+            });
+        }
+        if !self.suspended_serials.iter().any(|s| s == serial) {
+            self.suspended_serials.push(serial.to_string());
+        }
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    /// Reinstate a suspended key (remove from suspension).
+    pub fn reinstate(&mut self, serial: &str) -> Result<(), MspError> {
+        if self.revoked_serials.contains(&serial.to_string()) {
+            return Err(MspError::Revoked {
+                serial: serial.to_string(),
+            });
+        }
+        self.suspended_serials.retain(|s| s != serial);
+        Ok(())
+    }
+
+    /// Check if a serial is suspended.
+    pub fn is_suspended(&self, serial: &str) -> bool {
+        self.suspended_serials.contains(&serial.to_string())
+    }
+
+    #[allow(dead_code)]
     /// Validate that `public_key` is a registered root key for this MSP and has
-    /// not been revoked. The serial is the lowercase hex encoding of the key bytes.
+    /// not been revoked or suspended.
     pub fn validate_identity(&self, public_key: &[u8; 32]) -> Result<(), MspError> {
         if !self.root_public_keys.contains(public_key) {
             return Err(MspError::UnknownKey);
@@ -63,6 +101,9 @@ impl Msp {
         let serial = hex::encode(public_key);
         if self.revoked_serials.contains(&serial) {
             return Err(MspError::Revoked { serial });
+        }
+        if self.suspended_serials.contains(&serial) {
+            return Err(MspError::Suspended { serial });
         }
         Ok(())
     }

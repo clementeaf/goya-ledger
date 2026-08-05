@@ -30,7 +30,7 @@
 //! ).unwrap();
 //! ```
 
-use rcgen::{BasicConstraints, CertificateParams, DnType, IsCa, KeyPair};
+use rcgen::{BasicConstraints, CertificateParams, CustomExtension, DnType, IsCa, KeyPair};
 use rustls::pki_types::CertificateDer;
 use std::path::Path;
 
@@ -151,6 +151,86 @@ impl NodeCaConfig {
     }
 }
 
+/// Build a DER-encoded certificatePolicies extension (OID 2.5.29.32).
+///
+/// Contains a single PolicyInformation with a CPS URI qualifier.
+/// Structure: SEQUENCE { SEQUENCE { OID, SEQUENCE { SEQUENCE { OID, IA5String } } } }
+pub fn certificate_policies_extension(policy_oid: &str, cps_uri: &str) -> CustomExtension {
+    let policy_oid_parts: Vec<u64> = policy_oid
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    let cps_qualifier_oid: &[u8] = &[0x06, 0x08, 0x2B, 0x06, 0x01, 0x05, 0x05, 0x07, 0x02, 0x01];
+
+    let policy_oid_der = encode_oid_der(&policy_oid_parts);
+    let uri_bytes = cps_uri.as_bytes();
+    let uri_der = encode_ia5string_der(uri_bytes);
+
+    let qualifier_info = encode_sequence(&[cps_qualifier_oid, &uri_der]);
+    let qualifiers = encode_sequence(&[&qualifier_info]);
+    let policy_info = encode_sequence(&[&policy_oid_der, &qualifiers]);
+    let content = encode_sequence(&[&policy_info]);
+
+    CustomExtension::from_oid_content(&[2, 5, 29, 32], content)
+}
+
+fn encode_oid_der(parts: &[u64]) -> Vec<u8> {
+    if parts.len() < 2 {
+        return vec![0x06, 0x00];
+    }
+    let mut body = vec![(parts[0] * 40 + parts[1]) as u8];
+    for &p in &parts[2..] {
+        if p < 128 {
+            body.push(p as u8);
+        } else {
+            let mut bytes = Vec::new();
+            let mut val = p;
+            bytes.push((val & 0x7F) as u8);
+            val >>= 7;
+            while val > 0 {
+                bytes.push((val & 0x7F) as u8 | 0x80);
+                val >>= 7;
+            }
+            bytes.reverse();
+            body.extend(bytes);
+        }
+    }
+    let mut out = vec![0x06];
+    encode_length(&mut out, body.len());
+    out.extend(body);
+    out
+}
+
+fn encode_ia5string_der(s: &[u8]) -> Vec<u8> {
+    let mut out = vec![0x16];
+    encode_length(&mut out, s.len());
+    out.extend(s);
+    out
+}
+
+fn encode_sequence(items: &[&[u8]]) -> Vec<u8> {
+    let total: usize = items.iter().map(|i| i.len()).sum();
+    let mut out = vec![0x30];
+    encode_length(&mut out, total);
+    for item in items {
+        out.extend(*item);
+    }
+    out
+}
+
+fn encode_length(out: &mut Vec<u8>, len: usize) {
+    if len < 128 {
+        out.push(len as u8);
+    } else if len < 256 {
+        out.push(0x81);
+        out.push(len as u8);
+    } else {
+        out.push(0x82);
+        out.push((len >> 8) as u8);
+        out.push(len as u8);
+    }
+}
+
 #[allow(dead_code)]
 /// Build `CertificateParams` for the internal CA (fixed CN and validity).
 fn make_ca_cert_params() -> Result<CertificateParams, PkiError> {
@@ -161,6 +241,12 @@ fn make_ca_cert_params() -> Result<CertificateParams, PkiError> {
     params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
     params.not_before = CA_NOT_BEFORE;
     params.not_after = CA_NOT_AFTER;
+    params
+        .custom_extensions
+        .push(certificate_policies_extension(
+            crate::pki_policy::CP_OID,
+            "https://goya.cl/pki/cp",
+        ));
     Ok(params)
 }
 
@@ -257,6 +343,12 @@ fn make_intermediate_params() -> Result<CertificateParams, PkiError> {
     let now = time::OffsetDateTime::now_utc();
     params.not_before = now;
     params.not_after = now + time::Duration::days(365 * 5);
+    params
+        .custom_extensions
+        .push(certificate_policies_extension(
+            crate::pki_policy::CP_OID,
+            "https://goya.cl/pki/cp",
+        ));
     Ok(params)
 }
 
@@ -281,6 +373,12 @@ pub fn sign_node_cert(
     let now = time::OffsetDateTime::now_utc();
     params.not_before = now;
     params.not_after = now + time::Duration::days(i64::from(ttl_days));
+    params
+        .custom_extensions
+        .push(certificate_policies_extension(
+            crate::pki_policy::CP_OID,
+            "https://goya.cl/pki/cp",
+        ));
 
     let cert = params.signed_by(&key_pair, &ca.ca_cert, &ca.ca_key)?;
     let cert_der = cert.der().clone();
@@ -292,6 +390,19 @@ pub fn sign_node_cert(
         cert_pem,
         key_pem,
     })
+}
+
+// ── renew_node_cert ───────────────────────────────────────────────────────
+
+#[allow(dead_code)]
+/// Renew a node certificate: same identity (node_id), fresh key pair,
+/// new validity period. The old certificate should be revoked separately.
+pub fn renew_node_cert(
+    node_id: &str,
+    ca: &NodeCaConfig,
+    ttl_days: u32,
+) -> Result<IssuedNodeCert, PkiError> {
+    sign_node_cert(node_id, ca, ttl_days)
 }
 
 // ── provision_node_cert_if_absent ──────────────────────────────────────────
@@ -752,5 +863,133 @@ mod tests {
         let dbg = format!("{h:?}");
         assert!(dbg.contains("Goya Ledger Intermediate CA"));
         assert!(dbg.contains(INTERNAL_CA_CN));
+    }
+
+    // ── certificatePolicies extension ──────────────────────────────
+
+    #[test]
+    fn cert_contains_certificate_policies_extension() {
+        let (ca, _, _) = make_ca();
+        let issued = sign_node_cert("node-policy", &ca, 365).unwrap();
+        let der = issued.cert_der.as_ref();
+        // OID 2.5.29.32 in DER = 55 1D 20
+        let oid_bytes: &[u8] = &[0x55, 0x1D, 0x20];
+        assert!(
+            der.windows(3).any(|w| w == oid_bytes),
+            "cert must contain certificatePolicies OID (2.5.29.32)"
+        );
+    }
+
+    #[test]
+    fn cert_contains_cps_uri() {
+        let (ca, _, _) = make_ca();
+        let issued = sign_node_cert("node-cps", &ca, 365).unwrap();
+        let der = issued.cert_der.as_ref();
+        let uri = b"https://goya.cl/pki/cp";
+        assert!(
+            der.windows(uri.len()).any(|w| w == uri),
+            "cert must contain CPS URI"
+        );
+    }
+
+    #[test]
+    fn ca_cert_contains_policy_extension() {
+        let (_, cert_pem, _) = make_ca();
+        let mut reader = std::io::BufReader::new(cert_pem.as_bytes());
+        let certs: Vec<_> = rustls_pemfile::certs(&mut reader)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let der = certs[0].as_ref();
+        let oid_bytes: &[u8] = &[0x55, 0x1D, 0x20];
+        assert!(
+            der.windows(3).any(|w| w == oid_bytes),
+            "CA cert must contain certificatePolicies OID"
+        );
+    }
+
+    #[test]
+    fn hierarchy_intermediate_contains_policy_extension() {
+        let h = CaHierarchy::generate().unwrap();
+        let mut reader = std::io::BufReader::new(h.intermediate_cert_pem().as_bytes());
+        let certs: Vec<_> = rustls_pemfile::certs(&mut reader)
+            .collect::<Result<_, _>>()
+            .unwrap();
+        let der = certs[0].as_ref();
+        let uri = b"https://goya.cl/pki/cp";
+        assert!(
+            der.windows(uri.len()).any(|w| w == uri),
+            "intermediate cert must contain CPS URI"
+        );
+    }
+
+    #[test]
+    fn renew_node_cert_produces_different_key() {
+        let (ca, _, _) = make_ca();
+        let orig = sign_node_cert("node-renew", &ca, 365).unwrap();
+        let renewed = renew_node_cert("node-renew", &ca, 365).unwrap();
+        assert_ne!(
+            orig.key_pem, renewed.key_pem,
+            "renewed cert must have fresh key"
+        );
+        assert!(renewed.cert_pem.contains("BEGIN CERTIFICATE"));
+    }
+
+    // ── MSP suspension ────────────────────────────────────────────
+
+    #[test]
+    fn msp_suspend_and_reinstate() {
+        use crate::msp::Msp;
+        let mut msp = Msp::new("msp1", "org1");
+        let key = [42u8; 32];
+        msp.root_public_keys.push(key);
+        let serial = hex::encode(key);
+
+        assert!(msp.validate_identity(&key).is_ok());
+
+        msp.suspend(&serial).unwrap();
+        assert!(msp.is_suspended(&serial));
+        assert!(matches!(
+            msp.validate_identity(&key),
+            Err(crate::msp::MspError::Suspended { .. })
+        ));
+
+        msp.reinstate(&serial).unwrap();
+        assert!(!msp.is_suspended(&serial));
+        assert!(msp.validate_identity(&key).is_ok());
+    }
+
+    #[test]
+    fn msp_cannot_suspend_revoked() {
+        use crate::msp::Msp;
+        let mut msp = Msp::new("msp1", "org1");
+        let serial = hex::encode([1u8; 32]);
+        msp.revoke(&serial);
+        assert!(matches!(
+            msp.suspend(&serial),
+            Err(crate::msp::MspError::Revoked { .. })
+        ));
+    }
+
+    #[test]
+    fn msp_cannot_reinstate_revoked() {
+        use crate::msp::Msp;
+        let mut msp = Msp::new("msp1", "org1");
+        let serial = hex::encode([1u8; 32]);
+        msp.revoke(&serial);
+        assert!(matches!(
+            msp.reinstate(&serial),
+            Err(crate::msp::MspError::Revoked { .. })
+        ));
+    }
+
+    #[test]
+    fn msp_revoke_clears_suspension() {
+        use crate::msp::Msp;
+        let mut msp = Msp::new("msp1", "org1");
+        let serial = hex::encode([1u8; 32]);
+        msp.suspend(&serial).unwrap();
+        assert!(msp.is_suspended(&serial));
+        msp.revoke(&serial);
+        assert!(!msp.is_suspended(&serial));
     }
 }

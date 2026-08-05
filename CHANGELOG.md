@@ -8,6 +8,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **certificatePolicies X.509 extension** (`src/pki.rs`)
+  - All issued certificates (CA, intermediate, node) now carry OID 2.5.29.32 with CPS URI
+  - `certificate_policies_extension()` builds DER-encoded PolicyInformation with CPS qualifier
+  - Manual DER encoding (OID, IA5String, SEQUENCE) — no new dependencies
+  - 4 tests (cert DER contains OID + URI, CA cert, intermediate cert)
+- **Certificate suspension and renewal** (`src/msp/mod.rs`, `src/pki.rs`)
+  - `Msp::suspend()` / `reinstate()` / `is_suspended()` for certificateHold (RFC 5280)
+  - `validate_identity()` now rejects suspended keys
+  - `renew_node_cert()` re-issues with same identity, fresh key pair
+  - Revoke automatically clears suspension
+  - 5 tests (suspend/reinstate lifecycle, revoked guards, revoke clears suspension, renewal key difference)
 - **Compliance documentation** (`docs/compliance/`)
   - `INCIDENT-RESPONSE-PLAN.md` — P1–P4 severity classification, response team, containment procedures for CA key compromise/TSA outage/audit tampering, communication plan, testing schedule
   - `BUSINESS-CONTINUITY-DR.md` — RTO/RPO per service (OCSP 15min, CRL 1hr, TSA 4hr, CA 24hr), disaster scenarios (node failure, datacenter outage, key compromise, ransomware), backup strategy, recovery verification checklist
