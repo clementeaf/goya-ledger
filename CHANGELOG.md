@@ -8,6 +8,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added
 
+- **Compliance documentation** (`docs/compliance/`)
+  - `INCIDENT-RESPONSE-PLAN.md` — P1–P4 severity classification, response team, containment procedures for CA key compromise/TSA outage/audit tampering, communication plan, testing schedule
+  - `BUSINESS-CONTINUITY-DR.md` — RTO/RPO per service (OCSP 15min, CRL 1hr, TSA 4hr, CA 24hr), disaster scenarios (node failure, datacenter outage, key compromise, ransomware), backup strategy, recovery verification checklist
+  - `PHYSICAL-SECURITY.md` — 3-tier facility classification (high security/operational/support), HSM physical requirements, key ceremony room specs, visitor policy, monitoring and alarms
+  - `CROSS-CERTIFICATION.md` — bilateral/bridge/trust-list models, target partners (Chilean PSC, Argentina mutual recognition, government integration), algorithm interoperability matrix, establishment and termination procedures
 - **Audit log retention enforcement** (`src/audit_retention.rs`)
   - `AuditRetentionPolicy` with configurable min/max retention (default 7 years per Chilean regulation)
   - `is_retained()`, `is_purgeable()`, `filter_retained()`, `count_purgeable()` for lifecycle management
