@@ -29,12 +29,17 @@ pub enum SigningAlgorithm {
     #[default]
     Ed25519,
     MlDsa65,
+    Rsa,
 }
 
 impl SigningAlgorithm {
     /// Returns `true` if this algorithm is post-quantum resistant.
     pub fn is_post_quantum(&self) -> bool {
         matches!(self, Self::MlDsa65)
+    }
+
+    pub fn is_classical(&self) -> bool {
+        matches!(self, Self::Ed25519 | Self::Rsa)
     }
 }
 
@@ -43,6 +48,7 @@ impl std::fmt::Display for SigningAlgorithm {
         match self {
             Self::Ed25519 => write!(f, "Ed25519"),
             Self::MlDsa65 => write!(f, "ML-DSA-65"),
+            Self::Rsa => write!(f, "RSA"),
         }
     }
 }
@@ -210,6 +216,65 @@ impl SigningProvider for MlDsaSigningProvider {
     }
 }
 
+// ── RSA Signing Provider ────────────────────────────────────────────────────
+
+/// Software-based signing provider using RSA-2048 with PKCS#1 v1.5 SHA-256.
+///
+/// Key and signature sizes:
+/// - Public key (DER-encoded): variable (~294 bytes for RSA-2048)
+/// - Signature: 256 bytes (2048-bit)
+pub struct RsaSigningProvider {
+    private_key: rsa::RsaPrivateKey,
+}
+
+impl RsaSigningProvider {
+    /// Generate a new random RSA-2048 keypair.
+    pub fn generate() -> Self {
+        use pqc_crypto_module::legacy::rng::OsRng;
+        let private_key =
+            rsa::RsaPrivateKey::new(&mut OsRng, 2048).expect("RSA key generation failed");
+        Self { private_key }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_key(private_key: rsa::RsaPrivateKey) -> Self {
+        Self { private_key }
+    }
+}
+
+impl SigningProvider for RsaSigningProvider {
+    fn algorithm(&self) -> SigningAlgorithm {
+        SigningAlgorithm::Rsa
+    }
+
+    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, SigningError> {
+        use rsa::pkcs1v15::SigningKey;
+        use rsa::signature::{SignatureEncoding, Signer};
+        let signing_key = SigningKey::<sha2::Sha256>::new(self.private_key.clone());
+        let sig = signing_key.sign(data);
+        Ok(sig.to_vec())
+    }
+
+    fn public_key(&self) -> Vec<u8> {
+        use rsa::pkcs1::EncodeRsaPublicKey;
+        self.private_key
+            .to_public_key()
+            .to_pkcs1_der()
+            .expect("RSA public key encoding failed")
+            .as_bytes()
+            .to_vec()
+    }
+
+    fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, SigningError> {
+        use rsa::pkcs1v15::{Signature, VerifyingKey};
+        use rsa::signature::Verifier;
+        let verifying_key = VerifyingKey::<sha2::Sha256>::new(self.private_key.to_public_key());
+        let signature = Signature::try_from(sig)
+            .map_err(|e| SigningError::VerifyFailed(format!("invalid RSA signature: {e}")))?;
+        Ok(verifying_key.verify(data, &signature).is_ok())
+    }
+}
+
 // ── FIPS 140-3 Power-Up Self-Tests (Known Answer Tests) ─────────────────────
 
 /// Run cryptographic self-tests for all supported algorithms.
@@ -260,6 +325,25 @@ pub fn run_crypto_self_tests() -> Result<(), SigningError> {
         if provider.verify(test_data, &bad_sig).unwrap_or(true) {
             return Err(SigningError::VerifyFailed(
                 "ML-DSA-65 KAT: corrupted signature was accepted".into(),
+            ));
+        }
+    }
+
+    // RSA KAT
+    {
+        let provider = RsaSigningProvider::generate();
+        let test_data = b"FIPS-140-3-KAT-RSA";
+        let sig = provider.sign(test_data)?;
+        if !provider.verify(test_data, &sig)? {
+            return Err(SigningError::SignFailed(
+                "RSA KAT: sign-then-verify failed".into(),
+            ));
+        }
+        let mut bad_sig = sig.clone();
+        bad_sig[0] ^= 0xff;
+        if provider.verify(test_data, &bad_sig).unwrap_or(true) {
+            return Err(SigningError::VerifyFailed(
+                "RSA KAT: corrupted signature was accepted".into(),
             ));
         }
     }
@@ -410,6 +494,51 @@ mod tests {
         let provider: Box<dyn SigningProvider> = Box::new(MlDsaSigningProvider::generate());
         let sig = provider.sign(b"pqc data").unwrap();
         assert!(provider.verify(b"pqc data", &sig).unwrap());
+    }
+
+    // --- RSA tests ---
+
+    #[test]
+    fn rsa_sign_and_verify_roundtrip() {
+        let provider = RsaSigningProvider::generate();
+        let data = b"rsa test message";
+        let sig = provider.sign(data).unwrap();
+        assert!(provider.verify(data, &sig).unwrap());
+    }
+
+    #[test]
+    fn rsa_verify_wrong_data_fails() {
+        let provider = RsaSigningProvider::generate();
+        let sig = provider.sign(b"correct").unwrap();
+        assert!(!provider.verify(b"wrong", &sig).unwrap());
+    }
+
+    #[test]
+    fn rsa_algorithm_identifier() {
+        let provider = RsaSigningProvider::generate();
+        assert_eq!(provider.algorithm(), SigningAlgorithm::Rsa);
+    }
+
+    #[test]
+    fn rsa_signature_is_256_bytes() {
+        let provider = RsaSigningProvider::generate();
+        let sig = provider.sign(b"test").unwrap();
+        assert_eq!(sig.len(), 256); // RSA-2048
+    }
+
+    #[test]
+    fn rsa_public_key_is_der_encoded() {
+        let provider = RsaSigningProvider::generate();
+        let pk = provider.public_key();
+        assert!(pk.len() > 128, "RSA-2048 DER pk should be > 128 bytes");
+        assert_eq!(pk[0], 0x30, "DER SEQUENCE tag");
+    }
+
+    #[test]
+    fn rsa_trait_object_usage() {
+        let provider: Box<dyn SigningProvider> = Box::new(RsaSigningProvider::generate());
+        let sig = provider.sign(b"rsa data").unwrap();
+        assert!(provider.verify(b"rsa data", &sig).unwrap());
     }
 
     #[test]

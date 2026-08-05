@@ -43,6 +43,7 @@ pub fn validate_signature_consistency(
     let expected_len = match algorithm {
         SigningAlgorithm::Ed25519 => 64,
         SigningAlgorithm::MlDsa65 => 3309,
+        SigningAlgorithm::Rsa => 256, // RSA-2048
     };
     if signature.len() != expected_len {
         Err(format!(

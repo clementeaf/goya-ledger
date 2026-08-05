@@ -21,7 +21,10 @@
 //! cryptographically covers the signer's biometric identity.
 
 pub mod cades;
+pub mod cades_der;
+pub mod iso19794;
 pub mod pades;
+pub mod pades_der;
 pub mod verify;
 pub mod xades;
 
@@ -161,6 +164,34 @@ impl BiometricEvidence {
         }
         hex::decode(&self.commitment)
             .map_err(|_| SignatureError::InvalidBiometric("commitment is not valid hex".into()))?;
+        Ok(())
+    }
+
+    /// Validate with optional raw template proof.
+    ///
+    /// When `raw_template` is provided:
+    /// 1. Validates template structure (ISO 19794-2 for fingerprints)
+    /// 2. Confirms SHA-256(raw_template) == commitment
+    ///
+    /// Raw data is never stored — only used transiently for validation.
+    pub fn validate_with_template(&self, raw_template: &[u8]) -> Result<(), SignatureError> {
+        self.validate()?;
+
+        if self.evidence_type == BiometricType::Fingerprint {
+            iso19794::validate_fingerprint_template(raw_template)
+                .map_err(|e| SignatureError::InvalidBiometric(format!("ISO 19794-2: {e}")))?;
+        }
+
+        let digest = hex::encode(crate::crypto::hasher::hash_with(
+            crate::crypto::hasher::HashAlgorithm::Sha256,
+            raw_template,
+        ));
+        if digest != self.commitment {
+            return Err(SignatureError::InvalidBiometric(
+                "raw template hash does not match commitment".into(),
+            ));
+        }
+
         Ok(())
     }
 }
@@ -689,6 +720,95 @@ mod tests {
             capture_device: Some("FingerprintReader-v2".into()),
         };
         assert!(e.validate().is_ok());
+    }
+
+    // ── validate_with_template ────────────────────────────────────────
+
+    fn make_iso19794_template() -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend(b"FMR\0");
+        buf.extend(&[0x20, 0x32, 0x30, 0x00]);
+        buf.extend(34u32.to_be_bytes()); // total = 24+4+6
+        buf.extend(&[0x00, 0x01]); // capture equipment
+        buf.extend(&[0x01, 0x40]); // width
+        buf.extend(&[0x01, 0x90]); // height
+        buf.extend(&[0x01, 0xF4]); // res_x
+        buf.extend(&[0x01, 0xF4]); // res_y
+        buf.push(0x01); // num views
+        buf.push(0x00); // reserved
+        buf.push(0x01); // finger position
+        buf.push(0x00); // view/impression
+        buf.push(80); // quality
+        buf.push(1); // 1 minutia
+        let type_x: u16 = (1 << 14) | 100;
+        buf.extend(type_x.to_be_bytes());
+        buf.extend(200u16.to_be_bytes());
+        buf.push(45);
+        buf.push(80);
+        buf
+    }
+
+    #[test]
+    fn validate_with_valid_template() {
+        let tmpl = make_iso19794_template();
+        let digest = hex::encode(crate::crypto::hasher::hash_with(
+            crate::crypto::hasher::HashAlgorithm::Sha256,
+            &tmpl,
+        ));
+        let e = BiometricEvidence {
+            evidence_type: BiometricType::Fingerprint,
+            commitment: digest,
+            captured_at: 1700000000,
+            capture_device: None,
+        };
+        assert!(e.validate_with_template(&tmpl).is_ok());
+    }
+
+    #[test]
+    fn validate_with_bad_template_structure() {
+        let garbage = vec![0xFF; 50];
+        let digest = hex::encode(crate::crypto::hasher::hash_with(
+            crate::crypto::hasher::HashAlgorithm::Sha256,
+            &garbage,
+        ));
+        let e = BiometricEvidence {
+            evidence_type: BiometricType::Fingerprint,
+            commitment: digest,
+            captured_at: 1700000000,
+            capture_device: None,
+        };
+        let err = e.validate_with_template(&garbage).unwrap_err();
+        assert!(err.to_string().contains("ISO 19794-2"));
+    }
+
+    #[test]
+    fn validate_with_wrong_commitment() {
+        let tmpl = make_iso19794_template();
+        let e = BiometricEvidence {
+            evidence_type: BiometricType::Fingerprint,
+            commitment: "b".repeat(64), // wrong hash
+            captured_at: 1700000000,
+            capture_device: None,
+        };
+        let err = e.validate_with_template(&tmpl).unwrap_err();
+        assert!(err.to_string().contains("does not match"));
+    }
+
+    #[test]
+    fn validate_with_template_skips_iso_for_non_fingerprint() {
+        let garbage = vec![0xFF; 50]; // not valid ISO 19794, but not fingerprint type
+        let digest = hex::encode(crate::crypto::hasher::hash_with(
+            crate::crypto::hasher::HashAlgorithm::Sha256,
+            &garbage,
+        ));
+        let e = BiometricEvidence {
+            evidence_type: BiometricType::FacialRecognition,
+            commitment: digest,
+            captured_at: 1700000000,
+            capture_device: None,
+        };
+        // Non-fingerprint types skip ISO 19794 check, only verify hash
+        assert!(e.validate_with_template(&garbage).is_ok());
     }
 
     // ── BiometricType Display (all variants) ─────────────────────────

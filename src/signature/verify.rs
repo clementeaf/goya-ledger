@@ -56,6 +56,31 @@ pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str)
         .is_ok()
 }
 
+/// Verify an RSA PKCS#1 v1.5 SHA-256 signature over a message.
+pub fn verify_rsa(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
+    let pub_bytes = match hex::decode(public_key_hex) {
+        Ok(b) if b.len() >= 128 => b,
+        _ => return false,
+    };
+    let sig_bytes = match hex::decode(signature_hex) {
+        Ok(b) if !b.is_empty() => b,
+        _ => return false,
+    };
+    use rsa::pkcs1::DecodeRsaPublicKey;
+    use rsa::pkcs1v15::{Signature, VerifyingKey};
+    use rsa::signature::Verifier;
+    let pk = match rsa::RsaPublicKey::from_pkcs1_der(&pub_bytes) {
+        Ok(pk) => pk,
+        Err(_) => return false,
+    };
+    let vk = VerifyingKey::<sha2::Sha256>::new(pk);
+    let sig = match Signature::try_from(sig_bytes.as_slice()) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    vk.verify(message, &sig).is_ok()
+}
+
 /// Dispatch signature verification based on algorithm.
 ///
 /// Returns `true` if the signature is valid for the given message and public key.
@@ -68,6 +93,7 @@ pub fn verify_signature(
     match algorithm {
         SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),
         SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),
+        SigningAlgorithm::Rsa => verify_rsa(public_key_hex, message, signature_hex),
     }
 }
 
@@ -81,6 +107,17 @@ pub fn validate_public_key(
     let expected_bytes = match algorithm {
         SigningAlgorithm::Ed25519 => 32,
         SigningAlgorithm::MlDsa65 => 1952,
+        SigningAlgorithm::Rsa => {
+            // RSA public keys are DER-encoded, variable length.
+            // Accept any length >= 128 bytes (RSA-1024 minimum).
+            if public_key_hex.len() >= 256 && hex::decode(public_key_hex).is_ok() {
+                return Ok(());
+            }
+            return Err(format!(
+                "RSA public_key must be >= 256 hex characters, got {}",
+                public_key_hex.len()
+            ));
+        }
     };
     let expected_hex = expected_bytes * 2;
     if public_key_hex.len() != expected_hex {
@@ -244,6 +281,45 @@ mod tests {
             "not_hex_at_all",
             b"msg",
             &"bb".repeat(3309)
+        ));
+    }
+
+    // ── RSA signature verification ────────────────────────────────
+
+    #[test]
+    fn rsa_sign_and_verify() {
+        use crate::identity::signing::{RsaSigningProvider, SigningProvider};
+        let provider = RsaSigningProvider::generate();
+        let msg = b"RSA test message";
+        let sig = provider.sign(msg).unwrap();
+        let pk_hex = hex::encode(provider.public_key());
+        let sig_hex = hex::encode(&sig);
+        assert!(verify_rsa(&pk_hex, msg, &sig_hex));
+    }
+
+    #[test]
+    fn rsa_wrong_message_fails() {
+        use crate::identity::signing::{RsaSigningProvider, SigningProvider};
+        let provider = RsaSigningProvider::generate();
+        let sig = provider.sign(b"correct").unwrap();
+        let pk_hex = hex::encode(provider.public_key());
+        let sig_hex = hex::encode(&sig);
+        assert!(!verify_rsa(&pk_hex, b"wrong", &sig_hex));
+    }
+
+    #[test]
+    fn dispatch_rsa() {
+        use crate::identity::signing::{RsaSigningProvider, SigningProvider};
+        let provider = RsaSigningProvider::generate();
+        let msg = b"rsa dispatch";
+        let sig = provider.sign(msg).unwrap();
+        let pk_hex = hex::encode(provider.public_key());
+        let sig_hex = hex::encode(&sig);
+        assert!(verify_signature(
+            SigningAlgorithm::Rsa,
+            &pk_hex,
+            msg,
+            &sig_hex
         ));
     }
 
