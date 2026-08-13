@@ -148,11 +148,48 @@ fn verify_dpop_proof(dpop_jwt: &str, htm: &str, htu: &str) -> Result<DpopClaims,
     Ok(DpopClaims { jkt })
 }
 
+// ── Wallet Provider Registry ──────────────────────────────────────────────
+
+/// Registry of trusted wallet provider public keys for WIA verification.
+pub struct WalletProviderRegistry {
+    providers: std::sync::RwLock<std::collections::HashMap<String, String>>,
+}
+
+impl WalletProviderRegistry {
+    pub fn new() -> Self {
+        Self {
+            providers: std::sync::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+
+    /// Register a wallet provider's public key (issuer → pubkey_hex).
+    pub fn register(&self, issuer: &str, pubkey_hex: &str) {
+        self.providers
+            .write()
+            .unwrap()
+            .insert(issuer.to_string(), pubkey_hex.to_string());
+    }
+
+    /// Look up a provider's public key by issuer.
+    pub fn resolve(&self, issuer: &str) -> Option<String> {
+        self.providers.read().unwrap().get(issuer).cloned()
+    }
+}
+
+impl Default for WalletProviderRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ── Wallet Instance Attestation ───────────────────────────────────────────
 
 /// Validate a Wallet Instance Attestation (WIA) JWT.
-/// Minimal check: well-formed JWT with typ=wia+jwt, iss, sub, iat, exp.
-fn verify_wia(wia_jwt: &str) -> Result<serde_json::Value, String> {
+/// Verifies structure, claims, expiration, and signature (when provider key available).
+fn verify_wia(
+    wia_jwt: &str,
+    registry: Option<&WalletProviderRegistry>,
+) -> Result<serde_json::Value, String> {
     let parts: Vec<&str> = wia_jwt.split('.').collect();
     if parts.len() != 3 {
         return Err("WIA JWT must have 3 parts".into());
@@ -167,6 +204,8 @@ fn verify_wia(wia_jwt: &str) -> Result<serde_json::Value, String> {
     if typ != "wia+jwt" && typ != "wallet-attestation+jwt" {
         return Err("WIA typ must be wia+jwt or wallet-attestation+jwt".into());
     }
+
+    let alg_str = header.get("alg").and_then(|v| v.as_str()).unwrap_or("");
 
     for field in &["iss", "sub"] {
         if payload
@@ -183,6 +222,29 @@ fn verify_wia(wia_jwt: &str) -> Result<serde_json::Value, String> {
     if let Some(exp) = payload.get("exp").and_then(|v| v.as_u64()) {
         if now > exp {
             return Err("WIA expired".into());
+        }
+    }
+
+    // Verify WIA signature if wallet provider key is registered
+    let iss = payload["iss"].as_str().unwrap_or("");
+    if let Some(reg) = registry {
+        if let Some(pubkey_hex) = reg.resolve(iss) {
+            let algorithm = match alg_str {
+                "EdDSA" => crate::identity::signing::SigningAlgorithm::Ed25519,
+                "RS256" => crate::identity::signing::SigningAlgorithm::Rsa,
+                other => return Err(format!("unsupported WIA alg: {other}")),
+            };
+            let sig_bytes = base64url_decode(parts[2])?;
+            let signing_input = format!("{}.{}", parts[0], parts[1]);
+            let sig_hex = hex::encode(&sig_bytes);
+            if !crate::signature::verify_signature(
+                algorithm,
+                &pubkey_hex,
+                signing_input.as_bytes(),
+                &sig_hex,
+            ) {
+                return Err("WIA signature verification failed".into());
+            }
         }
     }
 
@@ -314,6 +376,7 @@ struct TokenResponse {
 pub async fn token_endpoint(
     body: web::Form<TokenRequest>,
     req: HttpRequest,
+    wia_registry: Option<web::Data<WalletProviderRegistry>>,
 ) -> ApiResult<HttpResponse> {
     if body.grant_type != "urn:ietf:params:oauth:grant-type:pre-authorized_code" {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
@@ -335,7 +398,8 @@ pub async fn token_endpoint(
 
     // Validate WIA if present
     if let Some(wia) = &body.wallet_instance_attestation {
-        if let Err(e) = verify_wia(wia) {
+        let reg_ref = wia_registry.as_ref().map(|r| r.get_ref());
+        if let Err(e) = verify_wia(wia, reg_ref) {
             return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                 err_dto("invalid_wallet_attestation", &e),
                 400,
@@ -980,30 +1044,87 @@ mod tests {
     #[actix_web::test]
     async fn wia_valid() {
         let wia = make_wia_jwt("wia+jwt", "provider", "device", now_secs() + 3600);
-        assert!(verify_wia(&wia).is_ok());
+        assert!(verify_wia(&wia, None).is_ok());
     }
 
     #[actix_web::test]
     async fn wia_wallet_attestation_typ() {
         let wia = make_wia_jwt("wallet-attestation+jwt", "prov", "dev", now_secs() + 3600);
-        assert!(verify_wia(&wia).is_ok());
+        assert!(verify_wia(&wia, None).is_ok());
     }
 
     #[actix_web::test]
     async fn wia_expired() {
         let wia = make_wia_jwt("wia+jwt", "provider", "device", 1000);
-        assert!(verify_wia(&wia).is_err());
+        assert!(verify_wia(&wia, None).is_err());
     }
 
     #[actix_web::test]
     async fn wia_wrong_typ() {
         let wia = make_wia_jwt("jwt", "provider", "device", now_secs() + 3600);
-        assert!(verify_wia(&wia).is_err());
+        assert!(verify_wia(&wia, None).is_err());
     }
 
     #[actix_web::test]
     async fn wia_missing_iss() {
         let wia = make_wia_jwt("wia+jwt", "", "device", now_secs() + 3600);
-        assert!(verify_wia(&wia).is_err());
+        assert!(verify_wia(&wia, None).is_err());
+    }
+
+    #[actix_web::test]
+    async fn wia_sig_verified_with_registry() {
+        use crate::identity::signing::{SigningProvider, SoftwareSigningProvider};
+        let provider = SoftwareSigningProvider::generate();
+        let pk_hex = hex::encode(provider.public_key());
+
+        // Build a properly signed WIA JWT
+        let header = serde_json::json!({"typ":"wia+jwt","alg":"EdDSA"});
+        let payload = serde_json::json!({
+            "iss": "wallet-provider-1",
+            "sub": "device-1",
+            "iat": now_secs(),
+            "exp": now_secs() + 3600,
+        });
+        let h = base64url_encode(&serde_json::to_vec(&header).unwrap());
+        let p = base64url_encode(&serde_json::to_vec(&payload).unwrap());
+        let signing_input = format!("{h}.{p}");
+        let sig = provider.sign(signing_input.as_bytes()).unwrap();
+        let wia = format!("{signing_input}.{}", base64url_encode(&sig));
+
+        let reg = WalletProviderRegistry::new();
+        reg.register("wallet-provider-1", &pk_hex);
+        assert!(verify_wia(&wia, Some(&reg)).is_ok());
+    }
+
+    #[actix_web::test]
+    async fn wia_sig_fails_wrong_key() {
+        use crate::identity::signing::{SigningProvider, SoftwareSigningProvider};
+        let provider = SoftwareSigningProvider::generate();
+        let other = SoftwareSigningProvider::generate();
+
+        let header = serde_json::json!({"typ":"wia+jwt","alg":"EdDSA"});
+        let payload = serde_json::json!({
+            "iss": "wallet-provider-2",
+            "sub": "device-2",
+            "iat": now_secs(),
+            "exp": now_secs() + 3600,
+        });
+        let h = base64url_encode(&serde_json::to_vec(&header).unwrap());
+        let p = base64url_encode(&serde_json::to_vec(&payload).unwrap());
+        let signing_input = format!("{h}.{p}");
+        let sig = provider.sign(signing_input.as_bytes()).unwrap();
+        let wia = format!("{signing_input}.{}", base64url_encode(&sig));
+
+        let reg = WalletProviderRegistry::new();
+        reg.register("wallet-provider-2", &hex::encode(other.public_key()));
+        assert!(verify_wia(&wia, Some(&reg)).is_err());
+    }
+
+    #[actix_web::test]
+    async fn wallet_provider_registry_roundtrip() {
+        let reg = WalletProviderRegistry::new();
+        assert!(reg.resolve("unknown").is_none());
+        reg.register("provider-1", "deadbeef");
+        assert_eq!(reg.resolve("provider-1"), Some("deadbeef".to_string()));
     }
 }
