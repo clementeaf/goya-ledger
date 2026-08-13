@@ -30,6 +30,31 @@ pub const SIGNATURE_POLICY_OID: &str = "1.3.6.1.4.1.99999.3.1";
 /// Current CP/CPS document version.
 pub const CP_CPS_VERSION: &str = "1.0.0";
 
+// ── ETSI EN 319 412 certificate profile OIDs ─────────────────────────────
+
+/// id-etsi-qcs-QcCompliance 0.4.0.1862.1.1 (EN 319 412-5)
+pub const QC_COMPLIANCE_OID: &str = "0.4.0.1862.1.1";
+/// id-etsi-qcs-QcType 0.4.0.1862.1.6 (EN 319 412-5)
+pub const QC_TYPE_OID: &str = "0.4.0.1862.1.6";
+/// id-etsi-qct-esign 0.4.0.1862.1.6.1 (natural person signature)
+pub const QCT_ESIGN_OID: &str = "0.4.0.1862.1.6.1";
+/// id-etsi-qct-eseal 0.4.0.1862.1.6.2 (legal person seal)
+pub const QCT_ESEAL_OID: &str = "0.4.0.1862.1.6.2";
+/// id-etsi-qct-web 0.4.0.1862.1.6.3 (website authentication)
+pub const QCT_WEB_OID: &str = "0.4.0.1862.1.6.3";
+
+/// Certificate profile type per EN 319 412.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CertProfileType {
+    /// Natural person — EN 319 412-2.
+    NaturalPerson,
+    /// Legal person — EN 319 412-3.
+    LegalPerson,
+    /// Website authentication (QWAC) — EN 319 412-4.
+    WebAuthentication,
+}
+
 /// Assurance levels for issued certificates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -6,9 +6,9 @@ use crate::api::handlers::{
     acl, airdrop, alias, audit, billing, blocks, bridge, chain, chaincode, channels, compliance,
     compliance_auto, contact, contracts, credentials, discovery, events, forensic, gateway,
     governance, governance_entities, identity, inference, intelligence, interop, invitations,
-    legal_oracle, msp, network, notarize, ocsp, oracle, organizations, pentest, pin, policy,
-    private_data, proposals, ra, registry, regulatory, snapshots, staking, stats, stress, stripe,
-    tokenization, transactions, tsa, tsl, utilities, vault, wallets, zkp,
+    legal_oracle, msp, network, notarize, ocsp, oid4vci, oid4vp, oracle, organizations, pentest,
+    pin, policy, private_data, proposals, ra, registry, regulatory, snapshots, staking, stats,
+    stress, stripe, tokenization, transactions, tsa, tsl, utilities, vault, wallets, zkp,
 };
 
 /// API routes configuration
@@ -270,6 +270,14 @@ impl ApiRoutes {
         cfg.service(ocsp::ocsp_query).service(ocsp::ocsp_status);
         // Trust Service List (ETSI TS 119 612)
         cfg.service(tsl::get_tsl);
+        // OpenID4VCI (EUDI Wallet credential issuance)
+        cfg.service(oid4vci::issuer_metadata)
+            .service(oid4vci::token_endpoint)
+            .service(oid4vci::credential_endpoint);
+        // OpenID4VP (EUDI Wallet credential presentation)
+        cfg.service(oid4vp::create_request)
+            .service(oid4vp::get_request)
+            .service(oid4vp::submit_response);
         // Invitations (governance proposal invitations via alias)
         cfg.service(invitations::create_invitation)
             .service(invitations::list_invitations)

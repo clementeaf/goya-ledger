@@ -73,5 +73,6 @@ pub mod tokenomics;
 pub mod transaction;
 pub mod tsa;
 pub mod tsl;
+pub mod tsl_client;
 
 pub use app_state::AppState;

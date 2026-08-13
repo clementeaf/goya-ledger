@@ -9,8 +9,10 @@ pub mod did;
 pub mod dual_signing;
 pub mod hsm;
 pub mod keys;
+pub mod mdoc;
 pub mod pqc_policy;
 pub mod ra;
+pub mod sd_jwt;
 pub mod signing;
 pub mod zkp;
 

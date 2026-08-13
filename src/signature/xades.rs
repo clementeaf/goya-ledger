@@ -230,6 +230,7 @@ fn level_to_claimed_role(level: SignatureLevel) -> &'static str {
         SignatureLevel::Simple => "FES",
         SignatureLevel::Advanced => "FEA",
         SignatureLevel::Qualified => "FEQ",
+        SignatureLevel::Seal => "SEAL",
     }
 }
 

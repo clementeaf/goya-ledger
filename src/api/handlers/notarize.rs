@@ -91,7 +91,7 @@ fn build_notarize_payload(
 ) -> String {
     match level {
         SignatureLevel::Simple => format!("notarize:{signer}:{content_hash}"),
-        SignatureLevel::Advanced | SignatureLevel::Qualified => {
+        SignatureLevel::Advanced | SignatureLevel::Qualified | SignatureLevel::Seal => {
             let bio_hash = compute_biometrics_hash(biometric_evidence);
             format!("notarize_fea:{signer}:{content_hash}:{bio_hash}")
         }
@@ -108,7 +108,7 @@ fn build_transfer_payload(
 ) -> String {
     match level {
         SignatureLevel::Simple => format!("transfer_doc:{content_hash}:{from_did}:{to_did}"),
-        SignatureLevel::Advanced | SignatureLevel::Qualified => {
+        SignatureLevel::Advanced | SignatureLevel::Qualified | SignatureLevel::Seal => {
             let bio_hash = compute_biometrics_hash(biometric_evidence);
             format!("transfer_fea:{content_hash}:{from_did}:{to_did}:{bio_hash}")
         }

@@ -4,6 +4,74 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.6.0] — 2026-08-13
+
+### Added — EU digital identity / eIDAS 2.0 interoperability
+
+- **SD-JWT VC** (`src/identity/sd_jwt.rs`) — RFC 9901
+  - `issue_sd_jwt_vc()` creates selectively disclosable JWT credentials
+  - `present_sd_jwt()` builds presentations with chosen disclosures only
+  - `verify_sd_jwt_vc()` verifies signature + disclosure hash binding
+  - Supports Ed25519 (`EdDSA`), ML-DSA-65, RSA (`RS256`)
+  - JWT type `vc+sd-jwt`, `_sd_alg: sha-256`, `vct` claim per draft-ietf-oauth-sd-jwt-vc
+  - 11 tests (full roundtrip, selective disclosure, tamper detection, all algorithms)
+- **mdoc ISO/IEC 18013-5** (`src/identity/mdoc.rs`)
+  - CBOR-encoded credentials via `ciborium`
+  - `MobileSecurityObject` with per-element SHA-256 digests
+  - COSE_Sign1 issuer authentication
+  - Namespace-based selective disclosure via `present_mdoc()`
+  - `verify_mdoc()` checks signature + element digest integrity
+  - 9 tests (issuance, selective disclosure, tamper, multi-namespace, CBOR roundtrip)
+- **OpenID4VCI** (`src/api/handlers/oid4vci.rs`) — credential issuance
+  - `GET /.well-known/openid-credential-issuer` — issuer metadata (SD-JWT + mdoc)
+  - `POST /token` — pre-authorized code flow token exchange
+  - `POST /credential` — issue SD-JWT VC or mdoc based on `format` parameter
+  - 7 E2E tests (metadata, token, SD-JWT issuance, mdoc issuance, error paths)
+- **OpenID4VP** (`src/api/handlers/oid4vp.rs`) — credential presentation
+  - `POST /api/v1/oid4vp/request` — create presentation request with `PresentationDefinition`
+  - `GET /api/v1/oid4vp/request/{id}` — cross-device request retrieval
+  - `POST /api/v1/oid4vp/response` — submit `vp_token` (SD-JWT or mdoc)
+  - `VpRequestStore` for cross-device QR code flow
+  - 5 E2E tests (create+fetch, SD-JWT response, mdoc response, error paths)
+- **ETSI TS 119 612 Trusted List client** (`src/tsl_client.rs`)
+  - Parse LOTL (List of Trusted Lists) and country-level TLs from XML
+  - `is_qualified_tsp()` checks QTSP status by service type
+  - `find_qualified_services()` enumerates qualified services
+  - ETSI service status/type URI constants
+  - 8 tests (country TL, LOTL pointers, qualified check, withdrawn detection)
+- **ETSI TS 119 612 Trusted List publisher** (`src/tsl.rs`)
+  - `TrustServiceList::to_xml()` generates ETSI-compliant XML
+  - Maps `ServiceType` and `ServiceStatus` to ETSI URIs
+  - Roundtrip test: `to_xml()` → `tsl_client::parse_trusted_list()` → verify
+  - 3 XML tests
+- **ETSI EN 319 412 certificate profile OIDs** (`src/pki_policy.rs`)
+  - QCStatements: `QC_COMPLIANCE_OID`, `QC_TYPE_OID`
+  - QC types: `QCT_ESIGN_OID` (natural person), `QCT_ESEAL_OID` (legal person), `QCT_WEB_OID`
+  - `CertProfileType` enum: `NaturalPerson`, `LegalPerson`, `WebAuthentication`
+- **Qualified Seal** (`src/signature/mod.rs`)
+  - `SignatureLevel::Seal` for legal entity signatures (eIDAS Art. 3(25))
+  - Requires ML-DSA-65, biometric binding same as FEA
+  - All `match` arms updated across cades, xades, notarize handlers
+- **eIDAS level on credentials** (`src/storage/traits.rs`)
+  - `Credential::eidas_level()` and `set_eidas_level()` via claims field
+  - Values: `none`, `low`, `substantial`, `high`
+  - No breaking schema change — stored in existing `claims` JSON
+
+### Changed
+
+- `ciborium = "0.2"` added as direct dependency (was transitive via criterion)
+- `SignatureLevel` enum: added `Seal` variant; all exhaustive matches updated
+- `notarize.rs`: `Seal` treated same as `Advanced` for payload construction
+- OID4VCI/VP routes registered in `ApiRoutes::configure()`
+
+### Stats
+
+- 190 lines added across 14 modified files + 5 new files
+- Suite total: 2417 passed, 0 failed, 3 ignored
+- 10 EU interoperability items addressed (9 implemented, 1 documented as tech debt)
+
+---
+
 ## [0.5.0] — 2026-08-13
 
 ### Added — FEA certification readiness (24 gaps closed)

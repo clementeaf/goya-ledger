@@ -73,6 +73,7 @@ pub fn to_cades_bes(envelope: &SignedEnvelope) -> CadesEnvelope {
         SignatureLevel::Simple => "FES",
         SignatureLevel::Advanced => "FEA",
         SignatureLevel::Qualified => "FEQ",
+        SignatureLevel::Seal => "SEAL",
     };
 
     let signed_attrs = CadesSignedAttributes {

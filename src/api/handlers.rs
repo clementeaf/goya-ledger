@@ -33,6 +33,8 @@ pub mod msp;
 pub mod network;
 pub mod notarize;
 pub mod ocsp;
+pub mod oid4vci;
+pub mod oid4vp;
 pub mod oracle;
 pub mod organizations;
 pub mod pentest;

@@ -63,6 +63,12 @@ pub enum SignatureLevel {
     /// Requires a Qualified Trust Service Provider (QTSP).
     /// Reserved for when a certified TSP issues the signing certificate.
     Qualified,
+
+    /// eIDAS Art. 3(25) — electronic seal (legal entity signature).
+    ///
+    /// Like Advanced but for organizations, not natural persons.
+    /// Used for automated document sealing by legal entities.
+    Seal,
 }
 
 impl SignatureLevel {
@@ -70,7 +76,7 @@ impl SignatureLevel {
     pub fn required_algorithm(&self) -> SigningAlgorithm {
         match self {
             Self::Simple => SigningAlgorithm::Ed25519,
-            Self::Advanced | Self::Qualified => SigningAlgorithm::MlDsa65,
+            Self::Advanced | Self::Qualified | Self::Seal => SigningAlgorithm::MlDsa65,
         }
     }
 
@@ -83,7 +89,7 @@ impl SignatureLevel {
     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {
         match self {
             Self::Simple => true, // any algorithm accepted
-            Self::Advanced | Self::Qualified => alg.is_post_quantum(),
+            Self::Advanced | Self::Qualified | Self::Seal => alg.is_post_quantum(),
         }
     }
 }
@@ -94,6 +100,7 @@ impl std::fmt::Display for SignatureLevel {
             Self::Simple => write!(f, "Simple (FES)"),
             Self::Advanced => write!(f, "Advanced (FEA)"),
             Self::Qualified => write!(f, "Qualified"),
+            Self::Seal => write!(f, "Seal (Legal Entity)"),
         }
     }
 }
@@ -239,7 +246,7 @@ impl SignedEnvelope {
             SignatureLevel::Simple => {
                 format!("fes:{}:{}", self.signer, self.content_hash)
             }
-            SignatureLevel::Advanced | SignatureLevel::Qualified => {
+            SignatureLevel::Advanced | SignatureLevel::Qualified | SignatureLevel::Seal => {
                 let bio_hash = compute_biometrics_hash(&self.biometric_evidence);
                 format!("fea:{}:{}:{}", self.signer, self.content_hash, bio_hash)
             }

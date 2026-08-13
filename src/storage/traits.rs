@@ -132,6 +132,24 @@ fn default_credential_status() -> String {
     "active".to_string()
 }
 
+impl Credential {
+    /// Get the eIDAS assurance level from claims.
+    /// Convention: `claims.eidas_level` = "none" | "low" | "substantial" | "high".
+    pub fn eidas_level(&self) -> &str {
+        self.claims
+            .get("eidas_level")
+            .and_then(|v| v.as_str())
+            .unwrap_or("none")
+    }
+
+    /// Set the eIDAS assurance level in claims.
+    pub fn set_eidas_level(&mut self, level: &str) {
+        if let Some(obj) = self.claims.as_object_mut() {
+            obj.insert("eidas_level".to_string(), serde_json::json!(level));
+        }
+    }
+}
+
 impl Default for Credential {
     fn default() -> Self {
         Self {

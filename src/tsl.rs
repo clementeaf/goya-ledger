@@ -144,6 +144,84 @@ pub fn build_tsl(operator: &str, jurisdiction: &str, now_secs: u64) -> TrustServ
     }
 }
 
+impl TrustServiceList {
+    /// Export as ETSI TS 119 612 XML.
+    pub fn to_xml(&self) -> String {
+        let mut xml = String::from(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<tsl:TrustServiceStatusList xmlns:tsl="http://uri.etsi.org/02231/v2#">
+  <tsl:SchemeInformation>
+"#,
+        );
+        xml.push_str(&format!(
+            "    <tsl:TSLVersionIdentifier>{}</tsl:TSLVersionIdentifier>\n",
+            self.version
+        ));
+        xml.push_str(&format!(
+            "    <tsl:SchemeTerritory>{}</tsl:SchemeTerritory>\n",
+            self.jurisdiction
+        ));
+        xml.push_str(&format!(
+            "    <tsl:SchemeOperatorName><tsl:Name>{}</tsl:Name></tsl:SchemeOperatorName>\n",
+            self.operator
+        ));
+        xml.push_str("  </tsl:SchemeInformation>\n");
+        xml.push_str("  <tsl:TrustServiceProviderList>\n");
+        xml.push_str("    <tsl:TrustServiceProvider>\n");
+        xml.push_str(&format!(
+            "      <tsl:TSPInformation><tsl:TSPName><tsl:Name>{}</tsl:Name></tsl:TSPName></tsl:TSPInformation>\n",
+            self.operator
+        ));
+        xml.push_str("      <tsl:TSPServices>\n");
+
+        for svc in &self.services {
+            let stype_uri = service_type_uri(svc.service_type);
+            let status_uri = service_status_uri(svc.status);
+            xml.push_str("        <tsl:TSPService>\n");
+            xml.push_str("          <tsl:ServiceInformation>\n");
+            xml.push_str(&format!(
+                "            <tsl:ServiceTypeIdentifier>{stype_uri}</tsl:ServiceTypeIdentifier>\n"
+            ));
+            xml.push_str(&format!(
+                "            <tsl:ServiceName><tsl:Name>{}</tsl:Name></tsl:ServiceName>\n",
+                svc.name
+            ));
+            xml.push_str(&format!(
+                "            <tsl:ServiceStatus>{status_uri}</tsl:ServiceStatus>\n"
+            ));
+            xml.push_str("          </tsl:ServiceInformation>\n");
+            xml.push_str("        </tsl:TSPService>\n");
+        }
+
+        xml.push_str("      </tsl:TSPServices>\n");
+        xml.push_str("    </tsl:TrustServiceProvider>\n");
+        xml.push_str("  </tsl:TrustServiceProviderList>\n");
+        xml.push_str("</tsl:TrustServiceStatusList>\n");
+        xml
+    }
+}
+
+fn service_type_uri(st: ServiceType) -> &'static str {
+    match st {
+        ServiceType::CertificateAuthority => "http://uri.etsi.org/TrstSvc/Svctype/CA/QC",
+        ServiceType::TimeStampAuthority => "http://uri.etsi.org/TrstSvc/Svctype/TSA/QTST",
+        ServiceType::OcspResponder => "http://uri.etsi.org/TrstSvc/Svctype/Certstatus/OCSP/QC",
+        ServiceType::RegistrationAuthority => "http://uri.etsi.org/TrstSvc/Svctype/RA",
+        ServiceType::ElectronicSignature => "http://uri.etsi.org/TrstSvc/Svctype/EDS/Q",
+    }
+}
+
+fn service_status_uri(status: ServiceStatus) -> &'static str {
+    match status {
+        ServiceStatus::Active => "http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/granted",
+        ServiceStatus::Suspended => "http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/suspended",
+        ServiceStatus::Revoked => "http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/withdrawn",
+        ServiceStatus::Planned => {
+            "http://uri.etsi.org/TrstSvc/TrustedList/Svcstatus/recognisedatnationallevel"
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,6 +328,42 @@ mod tests {
         assert_eq!(ServiceStatus::Active.to_string(), "active");
         assert_eq!(ServiceStatus::Suspended.to_string(), "suspended");
         assert_eq!(ServiceStatus::Planned.to_string(), "planned");
+    }
+
+    #[test]
+    fn to_xml_valid_structure() {
+        let tsl = sample_tsl();
+        let xml = tsl.to_xml();
+        assert!(xml.starts_with("<?xml version="));
+        assert!(xml.contains("<tsl:TrustServiceStatusList"));
+        assert!(xml.contains("</tsl:TrustServiceStatusList>"));
+        assert!(xml.contains("<tsl:SchemeTerritory>Chile</tsl:SchemeTerritory>"));
+        assert!(xml.contains("<tsl:TSLVersionIdentifier>1</tsl:TSLVersionIdentifier>"));
+    }
+
+    #[test]
+    fn to_xml_contains_all_services() {
+        let tsl = sample_tsl();
+        let xml = tsl.to_xml();
+        assert!(xml.contains("CA/QC"));
+        assert!(xml.contains("TSA/QTST"));
+        assert!(xml.contains("OCSP/QC"));
+        assert!(xml.contains("EDS/Q"));
+        assert!(xml.contains("Svcstatus/granted"));
+    }
+
+    #[test]
+    fn to_xml_parseable_by_tsl_client() {
+        let tsl = sample_tsl();
+        let xml = tsl.to_xml();
+        let parsed = crate::tsl_client::parse_trusted_list(&xml).unwrap();
+        assert_eq!(parsed.territory, "Chile");
+        assert!(!parsed.tsp_entries.is_empty());
+        assert!(crate::tsl_client::is_qualified_tsp(
+            &parsed,
+            "Goya",
+            crate::tsl_client::STYPE_CA_QC
+        ));
     }
 
     #[test]

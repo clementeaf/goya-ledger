@@ -59,6 +59,7 @@ mod transaction;
 mod transaction_validation;
 mod tsa;
 mod tsl;
+mod tsl_client;
 
 use actix_cors::Cors;
 use actix_web::middleware::Compress;
