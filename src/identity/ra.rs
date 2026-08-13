@@ -199,6 +199,21 @@ impl RaStore {
         Ok(record.clone())
     }
 
+    /// Approve and issue a certificate signed by the CA.
+    pub fn approve_and_issue_cert(
+        &self,
+        did: &str,
+        officer_did: &str,
+        resolved_at: u64,
+        ca: &crate::pki::NodeCaConfig,
+        cert_ttl_days: u32,
+    ) -> Result<(IdentityProofing, crate::pki::IssuedNodeCert), String> {
+        let proofing = self.approve(did, officer_did, resolved_at)?;
+        let cert = crate::pki::sign_node_cert(did, ca, cert_ttl_days)
+            .map_err(|e| format!("certificate issuance failed: {e}"))?;
+        Ok((proofing, cert))
+    }
+
     /// Reject a pending proofing request.
     pub fn reject(
         &self,
@@ -520,5 +535,37 @@ mod tests {
         let parsed: IdentityProofing = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.rut, "12345678-5");
         assert_eq!(parsed.status, ProofingStatus::Verified);
+    }
+
+    #[test]
+    fn approve_and_issue_cert_produces_pem() {
+        let store = RaStore::new();
+        let did = "did:goya:certtest".to_string();
+        store
+            .submit(
+                did.clone(),
+                "11111111-1".into(),
+                "Test User".into(),
+                ProofingMethod::InPerson,
+                1_700_000_000,
+            )
+            .unwrap();
+
+        let (ca, _, _) = crate::pki::NodeCaConfig::generate().unwrap();
+        let (proofing, cert) = store
+            .approve_and_issue_cert(&did, "did:goya:officer", 1_700_001_000, &ca, 365)
+            .unwrap();
+        assert_eq!(proofing.status, ProofingStatus::Verified);
+        assert!(cert.cert_pem.contains("BEGIN CERTIFICATE"));
+        assert!(cert.key_pem.contains("BEGIN"));
+    }
+
+    #[test]
+    fn approve_and_issue_cert_fails_without_proofing() {
+        let store = RaStore::new();
+        let (ca, _, _) = crate::pki::NodeCaConfig::generate().unwrap();
+        let result =
+            store.approve_and_issue_cert("did:goya:none", "did:goya:off", 1_700_000_000, &ca, 365);
+        assert!(result.is_err());
     }
 }

@@ -4,6 +4,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.6.1] — 2026-08-13
+
+### Added — Cert chain validation + RA-to-PKI bridge
+
+- **X.509 certificate chain validator** (`src/pki_chain.rs`)
+  - `validate_chain()` — PEM chain parsing, validity period check, issuer→subject linking, CA basic constraints, trust store verification
+  - `validate_cert_der()` — single DER certificate validity check
+  - Supports 2-level (root+leaf) and 3-level (root+intermediate+leaf) hierarchies
+  - Extracts owned `CertInfo` structs (no lifetime issues with x509-parser)
+  - 7 tests (valid chain, expired, empty, self-signed, DER valid/expired, 3-level hierarchy)
+- **RA approve → certificate issuance** (`src/identity/ra.rs`)
+  - `RaStore::approve_and_issue_cert()` — approves identity proofing AND issues X.509 cert signed by CA in one atomic operation
+  - Connects RA identity verification to PKI certificate generation (`sign_node_cert`)
+  - 2 tests (success path with PEM output, failure without proofing)
+
+### Stats
+
+- 49 lines added across 3 modified files + 1 new file
+- Suite total: 2426 passed, 0 failed, 3 ignored
+
+---
+
 ## [0.6.0] — 2026-08-13
 
 ### Added — EU digital identity / eIDAS 2.0 interoperability

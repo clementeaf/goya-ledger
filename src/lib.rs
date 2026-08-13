@@ -59,6 +59,7 @@ pub mod ordering;
 pub mod pin;
 pub mod pki;
 pub mod pki_ceremony;
+pub mod pki_chain;
 pub mod pki_lifecycle;
 pub mod pki_policy;
 pub mod private_data;
