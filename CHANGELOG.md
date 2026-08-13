@@ -4,6 +4,55 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.8.0] — 2026-08-13
+
+### Fixed — Security hardening (9 fixes)
+
+- **KB-JWT signature verification** — `verify_kb_jwt()` now verifies cryptographic signature + jkt thumbprint match (was accepting any JWT without verification)
+- **SD-JWT `exp` validation** — `verify_sd_jwt_vc()` rejects expired credentials (was ignoring exp claim entirely)
+- **Token endpoint code entropy** — enforces minimum 16-char pre-authorized code (was accepting 1-char codes)
+- **DPoP JWT signature verification** — verifies signature using JWK embedded in header via `extract_pubkey_from_jwk()` (was structural-only)
+- **WIA JWT signature verification** — `verify_wia()` verifies signature via `WalletProviderRegistry` issuer key lookup (was structural-only)
+- **mdoc COSE RSA algorithm ID** — corrected to `-37` (IANA PS256), was placeholder `-257`
+- **Audit purge hash chain integrity** — `MemoryAuditStore::purge_expired()` re-seals hash chain after entry removal (was breaking chain)
+- **VP nonce replay protection** — `verify_sd_jwt_presentation()` checks JWT/KB-JWT nonce against authorization request (was hardcoded `true`)
+- **proof_jwt iat freshness** — `verify_proof_jwt()` enforces 5-minute window (was accepting arbitrarily old proofs)
+- **Notarize handler panic** — `read_notarization_by_hash().unwrap()` replaced with proper `Err→404` response
+- **Rate limiter panic** — `get_mut().unwrap()` replaced with `entry()` return value
+
+### Added
+
+- **`WalletProviderRegistry`** — in-memory issuer→pubkey store for WIA signature verification
+- **`verify_sd_jwt_vc_with_holder()`** — full KB-JWT cryptographic verification with holder public key
+- **`extract_pubkey_from_jwk()`** — JWK→raw pubkey extraction for Ed25519/RSA
+- **CRL endpoint per-MSP** — `GET /api/v1/crl/{msp_id}` and `/crl/{msp_id}/pem` (was hardcoded "default")
+
+### Added — Regulatory policy documentation (14 documents)
+
+- `docs/policy/CPS.md` — Certification Practice Statement (RFC 3647, 75 KB)
+- `docs/policy/CP.md` — Certificate Policy (RFC 3647, 61 KB)
+- `docs/policy/ETSI-EN-319-401-TSP-POLICY.md` — General TSP policy requirements (46 KB)
+- `docs/policy/ETSI-EN-319-411-CA-POLICY.md` — CA policy for qualified certificates (33 KB)
+- `docs/policy/ETSI-EN-319-421-TSA-POLICY.md` — TSA policy and security requirements (29 KB)
+- `docs/policy/PLAN-SEGURIDAD.md` — Security plan per DS 181 (Spanish, 30 KB)
+- `docs/policy/PLAN-CONTINGENCIA.md` — Business continuity plan per DS 181 (Spanish, 30 KB)
+- `docs/policy/PROCEDIMIENTO-CEREMONIA-CLAVES.md` — Key ceremony procedure (Spanish, 64 KB)
+- `docs/policy/POLITICA-PRIVACIDAD-EIPD.md` — Privacy policy + DPIA (Ley 19.628/GDPR, Spanish, 30 KB)
+- `docs/policy/ACUERDO-SUSCRIPTOR.md` — Subscriber agreement (Spanish, 35 KB)
+- `docs/policy/ACUERDO-PARTE-CONFIANTE.md` — Relying party agreement (Spanish, 30 KB)
+- `docs/policy/INFORME-INTEROPERABILIDAD.md` — Interoperability test report template (Spanish, 25 KB)
+- `docs/policy/OID-REGISTRY.md` — OID namespace registry + IANA PEN instructions
+- `docs/policy/CHECKLIST-PRE-CERTIFICACION.md` — 48-item pre-certification checklist
+
+### Stats
+
+- Suite total: 2509 passed, 0 failed, 3 ignored
+- 14 policy documents, ~500 KB total
+- 0 `unwrap()` on external input paths (was 2)
+- All cryptographic verification paths validated (KB-JWT, DPoP, WIA, VP nonce, proof iat, SD-JWT exp)
+
+---
+
 ## [0.7.1] — 2026-08-13
 
 ### Added — Production operational improvements
