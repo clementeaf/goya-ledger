@@ -436,7 +436,15 @@ pub async fn transfer_document(
     let transfers = store
         .read_ownership_transfers(&content_hash)
         .unwrap_or_default();
-    let notarization = store.read_notarization_by_hash(&content_hash).unwrap();
+    let notarization = match store.read_notarization_by_hash(&content_hash) {
+        Ok(n) => n,
+        Err(_) => {
+            return Ok(HttpResponse::NotFound().json(ApiResponse::<()>::error(
+                err_dto("NOT_FOUND", "notarization not found for this content hash"),
+                404,
+            )));
+        }
+    };
     let current_owner = transfers
         .last()
         .map(|t| t.to_did.as_str())

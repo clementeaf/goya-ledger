@@ -76,13 +76,10 @@ impl RateLimiter {
     pub fn allow_request(&self, ip: IpAddr) -> bool {
         let mut buckets = self.buckets.lock().unwrap_or_else(|e| e.into_inner());
 
-        // Create bucket if not exists
-        buckets
+        // Create bucket if not exists, then consume
+        let bucket = buckets
             .entry(ip)
             .or_insert_with(|| TokenBucket::new(self.capacity, self.refill_rate));
-
-        // Try to consume 1 token
-        let bucket = buckets.get_mut(&ip).unwrap();
         let allowed = bucket.try_consume(1.0);
 
         // Cleanup old buckets periodically
