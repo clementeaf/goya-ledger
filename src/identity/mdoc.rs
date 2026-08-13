@@ -241,9 +241,9 @@ fn cbor_encode_cose_sign1(
 ) -> Result<Vec<u8>, String> {
     // Simplified COSE_Sign1 as CBOR array: [alg_id, {}, payload_bytes, sig_bytes]
     let alg_id: i64 = match alg {
-        SigningAlgorithm::Ed25519 => -8,  // EdDSA
-        SigningAlgorithm::MlDsa65 => -48, // placeholder
-        SigningAlgorithm::Rsa => -257,    // PS256 placeholder
+        SigningAlgorithm::Ed25519 => -8,  // IANA COSE EdDSA
+        SigningAlgorithm::MlDsa65 => -48, // draft-ietf-cose-dilithium (pre-IANA)
+        SigningAlgorithm::Rsa => -37,     // IANA COSE PS256 (RSASSA-PSS + SHA-256)
     };
     let structure = (
         alg_id,
@@ -283,7 +283,7 @@ mod tests {
             doc_type: "eu.europa.ec.eudi.pid.1".to_string(),
             elements,
             valid_from: 1_700_000_000,
-            valid_until: 1_731_536_000,
+            valid_until: 2_000_000_000,
             device_key: Some("abcd1234".to_string()),
         }
     }
@@ -359,7 +359,7 @@ mod tests {
             doc_type: "org.iso.18013.5.1.mDL".to_string(),
             elements,
             valid_from: 1_700_000_000,
-            valid_until: 1_731_536_000,
+            valid_until: 2_000_000_000,
             device_key: None,
         };
         let mdoc = issue_mdoc(&params, &provider).unwrap();

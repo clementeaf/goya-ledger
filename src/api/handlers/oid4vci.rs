@@ -35,6 +35,23 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+/// Extract raw public key hex from a JWK. Supports OKP/Ed25519 and RSA.
+fn extract_pubkey_from_jwk(jwk: &serde_json::Value, alg: &str) -> Option<String> {
+    match alg {
+        "EdDSA" => {
+            let x = jwk.get("x")?.as_str()?;
+            let bytes = base64url_decode(x).ok()?;
+            Some(hex::encode(bytes))
+        }
+        "RS256" => {
+            let n = jwk.get("n")?.as_str()?;
+            let bytes = base64url_decode(n).ok()?;
+            Some(hex::encode(bytes))
+        }
+        _ => None,
+    }
+}
+
 // ── DPoP proof validation (RFC 9449) ──────────────────────────────────────
 
 /// Parsed DPoP proof fields.
@@ -101,6 +118,27 @@ fn verify_dpop_proof(dpop_jwt: &str, htm: &str, htu: &str) -> Result<DpopClaims,
         .is_empty()
     {
         return Err("DPoP missing jti".into());
+    }
+
+    // Verify DPoP JWT signature using the embedded JWK
+    let alg_str = header.get("alg").and_then(|v| v.as_str()).unwrap_or("");
+    if let Some(pubkey_hex) = extract_pubkey_from_jwk(&jwk, alg_str) {
+        let sig_bytes = base64url_decode(parts[2])?;
+        let signing_input = format!("{}.{}", parts[0], parts[1]);
+        let sig_hex = hex::encode(&sig_bytes);
+        let algorithm = match alg_str {
+            "EdDSA" => crate::identity::signing::SigningAlgorithm::Ed25519,
+            "RS256" => crate::identity::signing::SigningAlgorithm::Rsa,
+            _ => return Err(format!("unsupported DPoP alg for verification: {alg_str}")),
+        };
+        if !crate::signature::verify_signature(
+            algorithm,
+            &pubkey_hex,
+            signing_input.as_bytes(),
+            &sig_hex,
+        ) {
+            return Err("DPoP signature verification failed".into());
+        }
     }
 
     // Compute JWK thumbprint (RFC 7638): SHA-256 of canonical JWK JSON
@@ -328,7 +366,17 @@ pub async fn token_endpoint(
         None
     };
 
-    // ponytail: in production, validate code against a store.
+    // Validate code has minimum entropy (at least 16 chars, hex or base64)
+    if code.len() < 16 {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "invalid_grant",
+                "pre-authorized_code too short (min 16 chars)",
+            ),
+            400,
+        )));
+    }
+
     let access_token = format!(
         "goya_at_{}",
         hex::encode(hash_with(HashAlgorithm::Sha256, code.as_bytes()))
@@ -639,7 +687,7 @@ mod tests {
         let app = oid4vci_app!(state);
         let req = test::TestRequest::post()
             .uri("/token")
-            .set_form(make_token_form("test-code-123"))
+            .set_form(make_token_form("test-code-1234567890"))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 200);
@@ -662,7 +710,7 @@ mod tests {
             .uri("/token")
             .insert_header(("host", "localhost:8080"))
             .insert_header(("dpop", dpop.as_str()))
-            .set_form(make_token_form("test-code-dpop"))
+            .set_form(make_token_form("test-code-dpop-1234"))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 200);
@@ -680,7 +728,7 @@ mod tests {
             .uri("/token")
             .insert_header(("host", "localhost:8080"))
             .insert_header(("dpop", dpop.as_str()))
-            .set_form(make_token_form("test-code"))
+            .set_form(make_token_form("test-code-fallback1"))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 400);
@@ -700,7 +748,7 @@ mod tests {
             .uri("/token")
             .set_form(TokenRequest {
                 grant_type: "urn:ietf:params:oauth:grant-type:pre-authorized_code".to_string(),
-                pre_authorized_code: Some("code-wia".to_string()),
+                pre_authorized_code: Some("code-wia-1234567890".to_string()),
                 wallet_instance_attestation: Some(wia),
             })
             .to_request();
@@ -717,7 +765,7 @@ mod tests {
             .uri("/token")
             .set_form(TokenRequest {
                 grant_type: "urn:ietf:params:oauth:grant-type:pre-authorized_code".to_string(),
-                pre_authorized_code: Some("code-wia".to_string()),
+                pre_authorized_code: Some("code-wia-1234567890".to_string()),
                 wallet_instance_attestation: Some(wia),
             })
             .to_request();

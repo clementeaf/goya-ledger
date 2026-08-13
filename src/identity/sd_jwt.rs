@@ -309,6 +309,23 @@ pub fn present_sd_jwt_with_kb(
 
 /// Verify an SD-JWT VC presentation and extract disclosed claims.
 pub fn verify_sd_jwt_vc(presentation: &str, public_key_hex: &str) -> Result<VerifiedSdJwt, String> {
+    verify_sd_jwt_vc_full(presentation, public_key_hex, None)
+}
+
+/// Verify an SD-JWT VC with full KB-JWT cryptographic verification.
+pub fn verify_sd_jwt_vc_with_holder(
+    presentation: &str,
+    issuer_pubkey_hex: &str,
+    holder_pubkey_hex: &str,
+) -> Result<VerifiedSdJwt, String> {
+    verify_sd_jwt_vc_full(presentation, issuer_pubkey_hex, Some(holder_pubkey_hex))
+}
+
+fn verify_sd_jwt_vc_full(
+    presentation: &str,
+    public_key_hex: &str,
+    holder_pubkey_hex: Option<&str>,
+) -> Result<VerifiedSdJwt, String> {
     let parts: Vec<&str> = presentation.split('~').collect();
     if parts.is_empty() {
         return Err("empty presentation".into());
@@ -349,6 +366,17 @@ pub fn verify_sd_jwt_vc(presentation: &str, public_key_hex: &str) -> Result<Veri
     let iat = payload["iat"].as_u64().unwrap_or(0);
     let exp = payload["exp"].as_u64().unwrap_or(0);
     let vct = payload["vct"].as_str().unwrap_or("").to_string();
+
+    // Reject expired credentials
+    if exp > 0 {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        if now > exp {
+            return Err(format!("credential expired: exp={exp}, now={now}"));
+        }
+    }
 
     let sd_hashes: Vec<String> = payload["_sd"]
         .as_array()
@@ -415,7 +443,7 @@ pub fn verify_sd_jwt_vc(presentation: &str, public_key_hex: &str) -> Result<Veri
             .and_then(|c| c.get("jkt"))
             .and_then(|j| j.as_str());
         if let Some(expected_jkt) = cnf_jkt {
-            verify_kb_jwt(kb_jwt, presentation, expected_jkt)?
+            verify_kb_jwt(kb_jwt, presentation, expected_jkt, holder_pubkey_hex)?
         } else {
             false
         }
@@ -436,10 +464,12 @@ pub fn verify_sd_jwt_vc(presentation: &str, public_key_hex: &str) -> Result<Veri
 }
 
 /// Verify a Key Binding JWT (RFC 9901 §5.8).
+/// `holder_pubkey_hex`: if provided, verifies signature + jkt thumbprint match.
 fn verify_kb_jwt(
     kb_jwt: &str,
     full_presentation: &str,
     expected_jkt: &str,
+    holder_pubkey_hex: Option<&str>,
 ) -> Result<bool, String> {
     let kb_parts: Vec<&str> = kb_jwt.split('.').collect();
     if kb_parts.len() != 3 {
@@ -456,7 +486,7 @@ fn verify_kb_jwt(
     }
 
     let alg_str = header["alg"].as_str().ok_or("KB-JWT missing alg")?;
-    let _algorithm = jwt_to_alg(alg_str).ok_or_else(|| format!("unknown KB alg: {alg_str}"))?;
+    let algorithm = jwt_to_alg(alg_str).ok_or_else(|| format!("unknown KB alg: {alg_str}"))?;
 
     // Verify sd_hash: SHA-256 of everything before the KB-JWT
     let prefix_end = full_presentation.rfind(kb_jwt).unwrap_or(0);
@@ -475,10 +505,24 @@ fn verify_kb_jwt(
         return Err("KB-JWT missing iat".into());
     }
 
-    // ponytail: cryptographic KB-JWT signature verification requires resolving the
-    // holder's public key from the jkt thumbprint. We verify structural validity
-    // and sd_hash binding; full sig check needs the holder key registry.
-    let _ = expected_jkt;
+    // Verify KB-JWT signature if holder public key is available
+    if let Some(pk_hex) = holder_pubkey_hex {
+        let jkt = jwk_thumbprint(pk_hex, algorithm);
+        if jkt != expected_jkt {
+            return Err("KB-JWT jkt thumbprint mismatch".into());
+        }
+        let sig_bytes = base64url_decode(kb_parts[2])?;
+        let signing_input = format!("{}.{}", kb_parts[0], kb_parts[1]);
+        let sig_hex = hex::encode(&sig_bytes);
+        if !crate::signature::verify_signature(
+            algorithm,
+            pk_hex,
+            signing_input.as_bytes(),
+            &sig_hex,
+        ) {
+            return Err("KB-JWT signature verification failed".into());
+        }
+    }
 
     Ok(true)
 }
@@ -493,7 +537,7 @@ mod tests {
             iss: "did:goya:issuer".to_string(),
             sub: "did:goya:subject".to_string(),
             iat: 1_700_000_000,
-            exp: 1_731_536_000,
+            exp: 2_000_000_000,
             vct: "IdentityCredential".to_string(),
             claims: vec![
                 ("given_name".to_string(), serde_json::json!("Juan")),
@@ -632,7 +676,7 @@ mod tests {
             iss: "did:goya:i".to_string(),
             sub: "did:goya:s".to_string(),
             iat: 1_700_000_000,
-            exp: 1_731_536_000,
+            exp: 2_000_000_000,
             vct: "AgeVerification".to_string(),
             claims: vec![("age_over_18".to_string(), serde_json::json!(true))],
         };
@@ -653,7 +697,7 @@ mod tests {
             iss: "did:goya:i".to_string(),
             sub: "did:goya:s".to_string(),
             iat: 1_700_000_000,
-            exp: 1_731_536_000,
+            exp: 2_000_000_000,
             vct: "EmptyVC".to_string(),
             claims: vec![],
         };

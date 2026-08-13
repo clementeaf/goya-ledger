@@ -401,7 +401,16 @@ impl AuditStore for MemoryAuditStore {
                 .unwrap_or(0);
             !policy.is_purgeable(ts, now_secs)
         });
-        Ok(before - entries.len())
+        let purged = before - entries.len();
+        // Re-seal hash chain after purge to maintain integrity
+        if purged > 0 {
+            let mut prev_hash = String::new();
+            for entry in entries.iter_mut() {
+                entry.seal(&prev_hash);
+                prev_hash = entry.entry_hash.clone();
+            }
+        }
+        Ok(purged)
     }
 }
 

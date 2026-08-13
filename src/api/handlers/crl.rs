@@ -16,8 +16,12 @@ fn err_dto(code: &str, msg: &str) -> ErrorDto {
 
 /// Download the current CRL in DER format.
 /// Content-Type: application/pkix-crl
-#[get("/crl")]
-pub async fn get_crl_der(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
+#[get("/crl/{msp_id}")]
+pub async fn get_crl_der(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let msp_id = path.into_inner();
     let crl_store = match state.crl_store.as_ref() {
         Some(s) => s,
         None => {
@@ -45,7 +49,7 @@ pub async fn get_crl_der(state: web::Data<AppState>) -> ApiResult<HttpResponse> 
         }
     };
 
-    let serials = crl_store.read_crl("default").unwrap_or_default();
+    let serials = crl_store.read_crl(&msp_id).unwrap_or_default();
 
     match crate::msp::crl_rfc5280::generate_crl_der(&serials, &ca, 1, 7) {
         Ok(der) => Ok(HttpResponse::Ok()
@@ -61,8 +65,12 @@ pub async fn get_crl_der(state: web::Data<AppState>) -> ApiResult<HttpResponse> 
 }
 
 /// Download the current CRL in PEM format.
-#[get("/crl/pem")]
-pub async fn get_crl_pem(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
+#[get("/crl/{msp_id}/pem")]
+pub async fn get_crl_pem(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> ApiResult<HttpResponse> {
+    let msp_id = path.into_inner();
     let crl_store = match state.crl_store.as_ref() {
         Some(s) => s,
         None => {
@@ -87,7 +95,7 @@ pub async fn get_crl_pem(state: web::Data<AppState>) -> ApiResult<HttpResponse> 
         }
     };
 
-    let serials = crl_store.read_crl("default").unwrap_or_default();
+    let serials = crl_store.read_crl(&msp_id).unwrap_or_default();
 
     match crate::msp::crl_rfc5280::generate_crl_pem(&serials, &ca, 1, 7) {
         Ok(pem) => Ok(HttpResponse::Ok()
@@ -128,7 +136,9 @@ mod tests {
         )
         .await;
 
-        let req = test::TestRequest::get().uri("/api/v1/crl").to_request();
+        let req = test::TestRequest::get()
+            .uri("/api/v1/crl/default")
+            .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 503);
     }
@@ -143,7 +153,9 @@ mod tests {
         )
         .await;
 
-        let req = test::TestRequest::get().uri("/api/v1/crl").to_request();
+        let req = test::TestRequest::get()
+            .uri("/api/v1/crl/default")
+            .to_request();
         let resp = test::call_service(&app, req).await;
         // Without TLS_CA_CERT_PATH/TLS_CA_KEY_PATH env vars, returns 503
         assert_eq!(resp.status(), 503);
