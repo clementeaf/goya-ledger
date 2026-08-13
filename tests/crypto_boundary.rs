@@ -28,10 +28,7 @@ const FORBIDDEN_IMPORTS: &[&str] = &[
 ///
 /// RSA signing uses `rsa` + `sha2` crates directly because RSA is a
 /// first-class SigningProvider, not a pqc_crypto_module algorithm.
-const LEGACY_ALLOWLIST: &[&str] = &[
-    "src/identity/signing.rs",
-    "src/signature/verify.rs",
-];
+const LEGACY_ALLOWLIST: &[&str] = &["src/identity/signing.rs", "src/signature/verify.rs"];
 
 fn collect_rs_files(dir: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();

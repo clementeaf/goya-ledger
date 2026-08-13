@@ -4,6 +4,98 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.5.0] — 2026-08-13
+
+### Added — FEA certification readiness (24 gaps closed)
+
+- **RFC 3161 DER TimeStampResp** (`src/tsa/rfc3161_der.rs`)
+  - DER-encoded TSTInfo per RFC 3161 §2.4.2 with CMS SignedData wrapper
+  - Build + verify roundtrip for Ed25519, ML-DSA-65, RSA
+  - API endpoint: `POST /api/v1/tsa/timestamp/der` (content-type `application/timestamp-reply`)
+  - 16 tests + 3 x509-parser interop tests
+- **TimeSource integration in TSA**
+  - `TsaProvider.with_time_source()` accepts pluggable `dyn TimeSource`
+  - NTP enforcement: TSA rejects if `time_source.validate()` fails
+  - TSA validates own signer health before issuing
+  - Serial numbers seeded from epoch to avoid cross-restart collisions
+- **CAdES-T timestamp embedding** (`src/signature/cades_der.rs`)
+  - `build_cades_t_der()` adds `id-smime-aa-timeStampToken` (1.2.840.113549.1.9.16.2.14) as unsigned attribute
+  - `verify_cades_bes_der()` extracts timestamp token from unsigned attrs
+  - 5 CAdES-T tests
+- **ETSI TS 101 733 signed attributes** (`src/signature/cades_der.rs`)
+  - `id-aa-signingCertificateV2` (RFC 5035): ESSCertIDv2 with SHA-256 cert hash
+  - `id-smime-aa-ets-commitmentType`: `CadesCommitment::Fes` (proofOfOrigin) / `Fea` (proofOfApproval)
+  - `id-smime-aa-ets-sigPolicyId`: Decreto 24 signature policy OID + hash
+  - Certificate embedding in CMS `certificates [0] IMPLICIT`
+  - `CadesParams` struct for full control; `build_cades_der()` public API
+  - 6 ETSI compliance tests
+- **Certificate chain verification** (`src/signature/cades_der.rs`)
+  - `VerifyContext` with trusted roots, CRL store, timestamp verification flag
+  - `verify_cades_with_context()` validates cert hash, checks CRL revocation, verifies timestamp token structure
+  - 3 context verification tests
+- **PKCS#11 HsmSigningProvider** (`src/identity/hsm.rs`)
+  - Real PKCS#11 session: slot discovery, `CKA_LABEL` key lookup, `CKA_EC_POINT` public key extraction
+  - `CKM_EDDSA` signing and verification via cryptoki 0.7
+  - `backup_info()` documents key backup requirements
+  - Feature-gated under `hsm = ["cryptoki"]`
+- **CPS/CP markdown export** (`src/pki_policy.rs`)
+  - `CertificatePolicy::to_markdown()` and `CertificationPracticeStatement::to_markdown()` — RFC 3647 section structure
+  - API endpoints: `GET /api/v1/cps/document`, `GET /api/v1/cp/document` (content-type `text/markdown`)
+  - 8 tests (section presence, table rendering, compliance refs)
+- **CAVP NIST test vectors**
+  - SHA-256: FIPS 180-4 §B.1/B.2/B.3 (empty, abc, 448-bit, 896-bit)
+  - SHA3-256: FIPS 202 (empty, abc)
+  - Ed25519: RFC 8032 §7.1 test vectors 1-3 + wrong-message rejection
+  - 10 CAVP tests
+- **Audit log JSON export** (`src/audit.rs`)
+  - `export_json()` with hash chain metadata, chain validity flag, entry count
+  - `retention_status()` connected to `AuditRetentionPolicy`
+  - CSV export fixed: includes metadata, previous_hash, entry_hash (was missing)
+  - 7 export tests
+- **Interoperability tests**
+  - x509-parser: CAdES DER ContentInfo/SignedData/OID parsing (Ed25519, ML-DSA-65, RSA)
+  - x509-parser: RFC 3161 TimeStampResp structure (PKIStatus, id-ct-TSTInfo OID)
+  - OpenSSL CLI: `asn1parse` validates RSA CAdES, Ed25519 CAdES, CAdES-T DER
+  - 10 interop tests
+- **XAdES-T** (`src/signature/xades.rs`)
+  - `to_xades_t()` embeds timestamp token in `UnsignedProperties/SignatureTimeStamp`
+  - Fixed `unwrap_or_default()` in hex_to_base64 (returns empty on invalid hex)
+  - 3 XAdES-T tests
+- **OCSP improvements** (`src/msp/ocsp.rs`)
+  - `verify_nonce()` properly distinguishes `None` from `Some(0)`
+  - `OcspResponse::to_export_json()` with verification flag
+  - Nonce payload uses `"none"` string for absent nonce (not `"0"`)
+  - 3 OCSP tests
+- **FEA endpoint rewrite** (`src/api/handlers/notarize.rs`)
+  - Uses node's persistent signing provider (not ephemeral throwaway keys)
+  - Produces CAdES DER with FEA commitment + policy OID
+  - Biometric hash included in signing content
+  - Format parameter (`json`, `cades-der`, `cades-t`) in `SignFeaRequest`
+  - Emits `CertificateIssued` audit event
+- **PSC certification roadmap** (`docs/compliance/PSC-CERTIFICATION-ROADMAP.md`)
+  - 4-phase plan: Legal → HSM+DC → Consultor → Auditoría
+  - Timeline: 6-8 months, USD 47-89K estimated
+- **SoftHSM2 integration test** (`tests/softhsm_pkcs11.rs`)
+  - Feature-gated `#[cfg(feature = "hsm")]`, skips gracefully without SoftHSM2
+
+### Changed
+
+- `TsaProvider`: time source pluggable, NTP validation mandatory, signer self-check before issuing
+- `sign_fea` endpoint: persistent provider, CAdES DER output, audit emission
+- `MemoryCrlStore`: `Mutex` → `RwLock` for concurrent read performance
+- `renew_node_cert`: removed `#[allow(dead_code)]`, documented revocation requirement
+- `VerifyContext` added to CAdES DER verification path
+- RA store, OCSP responder, LifecycleManager initialized in `main.rs` (were `None`)
+- Light client: documented FEA dependency on full node
+
+### Stats
+
+- 2014 lines added, 112 removed across 19 files
+- Suite total: 2374 passed, 0 failed, 3 ignored
+- 24 FEA certification gaps closed (8 blocker, 5 high, 11 medium/low)
+
+---
+
 ## [0.4.0] — 2026-08-05
 
 ### Added — Regulatory gaps closed

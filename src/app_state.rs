@@ -113,6 +113,8 @@ pub struct AppState {
     pub ra_store: Option<Arc<crate::identity::ra::RaStore>>,
     /// OCSP responder (RFC 6960).
     pub ocsp_responder: Option<Arc<crate::msp::ocsp::OcspResponder>>,
+    /// Certificate lifecycle manager (revoke→CRL, suspend, expiry monitoring).
+    pub lifecycle_manager: Option<Arc<crate::pki_lifecycle::LifecycleManager>>,
 }
 
 impl AppState {
@@ -180,6 +182,7 @@ impl AppState {
             tsa_provider: None,
             ra_store: None,
             ocsp_responder: None,
+            lifecycle_manager: None,
         }
     }
 }

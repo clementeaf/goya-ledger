@@ -252,6 +252,7 @@ impl ApiRoutes {
             .service(notarize::sign_fea);
         // TSA (Time Stamping Authority — RFC 3161)
         cfg.service(tsa::request_timestamp)
+            .service(tsa::request_timestamp_der)
             .service(tsa::tsa_policy)
             .service(tsa::verify_timestamp);
         // Registration Authority (Ley 19.799 Art. 15)
@@ -262,6 +263,8 @@ impl ApiRoutes {
         // CP/CPS Policy (RFC 3647 / ETSI TS 102 042)
         cfg.service(policy::get_cp)
             .service(policy::get_cps)
+            .service(policy::get_cp_document)
+            .service(policy::get_cps_document)
             .service(policy::get_oids);
         // OCSP Responder (RFC 6960)
         cfg.service(ocsp::ocsp_query).service(ocsp::ocsp_status);

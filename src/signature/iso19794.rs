@@ -328,7 +328,7 @@ mod tests {
     fn other_type_parsed() {
         let mut tmpl = make_valid_template(1);
         let base = GENERAL_HEADER_LEN + FINGER_VIEW_HEADER_LEN;
-        let type_x: u16 = (0 << 14) | 100; // type=other
+        let type_x: u16 = 100; // type=other (bits 15:14 = 0b00)
         tmpl[base..base + 2].copy_from_slice(&type_x.to_be_bytes());
         let record = parse_fingerprint_template(&tmpl).unwrap();
         assert_eq!(record.minutiae[0].minutia_type, MinutiaType::Other);

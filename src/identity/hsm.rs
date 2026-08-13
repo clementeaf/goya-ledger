@@ -64,19 +64,21 @@ impl HsmConfig {
 /// HSM-backed signing provider.
 ///
 /// When the `hsm` feature is not enabled, construction always returns
-/// `Err(HsmError::NotEnabled)`. When enabled, it delegates to PKCS#11.
+/// `Err(HsmError::NotEnabled)`. When enabled, it opens a PKCS#11 session,
+/// looks up the key by CKA_LABEL, and delegates signing to the HSM.
 pub struct HsmSigningProvider {
-    /// Cached public key bytes (read from HSM during construction).
-    public_key: [u8; 32],
-    /// Placeholder for the PKCS#11 context — real impl under `#[cfg(feature = "hsm")]`.
+    public_key: Vec<u8>,
+    #[cfg(feature = "hsm")]
+    ctx: std::sync::Arc<cryptoki::context::Pkcs11>,
+    #[cfg(feature = "hsm")]
+    session: cryptoki::session::Session,
+    #[cfg(feature = "hsm")]
+    private_key: cryptoki::object::ObjectHandle,
     _config: HsmConfig,
 }
 
 impl HsmSigningProvider {
     #[allow(dead_code)]
-    /// Connect to an HSM and locate the signing key.
-    ///
-    /// This is a no-op stub when compiled without the `hsm` feature.
     #[cfg(not(feature = "hsm"))]
     pub fn new(
         _pkcs11_lib: &str,
@@ -95,37 +97,101 @@ impl HsmSigningProvider {
         key_label: &str,
     ) -> Result<Self, HsmError> {
         use cryptoki::context::{CInitializeArgs, Pkcs11};
+        use cryptoki::object::{Attribute, AttributeType, ObjectClass};
+        use cryptoki::session::UserType;
 
-        let ctx = Pkcs11::new(pkcs11_lib).map_err(|e| HsmError::LibraryNotFound(e.to_string()))?;
+        let ctx = std::sync::Arc::new(
+            Pkcs11::new(pkcs11_lib).map_err(|e| HsmError::LibraryNotFound(e.to_string()))?,
+        );
         ctx.initialize(CInitializeArgs::OsThreads)
             .map_err(|e| HsmError::LibraryNotFound(e.to_string()))?;
 
         let slots = ctx
             .get_slots_with_token()
-            .map_err(|e| HsmError::SlotNotFound(slot_id))?;
+            .map_err(|_| HsmError::SlotNotFound(slot_id))?;
         let slot = slots
             .into_iter()
-            .find(|s| s.id() == slot_id)
+            .find(|s| {
+                let id: u64 = (*s).into();
+                id == slot_id
+            })
             .ok_or(HsmError::SlotNotFound(slot_id))?;
 
-        // Open session and login.
         let session = ctx
             .open_rw_session(slot)
-            .map_err(|e| HsmError::AuthFailed)?;
+            .map_err(|_| HsmError::AuthFailed)?;
         session
-            .login(cryptoki::session::UserType::User, Some(pin))
+            .login(
+                UserType::User,
+                Some(&cryptoki::types::AuthPin::new(pin.into())),
+            )
             .map_err(|_| HsmError::AuthFailed)?;
 
-        // For now, return a placeholder public key — full PKCS#11 key lookup
-        // would require CKA_LABEL search and CKM_EDDSA mechanism support.
+        // Find private key by CKA_LABEL
+        let priv_template = vec![
+            Attribute::Class(ObjectClass::PRIVATE_KEY),
+            Attribute::Label(key_label.as_bytes().to_vec()),
+        ];
+        let priv_handles = session
+            .find_objects(&priv_template)
+            .map_err(|e| HsmError::KeyNotFound(e.to_string()))?;
+        let private_key = *priv_handles
+            .first()
+            .ok_or_else(|| HsmError::KeyNotFound(key_label.into()))?;
+
+        // Find corresponding public key to cache
+        let pub_template = vec![
+            Attribute::Class(ObjectClass::PUBLIC_KEY),
+            Attribute::Label(key_label.as_bytes().to_vec()),
+        ];
+        let pub_handles = session
+            .find_objects(&pub_template)
+            .map_err(|e| HsmError::KeyNotFound(e.to_string()))?;
+        let pub_handle = *pub_handles
+            .first()
+            .ok_or_else(|| HsmError::KeyNotFound(format!("{key_label} (public)")))?;
+
+        // Extract CKA_EC_POINT (raw public key bytes for EdDSA)
+        let attrs = session
+            .get_attributes(pub_handle, &[AttributeType::EcPoint])
+            .map_err(|e| HsmError::KeyNotFound(e.to_string()))?;
+        let public_key = attrs
+            .into_iter()
+            .find_map(|a| {
+                if let Attribute::EcPoint(bytes) = a {
+                    Some(bytes)
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| HsmError::KeyNotFound("CKA_EC_POINT not found".into()))?;
+
         Ok(Self {
-            public_key: [0u8; 32],
+            public_key,
+            ctx,
+            session,
+            private_key,
             _config: HsmConfig {
                 pkcs11_lib: pkcs11_lib.to_string(),
                 slot_id,
                 pin: pin.to_string(),
                 key_label: key_label.to_string(),
             },
+        })
+    }
+}
+
+impl HsmSigningProvider {
+    // ponytail: key backup requires HSM-to-HSM wrapping (CKM_AES_KEY_WRAP)
+    // or M-of-N Shamir split. Both need the target HSM present.
+    // This stub documents the interface; real backup is a key ceremony operation.
+    #[allow(dead_code)]
+    pub fn backup_info(&self) -> serde_json::Value {
+        serde_json::json!({
+            "key_label": self._config.key_label,
+            "slot_id": self._config.slot_id,
+            "backup_method": "HSM-to-HSM key wrapping (CKM_AES_KEY_WRAP) or Shamir M-of-N split",
+            "status": "requires_key_ceremony",
         })
     }
 }
@@ -144,22 +210,14 @@ impl super::signing::SigningProvider for HsmSigningProvider {
 
     #[cfg(feature = "hsm")]
     fn sign(&self, data: &[u8]) -> Result<Vec<u8>, super::signing::SigningError> {
-        // In a full implementation, this would:
-        // 1. Open a PKCS#11 session to the HSM
-        // 2. Find the key by label (CKA_LABEL)
-        // 3. Call C_Sign with CKM_EDDSA mechanism
-        // 4. Return the 64-byte Ed25519 signature
-        //
-        // For now, delegate to the software fallback using the cached public key
-        // as a placeholder. Real HSM integration requires hardware testing.
-        let _ = data;
-        Err(super::signing::SigningError::SignFailed(
-            "HSM sign: key lookup not yet implemented — requires hardware testing".into(),
-        ))
+        use cryptoki::mechanism::Mechanism;
+        self.session
+            .sign(&Mechanism::Eddsa, self.private_key, data)
+            .map_err(|e| super::signing::SigningError::SignFailed(e.to_string()))
     }
 
     fn public_key(&self) -> Vec<u8> {
-        self.public_key.to_vec()
+        self.public_key.clone()
     }
 
     #[cfg(not(feature = "hsm"))]
@@ -171,14 +229,14 @@ impl super::signing::SigningProvider for HsmSigningProvider {
 
     #[cfg(feature = "hsm")]
     fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, super::signing::SigningError> {
-        use pqc_crypto_module::legacy::ed25519::{Signature, VerifyingKey};
-        let sig_bytes: [u8; 64] = sig.try_into().map_err(|_| {
-            super::signing::SigningError::VerifyFailed("Ed25519 signature must be 64 bytes".into())
-        })?;
-        let vk = VerifyingKey::from_bytes(&self.public_key)
-            .map_err(|e| super::signing::SigningError::VerifyFailed(e.to_string()))?;
-        let signature = Signature::from_bytes(&sig_bytes);
-        Ok(vk.verify_strict(data, &signature).is_ok())
+        use cryptoki::mechanism::Mechanism;
+        match self
+            .session
+            .verify(&Mechanism::Eddsa, self.private_key, data, sig)
+        {
+            Ok(()) => Ok(true),
+            Err(_) => Ok(false),
+        }
     }
 }
 

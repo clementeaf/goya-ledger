@@ -19,7 +19,7 @@ use crate::api::errors::{ApiResponse, ApiResult, ErrorDto};
 use crate::api::handlers::channels::{channel_id_from_req, get_channel_store};
 use crate::app_state::AppState;
 use crate::document::DocumentFingerprint;
-use crate::identity::signing::{SigningAlgorithm, SigningProvider as _};
+use crate::identity::signing::SigningAlgorithm;
 use crate::signature::{
     compute_biometrics_hash, verify_signature, BiometricEvidence, SignatureLevel,
 };
@@ -565,22 +565,23 @@ pub struct SignFeaRequest {
     pub signer: String,
     /// Biometric evidence (required, at least one).
     pub biometric_evidence: Vec<BiometricEvidence>,
+    /// Output format: "json" (default), "cades-der", "cades-t".
+    #[serde(default)]
+    pub format: Option<String>,
 }
 
-/// POST /api/v1/sign/fea — server-side ML-DSA-65 signature.
+/// POST /api/v1/sign/fea — server-side FEA signature with CAdES DER.
 ///
-/// The browser cannot run ML-DSA-65 (no WebCrypto/WASM support).
-/// This endpoint signs on behalf of the user using the node's ML-DSA-65
-/// signing provider and returns the signature + public key so the
-/// frontend can call POST /notarize with a real FEA envelope.
+/// Uses the node's persistent signing provider (not ephemeral keys).
+/// Produces both a JSON response and a CAdES DER binary signature
+/// with biometric hash in signed attributes.
 #[post("/sign/fea")]
 pub async fn sign_fea(
-    _state: web::Data<AppState>,
+    state: web::Data<AppState>,
     body: web::Json<SignFeaRequest>,
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
 
-    // Validate content_hash
     if body.content_hash.len() != 64 || hex::decode(&body.content_hash).is_err() {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto("INVALID_HASH", "content_hash must be 64 hex characters"),
@@ -588,7 +589,6 @@ pub async fn sign_fea(
         )));
     }
 
-    // Require biometric evidence
     if body.biometric_evidence.is_empty() {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto(
@@ -607,29 +607,64 @@ pub async fn sign_fea(
         }
     }
 
-    // Build FEA signing payload
+    let provider = state.signing_provider.as_ref().ok_or_else(|| {
+        crate::api::errors::ApiError::StorageError {
+            reason: "signing provider not configured".into(),
+        }
+    })?;
+
     let bio_hash = compute_biometrics_hash(&body.biometric_evidence);
+    let content_bytes = hex::decode(&body.content_hash).unwrap_or_default();
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    // Build CAdES DER with FEA commitment + biometric hash in content
+    let signing_content = [content_bytes.as_slice(), bio_hash.as_bytes()].concat();
+    let cades_params = crate::signature::cades_der::CadesParams {
+        content: &signing_content,
+        provider: provider.as_ref(),
+        signing_time: now,
+        signer_cert_der: None,
+        commitment: crate::signature::cades_der::CadesCommitment::Fea,
+        policy_oid: Some(crate::pki_policy::SIGNATURE_POLICY_OID),
+        tsa_token_der: None,
+    };
+
+    let cades_der = crate::signature::cades_der::build_cades_der(&cades_params).map_err(|e| {
+        crate::api::errors::ApiError::StorageError {
+            reason: format!("CAdES signing failed: {e}"),
+        }
+    })?;
+
+    // Also produce legacy JSON signature for backwards compat
     let payload = format!(
         "notarize_fea:{}:{}:{}",
         body.signer, body.content_hash, bio_hash
     );
-
-    // FEA always requires ML-DSA-65 regardless of the node's global signing config.
-    let fea_provider = crate::identity::signing::MlDsaSigningProvider::generate();
-    let signature = fea_provider.sign(payload.as_bytes()).map_err(|e| {
+    let signature = provider.sign(payload.as_bytes()).map_err(|e| {
         crate::api::errors::ApiError::StorageError {
             reason: format!("signing failed: {e}"),
         }
     })?;
-    let public_key = fea_provider.public_key();
-    let algorithm = fea_provider.algorithm();
+
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::CertificateIssued,
+        "",
+        Some(format!("fea:signer={}", body.signer)),
+    );
 
     Ok(HttpResponse::Ok().json(ApiResponse::success(
         serde_json::json!({
             "signature": hex::encode(&signature),
-            "public_key": hex::encode(&public_key),
-            "signature_algorithm": algorithm,
+            "public_key": hex::encode(provider.public_key()),
+            "signature_algorithm": provider.algorithm(),
             "signing_payload": payload,
+            "cades_der": hex::encode(&cades_der),
+            "biometric_hash": bio_hash,
         }),
         trace,
     )))

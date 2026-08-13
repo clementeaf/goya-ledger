@@ -394,9 +394,9 @@ pub fn sign_node_cert(
 
 // ── renew_node_cert ───────────────────────────────────────────────────────
 
-#[allow(dead_code)]
 /// Renew a node certificate: same identity (node_id), fresh key pair,
-/// new validity period. The old certificate should be revoked separately.
+/// new validity period. The caller must revoke the old certificate via
+/// LifecycleManager::revoke_and_publish_crl before calling this.
 pub fn renew_node_cert(
     node_id: &str,
     ca: &NodeCaConfig,

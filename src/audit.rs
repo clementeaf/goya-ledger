@@ -246,11 +246,11 @@ pub trait AuditStore: Send + Sync {
     fn export_csv(&self, from: Option<&str>, to: Option<&str>) -> StorageResult<String> {
         let entries = self.query(from, to, None, None, usize::MAX)?;
         let mut csv = String::from(
-            "timestamp,action,method,path,org_id,source_ip,status_code,trace_id,duration_ms,metadata\n",
+            "timestamp,action,method,path,org_id,source_ip,status_code,trace_id,duration_ms,metadata,previous_hash,entry_hash\n",
         );
         for e in &entries {
             csv.push_str(&format!(
-                "{},{},{},{},{},{},{},{},{}\n",
+                "{},{},{},{},{},{},{},{},{},{},{},{}\n",
                 e.timestamp,
                 e.action,
                 e.method,
@@ -260,9 +260,48 @@ pub trait AuditStore: Send + Sync {
                 e.status_code,
                 e.trace_id,
                 e.duration_ms,
+                e.metadata.as_deref().unwrap_or(""),
+                e.previous_hash,
+                e.entry_hash,
             ));
         }
         Ok(csv)
+    }
+
+    /// Count entries eligible for purge under the given retention policy.
+    fn retention_status(
+        &self,
+        policy: &crate::audit_retention::AuditRetentionPolicy,
+        now_secs: u64,
+    ) -> StorageResult<(usize, usize)> {
+        let entries = self.query(None, None, None, None, usize::MAX)?;
+        let total = entries.len();
+        let purgeable = entries
+            .iter()
+            .filter(|e| {
+                chrono::DateTime::parse_from_rfc3339(&e.timestamp)
+                    .map(|dt| policy.is_purgeable(dt.timestamp() as u64, now_secs))
+                    .unwrap_or(false)
+            })
+            .count();
+        Ok((total, purgeable))
+    }
+
+    /// Export entries as JSON with hash chain metadata for independent verification.
+    fn export_json(&self, from: Option<&str>, to: Option<&str>) -> StorageResult<String> {
+        let entries = self.query(from, to, None, None, usize::MAX)?;
+        let chain_valid = verify_audit_chain(&entries).is_ok();
+        let export = serde_json::json!({
+            "version": "1.0",
+            "format": "goya-audit-export",
+            "entry_count": entries.len(),
+            "chain_valid": chain_valid,
+            "first_hash": entries.first().map(|e| &e.entry_hash).unwrap_or(&String::new()),
+            "last_hash": entries.last().map(|e| &e.entry_hash).unwrap_or(&String::new()),
+            "entries": entries,
+        });
+        serde_json::to_string_pretty(&export)
+            .map_err(|e| crate::storage::errors::StorageError::SerializationError(e.to_string()))
     }
 }
 
@@ -902,5 +941,121 @@ mod tests {
         assert!(entry.verify());
         entry.status_code = 500;
         assert!(!entry.verify());
+    }
+
+    // ── JSON + CSV export ─────────────────────────────────────────────
+
+    #[test]
+    fn export_json_structure() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_entry("2026-01-01T00:00:00Z", "org1", "/a"))
+            .unwrap();
+        store
+            .append(&make_entry("2026-01-01T00:01:00Z", "org1", "/b"))
+            .unwrap();
+
+        let json_str = store.export_json(None, None).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(doc["version"], "1.0");
+        assert_eq!(doc["format"], "goya-audit-export");
+        assert_eq!(doc["entry_count"], 2);
+        assert_eq!(doc["chain_valid"], true);
+        assert!(!doc["first_hash"].as_str().unwrap().is_empty());
+        assert!(!doc["last_hash"].as_str().unwrap().is_empty());
+        assert_ne!(doc["first_hash"], doc["last_hash"]);
+        assert_eq!(doc["entries"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn export_json_entries_have_hashes() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_entry("2026-01-01T00:00:00Z", "org1", "/a"))
+            .unwrap();
+
+        let json_str = store.export_json(None, None).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        let entry = &doc["entries"][0];
+        assert!(!entry["entry_hash"].as_str().unwrap().is_empty());
+        assert!(entry["previous_hash"].as_str().unwrap().is_empty());
+    }
+
+    #[test]
+    fn export_json_chain_valid_false_on_tamper() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_entry("2026-01-01T00:00:00Z", "org1", "/a"))
+            .unwrap();
+        // Tamper internally
+        {
+            let mut entries = store.entries.lock().unwrap();
+            entries[0].path = "/TAMPERED".to_string();
+        }
+        let json_str = store.export_json(None, None).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(doc["chain_valid"], false);
+    }
+
+    #[test]
+    fn export_json_empty_store() {
+        let store = MemoryAuditStore::new();
+        let json_str = store.export_json(None, None).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(doc["entry_count"], 0);
+        assert_eq!(doc["chain_valid"], true);
+        assert!(doc["entries"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn export_json_with_metadata() {
+        let store = MemoryAuditStore::new();
+        emit_domain_event(
+            &store,
+            AuditAction::KeyGenerated,
+            "org1",
+            Some("algo=Ed25519".to_string()),
+        );
+        let json_str = store.export_json(None, None).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(doc["entries"][0]["metadata"], "algo=Ed25519");
+    }
+
+    #[test]
+    fn export_csv_includes_metadata_and_hashes() {
+        let store = MemoryAuditStore::new();
+        emit_domain_event(
+            &store,
+            AuditAction::KeyGenerated,
+            "org1",
+            Some("algo=Ed25519".to_string()),
+        );
+        let csv = store.export_csv(None, None).unwrap();
+        assert!(csv.contains("previous_hash,entry_hash"));
+        assert!(csv.contains("algo=Ed25519"));
+        let lines: Vec<&str> = csv.lines().collect();
+        // Header has 12 columns
+        assert_eq!(lines[0].matches(',').count(), 11);
+        // Data row has 12 columns too
+        assert_eq!(lines[1].matches(',').count(), 11);
+    }
+
+    #[test]
+    fn export_json_independently_verifiable() {
+        let store = MemoryAuditStore::new();
+        for i in 0..5 {
+            store
+                .append(&make_entry(
+                    &format!("2026-01-01T00:{i:02}:00Z"),
+                    "org1",
+                    "/x",
+                ))
+                .unwrap();
+        }
+        let json_str = store.export_json(None, None).unwrap();
+        // Parse back and verify chain independently
+        let doc: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        let entries: Vec<AuditEntry> = serde_json::from_value(doc["entries"].clone()).unwrap();
+        assert!(verify_audit_chain(&entries).is_ok());
     }
 }

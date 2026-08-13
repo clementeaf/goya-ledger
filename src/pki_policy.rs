@@ -277,6 +277,229 @@ pub fn default_cps() -> CertificationPracticeStatement {
     }
 }
 
+// ── RFC 3647 Markdown export ──────────────────────────────────────────────
+
+impl CertificatePolicy {
+    /// Export as RFC 3647-structured markdown.
+    pub fn to_markdown(&self) -> String {
+        let mut md = String::new();
+        md.push_str(&format!("# {}\n\n", self.name));
+        md.push_str(&format!("**OID:** `{}`  \n", self.oid));
+        md.push_str(&format!("**Version:** {}  \n", self.version));
+        md.push_str(&format!("**Status:** {}  \n", self.status));
+        md.push_str(&format!("**URL:** {}  \n\n", self.publication_url));
+
+        md.push_str("## 1. Introduction\n\n");
+        md.push_str("### 1.1 Overview\n\n");
+        md.push_str(&format!(
+            "This Certificate Policy governs certificate issuance and management \
+             for the Goya Ledger PKI under {}.\n\n",
+            self.legal_framework.primary_law
+        ));
+        md.push_str("### 1.2 Document Name and Identification\n\n");
+        md.push_str(&format!("- Policy OID: `{}`\n", self.oid));
+        md.push_str(&format!(
+            "- Signature Policy OID: `{}`\n\n",
+            SIGNATURE_POLICY_OID
+        ));
+
+        md.push_str("### 1.3 PKI Participants\n\n");
+        md.push_str("### 1.4 Certificate Usage\n\n");
+        for level in &self.assurance_levels {
+            md.push_str(&format!("- {level}\n"));
+        }
+        md.push('\n');
+
+        md.push_str("### 1.5 Policy Administration\n\n");
+        md.push_str(&format!(
+            "- Jurisdiction: {}\n",
+            self.legal_framework.jurisdiction
+        ));
+        md.push_str(&format!(
+            "- Primary Law: {}\n",
+            self.legal_framework.primary_law
+        ));
+        md.push_str(&format!(
+            "- Regulation: {}\n",
+            self.legal_framework.regulation
+        ));
+        md.push_str(&format!(
+            "- Technical Standard: {}\n\n",
+            self.legal_framework.technical_standard
+        ));
+
+        md.push_str("## 2. Publication and Repository Responsibilities\n\n");
+        md.push_str(&format!("Publication URL: {}\n\n", self.publication_url));
+
+        md.push_str("## 3. Identification and Authentication\n\n");
+        md.push_str("See CPS for identity proofing procedures.\n\n");
+
+        md.push_str("## 4. Certificate Life-Cycle Operational Requirements\n\n");
+        md.push_str(&format!(
+            "- Certificate lifetime: {} days\n",
+            self.certificate_lifetime_days
+        ));
+        md.push_str("- Revocation mechanisms:\n");
+        for m in &self.revocation_mechanisms {
+            md.push_str(&format!("  - {m}\n"));
+        }
+        md.push('\n');
+
+        md.push_str("## 5. Facility, Management, and Operational Controls\n\n");
+        md.push_str(&format!(
+            "- Private key protection: {}\n",
+            self.private_key_protection
+        ));
+        md.push_str(&format!("- Audit: {}\n\n", self.audit_requirements));
+
+        md.push_str("## 6. Technical Security Controls\n\n");
+        md.push_str("### 6.1 Supported Algorithms\n\n");
+        for a in &self.supported_algorithms {
+            md.push_str(&format!("- {a}\n"));
+        }
+        md.push('\n');
+
+        md.push_str("## 7. Certificate, CRL, and OCSP Profiles\n\n");
+        md.push_str("See CPS for detailed profiles.\n\n");
+
+        md.push_str("## 8. Compliance Audit and Other Assessments\n\n");
+        md.push_str(&format!("- {}\n\n", self.audit_requirements));
+
+        md.push_str("## 9. Other Business and Legal Matters\n\n");
+        md.push_str("### 9.1 Subscriber Obligations\n\n");
+        for o in &self.subscriber_obligations {
+            md.push_str(&format!("- {o}\n"));
+        }
+        md.push_str("\n### 9.2 CA Obligations\n\n");
+        for o in &self.ca_obligations {
+            md.push_str(&format!("- {o}\n"));
+        }
+        md.push_str("\n### 9.3 RA Obligations\n\n");
+        for o in &self.ra_obligations {
+            md.push_str(&format!("- {o}\n"));
+        }
+        md.push('\n');
+
+        md
+    }
+}
+
+impl CertificationPracticeStatement {
+    /// Export as RFC 3647-structured markdown.
+    pub fn to_markdown(&self) -> String {
+        let mut md = String::new();
+        md.push_str(&format!("# {}\n\n", self.name));
+        md.push_str(&format!("**OID:** `{}`  \n", self.oid));
+        md.push_str(&format!("**Version:** {}  \n", self.version));
+        md.push_str(&format!("**Status:** {}  \n", self.status));
+        md.push_str(&format!("**CA:** {}  \n", self.ca_name));
+        md.push_str(&format!("**Jurisdiction:** {}  \n", self.ca_jurisdiction));
+        md.push_str(&format!("**URL:** {}  \n\n", self.publication_url));
+
+        md.push_str("## 1. Introduction\n\n");
+        md.push_str(&format!(
+            "This Certification Practice Statement describes the operational practices of \
+             {} for certificate management under Chilean electronic signature law.\n\n",
+            self.ca_name
+        ));
+
+        md.push_str("## 2. Publication and Repository Responsibilities\n\n");
+        md.push_str(&format!("Publication URL: {}\n\n", self.publication_url));
+
+        md.push_str("## 3. Identification and Authentication\n\n");
+        md.push_str("### 3.1 Identity Proofing Methods\n\n");
+        for m in &self.identity_proofing.methods {
+            md.push_str(&format!("- {m}\n"));
+        }
+        md.push_str(&format!(
+            "\n- RUT validation required: {}\n",
+            self.identity_proofing.rut_validation_required
+        ));
+        md.push_str(&format!(
+            "- Document retention: {} years\n",
+            self.identity_proofing.document_retention_years
+        ));
+        md.push_str(&format!(
+            "- Re-verification interval: {} months\n\n",
+            self.identity_proofing.re_verification_interval_months
+        ));
+
+        md.push_str("## 4. Certificate Life-Cycle Operational Requirements\n\n");
+        md.push_str("### 4.1 Certificate Profiles\n\n");
+        md.push_str("| Profile | Assurance | Lifetime | Key Usage |\n");
+        md.push_str("|---------|-----------|----------|-----------|\n");
+        for p in &self.certificate_profiles {
+            md.push_str(&format!(
+                "| {} | {} | {} days | {} |\n",
+                p.name,
+                p.assurance_level,
+                p.lifetime_days,
+                p.key_usage.join(", ")
+            ));
+        }
+        md.push('\n');
+
+        md.push_str("## 5. Facility, Management, and Operational Controls\n\n");
+        md.push_str(&format!(
+            "- Disaster recovery: {}\n\n",
+            self.disaster_recovery
+        ));
+
+        md.push_str("## 6. Technical Security Controls\n\n");
+        md.push_str("### 6.1 Key Management\n\n");
+        md.push_str("**Algorithms:**\n\n");
+        for a in &self.key_management.algorithms {
+            md.push_str(&format!("- {a}\n"));
+        }
+        md.push_str("\n**Key Sizes:**\n\n");
+        for s in &self.key_management.min_key_sizes {
+            md.push_str(&format!("- {s}\n"));
+        }
+        md.push_str(&format!(
+            "\n- Key generation: {}\n",
+            self.key_management.key_generation
+        ));
+        md.push_str(&format!(
+            "- Private key storage: {}\n",
+            self.key_management.private_key_storage
+        ));
+        md.push_str(&format!(
+            "- Key ceremony required: {}\n",
+            self.key_management.key_ceremony_required
+        ));
+        md.push_str(&format!(
+            "- Key backup: {}\n\n",
+            self.key_management.key_backup
+        ));
+
+        md.push_str("## 7. Certificate, CRL, and OCSP Profiles\n\n");
+        md.push_str("See certificate profiles in §4.1.\n\n");
+
+        md.push_str("## 8. Compliance Audit and Other Assessments\n\n");
+        md.push_str(&format!(
+            "- Log retention: {} years\n",
+            self.audit_logging.log_retention_years
+        ));
+        md.push_str(&format!(
+            "- Tamper evidence: {}\n",
+            self.audit_logging.tamper_evidence
+        ));
+        md.push_str(&format!(
+            "- Review frequency: {}\n\n",
+            self.audit_logging.review_frequency
+        ));
+
+        md.push_str("## 9. Other Business and Legal Matters\n\n");
+        md.push_str("### 9.1 Compliance References\n\n");
+        for r in &self.compliance_references {
+            md.push_str(&format!("- {r}\n"));
+        }
+        md.push('\n');
+
+        md
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -399,5 +622,71 @@ mod tests {
             parsed.certificate_profiles.len(),
             cps.certificate_profiles.len()
         );
+    }
+
+    // ── Markdown export ──────────────────────────────────────────────
+
+    #[test]
+    fn cp_markdown_has_rfc3647_sections() {
+        let md = default_cp().to_markdown();
+        for section in [
+            "## 1. Introduction",
+            "## 2. Publication",
+            "## 3. Identification",
+            "## 4. Certificate Life-Cycle",
+            "## 5. Facility",
+            "## 6. Technical Security",
+            "## 7. Certificate, CRL",
+            "## 8. Compliance Audit",
+            "## 9. Other Business",
+        ] {
+            assert!(md.contains(section), "missing: {section}");
+        }
+    }
+
+    #[test]
+    fn cp_markdown_contains_oid_and_law() {
+        let md = default_cp().to_markdown();
+        assert!(md.contains(CP_OID));
+        assert!(md.contains("19.799"));
+    }
+
+    #[test]
+    fn cps_markdown_has_rfc3647_sections() {
+        let md = default_cps().to_markdown();
+        for section in [
+            "## 1. Introduction",
+            "## 3. Identification",
+            "### 3.1 Identity Proofing",
+            "### 4.1 Certificate Profiles",
+            "### 6.1 Key Management",
+            "## 8. Compliance Audit",
+            "### 9.1 Compliance References",
+        ] {
+            assert!(md.contains(section), "missing: {section}");
+        }
+    }
+
+    #[test]
+    fn cps_markdown_has_profile_table() {
+        let md = default_cps().to_markdown();
+        assert!(md.contains("| FES Subscriber"));
+        assert!(md.contains("| FEA Subscriber"));
+        assert!(md.contains("| TSA Signing"));
+    }
+
+    #[test]
+    fn cps_markdown_contains_rut_and_retention() {
+        let md = default_cps().to_markdown();
+        assert!(md.contains("RUT validation required: true"));
+        assert!(md.contains("Document retention: 7 years"));
+    }
+
+    #[test]
+    fn cps_markdown_lists_compliance_refs() {
+        let md = default_cps().to_markdown();
+        assert!(md.contains("Ley 19.799"));
+        assert!(md.contains("DS 181"));
+        assert!(md.contains("FIPS 204"));
     }
 }

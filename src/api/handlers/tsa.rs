@@ -45,6 +45,15 @@ pub async fn request_timestamp(
         )));
     }
 
+    if let Some(token) = &resp.token {
+        crate::audit::emit_if_present(
+            &state.audit_store,
+            crate::audit::AuditAction::TimestampIssued,
+            "",
+            Some(format!("serial={}", token.tst_info.serial_number)),
+        );
+    }
+
     Ok(HttpResponse::Created().json(ApiResponse::success(resp.token, trace)))
 }
 
@@ -59,6 +68,36 @@ pub async fn tsa_policy(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
     };
 
     Ok(HttpResponse::Ok().json(ApiResponse::success(tsa.policy_info(), trace)))
+}
+
+/// Request a DER-encoded RFC 3161 TimeStampResp (binary).
+#[post("/tsa/timestamp/der")]
+pub async fn request_timestamp_der(
+    state: web::Data<AppState>,
+    body: web::Json<TimeStampRequest>,
+) -> ApiResult<HttpResponse> {
+    let tsa = match get_tsa(&state) {
+        Ok(t) => t,
+        Err(resp) => return Ok(resp),
+    };
+
+    match tsa.issue_der(&body) {
+        Ok(der) => {
+            crate::audit::emit_if_present(
+                &state.audit_store,
+                crate::audit::AuditAction::TimestampIssued,
+                "",
+                Some("format=der".to_string()),
+            );
+            Ok(HttpResponse::Created()
+                .content_type("application/timestamp-reply")
+                .body(der))
+        }
+        Err(e) => Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("TSA_REJECTED", &e.to_string()),
+            400,
+        ))),
+    }
 }
 
 /// Verify a timestamp token's signature.
@@ -110,6 +149,7 @@ mod tests {
                 App::new().app_data($state).service(
                     web::scope("/api/v1")
                         .service(request_timestamp)
+                        .service(request_timestamp_der)
                         .service(tsa_policy)
                         .service(verify_timestamp),
                 ),
@@ -194,6 +234,33 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn e2e_request_timestamp_der() {
+        let state = make_tsa_state();
+        let app = tsa_app!(state);
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/tsa/timestamp/der")
+            .set_json(serde_json::json!({
+                "message_imprint": valid_imprint(),
+                "nonce": 77,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        assert_eq!(
+            resp.headers()
+                .get("content-type")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "application/timestamp-reply"
+        );
+        let body = test::read_body(resp).await;
+        assert_eq!(body[0], 0x30, "DER must start with SEQUENCE");
+        assert!(body.len() > 50);
+    }
+
+    #[actix_web::test]
     async fn e2e_tampered_token_fails_verify() {
         let state = make_tsa_state();
         let app = tsa_app!(state);
@@ -217,5 +284,65 @@ mod tests {
         assert_eq!(resp.status(), 200);
         let verify_body: serde_json::Value = test::read_body_json(resp).await;
         assert_eq!(verify_body["data"]["valid"], false);
+    }
+
+    #[actix_web::test]
+    async fn e2e_timestamp_emits_audit_event() {
+        let state = make_tsa_state();
+        let app = tsa_app!(state.clone());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/tsa/timestamp")
+            .set_json(serde_json::json!({
+                "message_imprint": valid_imprint(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+
+        let audit = state
+            .audit_store
+            .as_ref()
+            .unwrap()
+            .query(
+                None,
+                None,
+                None,
+                Some(&crate::audit::AuditAction::TimestampIssued),
+                100,
+            )
+            .unwrap();
+        assert!(!audit.is_empty(), "TimestampIssued event must be emitted");
+        assert!(audit[0].metadata.as_deref().unwrap().contains("serial="));
+    }
+
+    #[actix_web::test]
+    async fn e2e_timestamp_der_emits_audit_event() {
+        let state = make_tsa_state();
+        let app = tsa_app!(state.clone());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/tsa/timestamp/der")
+            .set_json(serde_json::json!({
+                "message_imprint": valid_imprint(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+
+        let audit = state
+            .audit_store
+            .as_ref()
+            .unwrap()
+            .query(
+                None,
+                None,
+                None,
+                Some(&crate::audit::AuditAction::TimestampIssued),
+                100,
+            )
+            .unwrap();
+        assert!(!audit.is_empty());
+        assert!(audit[0].metadata.as_deref().unwrap().contains("format=der"));
     }
 }

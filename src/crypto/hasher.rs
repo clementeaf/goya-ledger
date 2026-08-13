@@ -164,4 +164,73 @@ mod tests {
         assert_eq!(format!("{}", HashAlgorithm::Sha256), "SHA-256");
         assert_eq!(format!("{}", HashAlgorithm::Sha3_256), "SHA3-256");
     }
+
+    // ── NIST CAVP test vectors ───────────────────────────────────────
+    // SHA-256 vectors from NIST CSRC (FIPS 180-4 examples)
+    // SHA3-256 vectors from NIST CSRC (FIPS 202 examples)
+
+    #[test]
+    fn cavp_sha256_empty() {
+        let h = hash_with(HashAlgorithm::Sha256, b"");
+        assert_eq!(
+            hex::encode(h),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn cavp_sha256_abc() {
+        // NIST FIPS 180-4 §B.1
+        let h = hash_with(HashAlgorithm::Sha256, b"abc");
+        assert_eq!(
+            hex::encode(h),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn cavp_sha256_448bit() {
+        // NIST FIPS 180-4 §B.2 — 448-bit message
+        let h = hash_with(
+            HashAlgorithm::Sha256,
+            b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+        );
+        assert_eq!(
+            hex::encode(h),
+            "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+        );
+    }
+
+    #[test]
+    fn cavp_sha256_896bit() {
+        // NIST FIPS 180-4 §B.3 — 896-bit message
+        let h = hash_with(
+            HashAlgorithm::Sha256,
+            b"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu",
+        );
+        assert_eq!(
+            hex::encode(h),
+            "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1"
+        );
+    }
+
+    #[test]
+    fn cavp_sha3_256_empty() {
+        // NIST FIPS 202 example
+        let h = hash_with(HashAlgorithm::Sha3_256, b"");
+        assert_eq!(
+            hex::encode(h),
+            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+        );
+    }
+
+    #[test]
+    fn cavp_sha3_256_abc() {
+        // NIST FIPS 202 ShortMsg
+        let h = hash_with(HashAlgorithm::Sha3_256, b"abc");
+        assert_eq!(
+            hex::encode(h),
+            "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532"
+        );
+    }
 }

@@ -111,13 +111,13 @@ impl Msp {
 
 /// In-memory CRL store backed by a `HashMap`.
 pub struct MemoryCrlStore {
-    inner: std::sync::Mutex<std::collections::HashMap<String, Vec<String>>>,
+    inner: std::sync::RwLock<std::collections::HashMap<String, Vec<String>>>,
 }
 
 impl MemoryCrlStore {
     pub fn new() -> Self {
         Self {
-            inner: std::sync::Mutex::new(std::collections::HashMap::new()),
+            inner: std::sync::RwLock::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -131,7 +131,7 @@ impl Default for MemoryCrlStore {
 impl CrlStore for MemoryCrlStore {
     fn write_crl(&self, msp_id: &str, serials: &[String]) -> StorageResult<()> {
         self.inner
-            .lock()
+            .write()
             .unwrap()
             .insert(msp_id.to_string(), serials.to_vec());
         Ok(())
@@ -140,7 +140,7 @@ impl CrlStore for MemoryCrlStore {
     fn read_crl(&self, msp_id: &str) -> StorageResult<Vec<String>> {
         Ok(self
             .inner
-            .lock()
+            .read()
             .unwrap()
             .get(msp_id)
             .cloned()

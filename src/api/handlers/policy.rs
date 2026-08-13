@@ -20,6 +20,24 @@ pub async fn get_cps() -> ApiResult<HttpResponse> {
     Ok(HttpResponse::Ok().json(ApiResponse::success(cps, trace)))
 }
 
+/// Get the CPS as an RFC 3647-structured markdown document.
+#[get("/cps/document")]
+pub async fn get_cps_document() -> ApiResult<HttpResponse> {
+    let cps = pki_policy::default_cps();
+    Ok(HttpResponse::Ok()
+        .content_type("text/markdown; charset=utf-8")
+        .body(cps.to_markdown()))
+}
+
+/// Get the CP as an RFC 3647-structured markdown document.
+#[get("/cp/document")]
+pub async fn get_cp_document() -> ApiResult<HttpResponse> {
+    let cp = pki_policy::default_cp();
+    Ok(HttpResponse::Ok()
+        .content_type("text/markdown; charset=utf-8")
+        .body(cp.to_markdown()))
+}
+
 /// Get all OIDs in the Goya namespace.
 #[get("/policy/oids")]
 pub async fn get_oids() -> ApiResult<HttpResponse> {
@@ -50,6 +68,8 @@ mod tests {
                     web::scope("/api/v1")
                         .service(get_cp)
                         .service(get_cps)
+                        .service(get_cp_document)
+                        .service(get_cps_document)
                         .service(get_oids),
                 ),
             )
@@ -87,6 +107,43 @@ mod tests {
         assert!(body["data"]["identity_proofing"]["rut_validation_required"]
             .as_bool()
             .unwrap());
+    }
+
+    #[actix_web::test]
+    async fn e2e_get_cps_document_markdown() {
+        let app = policy_app!();
+        let req = test::TestRequest::get()
+            .uri("/api/v1/cps/document")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        assert_eq!(
+            resp.headers()
+                .get("content-type")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "text/markdown; charset=utf-8"
+        );
+        let body = test::read_body(resp).await;
+        let md = String::from_utf8(body.to_vec()).unwrap();
+        assert!(md.contains("# Goya Ledger Certification Practice Statement"));
+        assert!(md.contains("## 3. Identification"));
+        assert!(md.contains("FEA Subscriber"));
+    }
+
+    #[actix_web::test]
+    async fn e2e_get_cp_document_markdown() {
+        let app = policy_app!();
+        let req = test::TestRequest::get()
+            .uri("/api/v1/cp/document")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body = test::read_body(resp).await;
+        let md = String::from_utf8(body.to_vec()).unwrap();
+        assert!(md.contains("# Goya Ledger Certificate Policy"));
+        assert!(md.contains("19.799"));
     }
 
     #[actix_web::test]

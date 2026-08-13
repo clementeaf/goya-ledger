@@ -178,6 +178,10 @@ fn signing_payload(
     single: &SingleResponse,
     nonce: Option<u64>,
 ) -> String {
+    let nonce_str = match nonce {
+        Some(n) => n.to_string(),
+        None => "none".to_string(),
+    };
     format!(
         "ocsp:{}:{}:{}:{}:{}:{}:{}",
         responder_id,
@@ -186,8 +190,34 @@ fn signing_payload(
         single.status,
         single.this_update,
         single.next_update,
-        nonce.unwrap_or(0),
+        nonce_str,
     )
+}
+
+/// Verify that a nonce in the response matches the request.
+pub fn verify_nonce(request_nonce: Option<u64>, response: &OcspResponse) -> bool {
+    request_nonce == response.nonce
+}
+
+impl OcspResponse {
+    /// Export as a JSON-serializable DER-like structure with all fields.
+    /// Full ASN.1 DER OCSP encoding would require a DER encoder —
+    /// this provides a self-contained verifiable export.
+    pub fn to_export_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "format": "goya-ocsp-response",
+            "version": "1.0",
+            "response_status": self.response_status,
+            "responder_id": self.responder_id,
+            "produced_at": self.produced_at,
+            "response": self.response,
+            "nonce": self.nonce,
+            "signature": self.signature,
+            "public_key": self.public_key,
+            "signature_algorithm": self.signature_algorithm,
+            "verified": verify_ocsp_response(self),
+        })
+    }
 }
 
 fn now_secs() -> u64 {
@@ -433,5 +463,60 @@ mod tests {
         let resp = responder.query(&req, &store);
         assert_eq!(resp.signature_algorithm, SigningAlgorithm::MlDsa65);
         assert!(verify_ocsp_response(&resp));
+    }
+
+    #[test]
+    fn nonce_none_vs_zero_distinct() {
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let responder = OcspResponder::new(signer, "did:goya:ocsp".into());
+        let store = make_crl_store("msp1", &[]);
+
+        let req_none = OcspRequest {
+            msp_id: "msp1".into(),
+            serial: hex::encode([1u8; 8]),
+            nonce: None,
+        };
+        let req_zero = OcspRequest {
+            msp_id: "msp1".into(),
+            serial: hex::encode([1u8; 8]),
+            nonce: Some(0),
+        };
+        let resp_none = responder.query(&req_none, &store);
+        let resp_zero = responder.query(&req_zero, &store);
+        // Signatures differ because nonce payload differs
+        assert_ne!(resp_none.signature, resp_zero.signature);
+    }
+
+    #[test]
+    fn verify_nonce_match() {
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let responder = OcspResponder::new(signer, "did:goya:ocsp".into());
+        let store = make_crl_store("msp1", &[]);
+        let req = OcspRequest {
+            msp_id: "msp1".into(),
+            serial: hex::encode([1u8; 8]),
+            nonce: Some(42),
+        };
+        let resp = responder.query(&req, &store);
+        assert!(verify_nonce(Some(42), &resp));
+        assert!(!verify_nonce(Some(99), &resp));
+        assert!(!verify_nonce(None, &resp));
+    }
+
+    #[test]
+    fn export_json_has_verification_flag() {
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let responder = OcspResponder::new(signer, "did:goya:ocsp".into());
+        let store = make_crl_store("msp1", &[]);
+        let req = OcspRequest {
+            msp_id: "msp1".into(),
+            serial: hex::encode([1u8; 8]),
+            nonce: None,
+        };
+        let resp = responder.query(&req, &store);
+        let export = resp.to_export_json();
+        assert_eq!(export["format"], "goya-ocsp-response");
+        assert_eq!(export["verified"], true);
+        assert_eq!(export["version"], "1.0");
     }
 }

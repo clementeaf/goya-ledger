@@ -2,14 +2,19 @@
 //!
 //! Produces signed timestamp tokens that bind a content hash to a
 //! precise point in time. The TSA signs each token with the node's
-//! signing provider (Ed25519 or ML-DSA-65).
+//! signing provider (Ed25519, ML-DSA-65, or RSA).
 //!
-//! Token structure follows RFC 3161 TSTInfo semantics:
-//! serial number, genTime, hash algorithm, message imprint,
-//! TSA name, policy OID, nonce, accuracy, and ordering flag.
+//! Two output formats:
+//! - JSON: `issue()` returns structured `TimeStampToken` (original)
+//! - DER: `issue_der()` returns binary RFC 3161 `TimeStampResp`
+//!
+//! Time is sourced from a pluggable `TimeSource` (NTP-aware).
+
+pub mod rfc3161_der;
 
 use crate::crypto::hasher::HashAlgorithm;
 use crate::identity::signing::{SigningAlgorithm, SigningProvider};
+use crate::time_source::TimeSource;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -97,16 +102,23 @@ pub struct TsaProvider {
     tsa_name: String,
     policy_oid: String,
     accuracy_secs: u32,
+    time_source: Option<Arc<dyn TimeSource>>,
 }
 
 impl TsaProvider {
     pub fn new(signer: Arc<dyn SigningProvider>, tsa_name: String) -> Self {
+        // ponytail: seed serial from epoch seconds to avoid collisions across restarts
+        let initial_serial = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         Self {
             signer,
-            serial: AtomicU64::new(1),
+            serial: AtomicU64::new(initial_serial),
             tsa_name,
             policy_oid: TSA_POLICY_OID.to_string(),
             accuracy_secs: DEFAULT_ACCURACY_SECS,
+            time_source: None,
         }
     }
 
@@ -115,7 +127,43 @@ impl TsaProvider {
         self
     }
 
+    pub fn with_time_source(mut self, ts: Arc<dyn TimeSource>) -> Self {
+        self.time_source = Some(ts);
+        self
+    }
+
+    fn validate_signer(&self) -> Result<(), String> {
+        let test_msg = b"tsa-self-check";
+        let sig = self
+            .signer
+            .sign(test_msg)
+            .map_err(|e| format!("TSA signer unhealthy: {e}"))?;
+        if !self.signer.verify(test_msg, &sig).unwrap_or(false) {
+            return Err("TSA signer self-verification failed".into());
+        }
+        Ok(())
+    }
+
+    fn validated_time(&self) -> Result<u64, String> {
+        match &self.time_source {
+            Some(ts) => {
+                ts.validate()
+                    .map_err(|e| format!("time source not trusted: {e}"))?;
+                Ok(ts.now().unix_secs)
+            }
+            None => Ok(now_secs()),
+        }
+    }
+
     pub fn issue(&self, req: &TimeStampRequest) -> TimeStampResponse {
+        if let Err(msg) = self.validate_signer() {
+            return TimeStampResponse {
+                status: 2,
+                status_string: msg,
+                token: None,
+            };
+        }
+
         if let Err(msg) = validate_imprint(&req.message_imprint) {
             return TimeStampResponse {
                 status: 2,
@@ -124,8 +172,17 @@ impl TsaProvider {
             };
         }
 
+        let gen_time = match self.validated_time() {
+            Ok(t) => t,
+            Err(msg) => {
+                return TimeStampResponse {
+                    status: 2,
+                    status_string: msg,
+                    token: None,
+                };
+            }
+        };
         let serial = self.serial.fetch_add(1, Ordering::SeqCst);
-        let gen_time = now_secs();
 
         let tst_info = TstInfo {
             version: 1,
@@ -165,6 +222,36 @@ impl TsaProvider {
             status_string: "granted".to_string(),
             token: Some(token),
         }
+    }
+
+    /// Issue a DER-encoded RFC 3161 TimeStampResp.
+    pub fn issue_der(&self, req: &TimeStampRequest) -> Result<Vec<u8>, rfc3161_der::Rfc3161Error> {
+        if let Err(msg) = validate_imprint(&req.message_imprint) {
+            return Err(rfc3161_der::Rfc3161Error::Invalid(msg));
+        }
+
+        let gen_time = self
+            .validated_time()
+            .map_err(rfc3161_der::Rfc3161Error::Invalid)?;
+
+        let imprint_bytes = hex::decode(&req.message_imprint)
+            .map_err(|e| rfc3161_der::Rfc3161Error::Invalid(e.to_string()))?;
+
+        let serial = self.serial.fetch_add(1, Ordering::SeqCst);
+
+        let params = rfc3161_der::TstInfoParams {
+            policy_oid: &self.policy_oid,
+            hash_algorithm: req.hash_algorithm,
+            message_imprint: &imprint_bytes,
+            serial_number: serial,
+            gen_time,
+            accuracy_secs: self.accuracy_secs,
+            ordering: req.require_ordering,
+            nonce: req.nonce,
+            tsa_name: &self.tsa_name,
+        };
+
+        rfc3161_der::build_timestamp_resp_der(&params, self.signer.as_ref())
     }
 
     pub fn policy_info(&self) -> serde_json::Value {
@@ -496,5 +583,126 @@ mod tests {
         let now = now_secs();
         assert!(token.tst_info.gen_time <= now);
         assert!(token.tst_info.gen_time >= now - 2);
+    }
+
+    #[test]
+    fn issue_der_roundtrip() {
+        let tsa = make_provider();
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: valid_imprint(),
+            nonce: Some(99),
+            require_ordering: false,
+        };
+        let der = tsa.issue_der(&req).unwrap();
+        assert_eq!(der[0], 0x30);
+        let pk_hex = hex::encode(tsa.signer.public_key());
+        let fields = rfc3161_der::verify_timestamp_resp_der(&der, &pk_hex).unwrap();
+        assert_eq!(fields.nonce, Some(99));
+    }
+
+    #[test]
+    fn issue_der_rejects_bad_imprint() {
+        let tsa = make_provider();
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: "short".to_string(),
+            nonce: None,
+            require_ordering: false,
+        };
+        assert!(tsa.issue_der(&req).is_err());
+    }
+
+    #[test]
+    fn time_source_integration() {
+        use crate::time_source::SimulatedTimeSource;
+        let sim = Arc::new(SimulatedTimeSource::new(1_800_000_000));
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let tsa =
+            TsaProvider::new(signer, "did:goya:tsa-sim".to_string()).with_time_source(sim.clone());
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: valid_imprint(),
+            nonce: None,
+            require_ordering: false,
+        };
+        let token = tsa.issue(&req).token.unwrap();
+        assert_eq!(token.tst_info.gen_time, 1_800_000_000);
+
+        sim.advance(100);
+        let token2 = tsa.issue(&req).token.unwrap();
+        assert_eq!(token2.tst_info.gen_time, 1_800_000_100);
+    }
+
+    #[test]
+    fn issue_der_with_time_source() {
+        use crate::time_source::SimulatedTimeSource;
+        let sim = Arc::new(SimulatedTimeSource::new(1_800_000_000));
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let tsa =
+            TsaProvider::new(signer.clone(), "did:goya:tsa-sim".to_string()).with_time_source(sim);
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: valid_imprint(),
+            nonce: Some(7),
+            require_ordering: false,
+        };
+        let der = tsa.issue_der(&req).unwrap();
+        let pk_hex = hex::encode(signer.public_key());
+        let fields = rfc3161_der::verify_timestamp_resp_der(&der, &pk_hex).unwrap();
+        assert!(fields.gen_time_raw.contains("20270115"));
+    }
+
+    #[test]
+    fn rejects_when_ntp_desynced() {
+        use crate::time_source::NtpTimeSource;
+        let ntp = Arc::new(NtpTimeSource::new(1));
+        // NTP starts as not synced by default
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa-ntp".to_string()).with_time_source(ntp);
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: valid_imprint(),
+            nonce: None,
+            require_ordering: false,
+        };
+        let resp = tsa.issue(&req);
+        assert_eq!(resp.status, 2);
+        assert!(resp.status_string.contains("not trusted"));
+        assert!(resp.token.is_none());
+    }
+
+    #[test]
+    fn rejects_der_when_ntp_desynced() {
+        use crate::time_source::NtpTimeSource;
+        let ntp = Arc::new(NtpTimeSource::new(1));
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa-ntp".to_string()).with_time_source(ntp);
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: valid_imprint(),
+            nonce: None,
+            require_ordering: false,
+        };
+        let result = tsa.issue_der(&req);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn accepts_when_ntp_synced() {
+        use crate::time_source::NtpTimeSource;
+        let ntp = Arc::new(NtpTimeSource::new(5));
+        ntp.set_sync_status(true, 0);
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa-ntp".to_string()).with_time_source(ntp);
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: valid_imprint(),
+            nonce: None,
+            require_ordering: false,
+        };
+        let resp = tsa.issue(&req);
+        assert_eq!(resp.status, 0);
+        assert!(resp.token.is_some());
     }
 }

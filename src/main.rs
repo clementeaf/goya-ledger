@@ -866,9 +866,36 @@ async fn async_main_inner() -> std::io::Result<()> {
         vault_rate_limiter: Arc::new(crate::api::handlers::vault::RecoveryRateLimiter::new()),
         bridge_engine: Arc::new(crate::bridge::protocol::BridgeEngine::new()),
         proof_verifier: Arc::new(inference::proof::MultiVerifier::new()),
-        tsa_provider: None,
-        ra_store: None,
-        ocsp_responder: None,
+        tsa_provider: {
+            let pk_hex = hex::encode(signing_provider.public_key());
+            let tsa_did = crate::identity::did::did_from_pubkey_hex(&pk_hex);
+            let mut tsa = crate::tsa::TsaProvider::new(signing_provider.clone(), tsa_did);
+            let ntp = Arc::new(crate::time_source::NtpTimeSource::new(5));
+            let _ = crate::time_source::check_ntp_sync(&ntp);
+            tsa = tsa.with_time_source(ntp);
+            log::info!("TSA provider initialized (RFC 3161)");
+            Some(Arc::new(tsa))
+        },
+        ra_store: {
+            let store = Arc::new(crate::identity::ra::RaStore::new());
+            log::info!("RA store initialized (Ley 19.799 Art. 15)");
+            Some(store)
+        },
+        ocsp_responder: {
+            let responder = crate::msp::ocsp::OcspResponder::new(
+                signing_provider.clone(),
+                crate::identity::did::did_from_pubkey_hex(&hex::encode(
+                    signing_provider.public_key(),
+                )),
+            );
+            log::info!("OCSP responder initialized (RFC 6960)");
+            Some(Arc::new(responder))
+        },
+        lifecycle_manager: {
+            let lm = crate::pki_lifecycle::LifecycleManager::new(7, 30);
+            log::info!("Certificate lifecycle manager initialized");
+            Some(Arc::new(lm))
+        },
     };
 
     // Log vault recovery secret fingerprint for rotation verification.

@@ -28,7 +28,7 @@ pub fn to_xades_bes(envelope: &SignedEnvelope) -> XadesEnvelope {
     let level_str = level_to_claimed_role(envelope.level);
 
     let cert_digest = {
-        let pk_bytes = hex::decode(&envelope.public_key).unwrap_or_default();
+        let pk_bytes = hex::decode(&envelope.public_key).unwrap_or_else(|_| vec![]);
         let digest = hash_with(HashAlgorithm::Sha256, &pk_bytes);
         base64::Engine::encode(&base64::engine::general_purpose::STANDARD, digest)
     };
@@ -78,6 +78,28 @@ pub fn to_xades_bes(envelope: &SignedEnvelope) -> XadesEnvelope {
     XadesEnvelope {
         xml,
         signature_id: sig_id,
+    }
+}
+
+/// Build an XAdES-T envelope (XAdES-BES + timestamp token in UnsignedProperties).
+pub fn to_xades_t(envelope: &SignedEnvelope, tsa_token_b64: &str) -> XadesEnvelope {
+    let bes = to_xades_bes(envelope);
+    let unsigned_props = format!(
+        r##"      <xades:UnsignedProperties>
+        <xades:UnsignedSignatureProperties>
+          <xades:SignatureTimeStamp>
+            <xades:EncapsulatedTimeStamp>{tsa_token_b64}</xades:EncapsulatedTimeStamp>
+          </xades:SignatureTimeStamp>
+        </xades:UnsignedSignatureProperties>
+      </xades:UnsignedProperties>"##
+    );
+    let xml = bes.xml.replace(
+        "    </xades:QualifyingProperties>",
+        &format!("{unsigned_props}\n    </xades:QualifyingProperties>"),
+    );
+    XadesEnvelope {
+        xml,
+        signature_id: bes.signature_id,
     }
 }
 
@@ -238,8 +260,10 @@ fn days_to_ymd(mut days: i64) -> (i64, u32, u32) {
 }
 
 fn hex_to_base64(hex_str: &str) -> String {
-    let bytes = hex::decode(hex_str).unwrap_or_default();
-    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes)
+    match hex::decode(hex_str) {
+        Ok(bytes) => base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes),
+        Err(_) => String::new(),
+    }
 }
 
 fn extract_tag(xml: &str, tag: &str) -> Option<String> {
@@ -470,5 +494,32 @@ mod tests {
         env.signature_algorithm = SigningAlgorithm::MlDsa65;
         let xades = to_xades_bes(&env);
         assert!(xades.xml.contains("ml-dsa-65"));
+    }
+
+    #[test]
+    fn xades_t_contains_timestamp() {
+        let env = make_envelope();
+        let xades_t = to_xades_t(&env, "dGVzdC10b2tlbi1iNjQ=");
+        assert!(xades_t.xml.contains("<xades:UnsignedProperties>"));
+        assert!(xades_t.xml.contains("<xades:SignatureTimeStamp>"));
+        assert!(xades_t.xml.contains(
+            "<xades:EncapsulatedTimeStamp>dGVzdC10b2tlbi1iNjQ=</xades:EncapsulatedTimeStamp>"
+        ));
+    }
+
+    #[test]
+    fn xades_t_still_contains_bes_elements() {
+        let env = make_envelope();
+        let xades_t = to_xades_t(&env, "dG9rZW4=");
+        assert!(xades_t.xml.contains("<ds:SignedInfo>"));
+        assert!(xades_t.xml.contains("<xades:SignedProperties"));
+        assert!(xades_t.xml.contains("<xades:SigningTime>"));
+        assert!(xades_t.xml.contains("<ds:SignatureValue>"));
+    }
+
+    #[test]
+    fn hex_to_base64_invalid_hex_returns_empty() {
+        let b64 = hex_to_base64("zzzz");
+        assert!(b64.is_empty());
     }
 }
