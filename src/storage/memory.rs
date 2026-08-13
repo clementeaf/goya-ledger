@@ -870,8 +870,8 @@ mod tests {
             id: id.to_string(),
             block_height: height,
             timestamp: 1_000,
-            input_did: "did:bc:sender".to_string(),
-            output_recipient: "did:bc:receiver".to_string(),
+            input_did: "did:goya:sender".to_string(),
+            output_recipient: "did:goya:receiver".to_string(),
             amount: 42,
             state: "confirmed".to_string(),
         }
@@ -930,21 +930,21 @@ mod tests {
     fn write_and_read_identity() {
         let store = MemoryStore::new();
         let id = IdentityRecord {
-            did: "did:bc:alice".to_string(),
+            did: "did:goya:alice".to_string(),
             public_key: String::new(),
             created_at: 100,
             updated_at: 200,
             status: "active".to_string(),
         };
         store.write_identity(&id).unwrap();
-        let fetched = store.read_identity("did:bc:alice").unwrap();
+        let fetched = store.read_identity("did:goya:alice").unwrap();
         assert_eq!(fetched.status, "active");
     }
 
     #[test]
     fn read_missing_identity_returns_error() {
         let store = MemoryStore::new();
-        assert!(store.read_identity("did:bc:ghost").is_err());
+        assert!(store.read_identity("did:goya:ghost").is_err());
     }
 
     #[test]
@@ -952,8 +952,8 @@ mod tests {
         let store = MemoryStore::new();
         let cred = Credential {
             id: "cred-1".to_string(),
-            issuer_did: "did:bc:issuer".to_string(),
-            subject_did: "did:bc:subject".to_string(),
+            issuer_did: "did:goya:issuer".to_string(),
+            subject_did: "did:goya:subject".to_string(),
             cred_type: "eid".to_string(),
             issued_at: 100,
             expires_at: 999,
@@ -1024,7 +1024,7 @@ mod tests {
     fn sample_cred(id: &str, subject_did: &str) -> Credential {
         Credential {
             id: id.to_string(),
-            issuer_did: "did:bc:issuer".to_string(),
+            issuer_did: "did:goya:issuer".to_string(),
             subject_did: subject_did.to_string(),
             cred_type: "eid".to_string(),
             issued_at: 1_000,
@@ -1037,7 +1037,7 @@ mod tests {
     fn credentials_by_subject_did_returns_empty_for_unknown_subject() {
         let store = MemoryStore::new();
         assert!(store
-            .credentials_by_subject_did("did:bc:ghost")
+            .credentials_by_subject_did("did:goya:ghost")
             .unwrap()
             .is_empty());
     }
@@ -1137,20 +1137,20 @@ mod tests {
     fn credentials_by_subject_did_filters_correctly() {
         let store = MemoryStore::new();
         store
-            .write_credential(&sample_cred("cred-1", "did:bc:alice"))
+            .write_credential(&sample_cred("cred-1", "did:goya:alice"))
             .unwrap();
         store
-            .write_credential(&sample_cred("cred-2", "did:bc:alice"))
+            .write_credential(&sample_cred("cred-2", "did:goya:alice"))
             .unwrap();
         store
-            .write_credential(&sample_cred("cred-3", "did:bc:bob"))
+            .write_credential(&sample_cred("cred-3", "did:goya:bob"))
             .unwrap();
 
-        let alice = store.credentials_by_subject_did("did:bc:alice").unwrap();
+        let alice = store.credentials_by_subject_did("did:goya:alice").unwrap();
         assert_eq!(alice.len(), 2);
-        assert!(alice.iter().all(|c| c.subject_did == "did:bc:alice"));
+        assert!(alice.iter().all(|c| c.subject_did == "did:goya:alice"));
 
-        let bob = store.credentials_by_subject_did("did:bc:bob").unwrap();
+        let bob = store.credentials_by_subject_did("did:goya:bob").unwrap();
         assert_eq!(bob.len(), 1);
         assert_eq!(bob[0].id, "cred-3");
     }

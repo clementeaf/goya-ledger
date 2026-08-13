@@ -223,10 +223,10 @@ pub async fn alias_resolve(
 
     match store.read_alias(&body.commitment) {
         Ok(entry) if entry.status == "active" => {
-            // Extract address from DID (did:bc:<address>)
+            // Extract address from DID (did:goya:<address>)
             let address = entry
                 .did
-                .strip_prefix("did:bc:")
+                .strip_prefix("did:goya:")
                 .unwrap_or(&entry.did)
                 .to_string();
             Ok(HttpResponse::Ok().json(ApiResponse::success(

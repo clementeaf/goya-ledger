@@ -35,8 +35,8 @@ mod tests {
             id: "tx-1".to_string(),
             block_height: 0,
             timestamp: 0,
-            input_did: "did:example:alice".to_string(),
-            output_recipient: "did:example:bob".to_string(),
+            input_did: "did:goya:alice".to_string(),
+            output_recipient: "did:goya:bob".to_string(),
             amount: 0,
             state: "pending".to_string(),
         }
@@ -57,7 +57,7 @@ mod tests {
 
     fn sample_endorsement() -> Endorsement {
         Endorsement {
-            signer_did: "did:example:org1".to_string(),
+            signer_did: "did:goya:org1".to_string(),
             org_id: "Org1".to_string(),
             signature: vec![0u8; 64],
             signature_algorithm: Default::default(),
@@ -70,12 +70,12 @@ mod tests {
     fn creates_transaction_proposal() {
         let proposal = TransactionProposal {
             tx: sample_tx(),
-            creator_did: "did:example:alice".to_string(),
+            creator_did: "did:goya:alice".to_string(),
             creator_signature: vec![0u8; 64],
             signature_algorithm: Default::default(),
             rwset: sample_rwset(),
         };
-        assert_eq!(proposal.creator_did, "did:example:alice");
+        assert_eq!(proposal.creator_did, "did:goya:alice");
         assert!(!proposal.rwset.is_empty());
     }
 

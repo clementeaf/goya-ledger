@@ -159,8 +159,8 @@ mod tests {
             id: id.to_string(),
             block_height: 0,
             timestamp: 0,
-            input_did: "did:example:alice".to_string(),
-            output_recipient: "did:example:bob".to_string(),
+            input_did: "did:goya:alice".to_string(),
+            output_recipient: "did:goya:bob".to_string(),
             amount: 0,
             state: "pending".to_string(),
         }
@@ -191,7 +191,7 @@ mod tests {
 
         let proposal = TransactionProposal {
             tx: sample_tx("tx-test-1"),
-            creator_did: "did:example:alice".to_string(),
+            creator_did: "did:goya:alice".to_string(),
             creator_signature: vec![0u8; 64],
             signature_algorithm: Default::default(),
             rwset: sample_rwset(),
@@ -219,13 +219,13 @@ mod tests {
         let endorsed = EndorsedTransaction {
             proposal: TransactionProposal {
                 tx: sample_tx("tx-test-2"),
-                creator_did: "did:example:alice".to_string(),
+                creator_did: "did:goya:alice".to_string(),
                 creator_signature: vec![0u8; 64],
                 signature_algorithm: Default::default(),
                 rwset: sample_rwset(),
             },
             endorsements: vec![Endorsement {
-                signer_did: "did:example:org1".to_string(),
+                signer_did: "did:goya:org1".to_string(),
                 org_id: "Org1".to_string(),
                 signature: vec![0u8; 64],
                 signature_algorithm: Default::default(),

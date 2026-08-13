@@ -2488,8 +2488,8 @@ mod tests {
             id: id.to_string(),
             block_height: 1,
             timestamp: 1_000,
-            input_did: "did:bc:input".to_string(),
-            output_recipient: "did:bc:output".to_string(),
+            input_did: "did:goya:input".to_string(),
+            output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
         }
@@ -2600,22 +2600,22 @@ mod tests {
     fn write_and_read_identity_roundtrip() {
         let (store, _dir) = tmp_store();
         let identity = IdentityRecord {
-            did: "did:bc:123".to_string(),
+            did: "did:goya:123".to_string(),
             public_key: String::new(),
             created_at: 1_000,
             updated_at: 2_000,
             status: "active".to_string(),
         };
         store.write_identity(&identity).unwrap();
-        let loaded = store.read_identity("did:bc:123").unwrap();
-        assert_eq!(loaded.did, "did:bc:123");
+        let loaded = store.read_identity("did:goya:123").unwrap();
+        assert_eq!(loaded.did, "did:goya:123");
         assert_eq!(loaded.status, "active");
     }
 
     #[test]
     fn read_identity_not_found_returns_identity_error() {
         let (store, _dir) = tmp_store();
-        let err = store.read_identity("did:bc:ghost").unwrap_err();
+        let err = store.read_identity("did:goya:ghost").unwrap_err();
         assert!(matches!(err, StorageError::IdentityNotFound(_)));
     }
 
@@ -2626,8 +2626,8 @@ mod tests {
         let (store, _dir) = tmp_store();
         let cred = Credential {
             id: "cred-1".to_string(),
-            issuer_did: "did:bc:issuer".to_string(),
-            subject_did: "did:bc:subject".to_string(),
+            issuer_did: "did:goya:issuer".to_string(),
+            subject_did: "did:goya:subject".to_string(),
             cred_type: "eid".to_string(),
             issued_at: 1_000,
             expires_at: 2_000,
@@ -2686,8 +2686,8 @@ mod tests {
             id: id.to_string(),
             block_height: height,
             timestamp: 1_000,
-            input_did: "did:bc:in".to_string(),
-            output_recipient: "did:bc:out".to_string(),
+            input_did: "did:goya:in".to_string(),
+            output_recipient: "did:goya:out".to_string(),
             amount: 1,
             state: "confirmed".to_string(),
         }
@@ -2752,7 +2752,7 @@ mod tests {
     fn cred_for_subject(id: &str, subject_did: &str) -> Credential {
         Credential {
             id: id.to_string(),
-            issuer_did: "did:bc:issuer".to_string(),
+            issuer_did: "did:goya:issuer".to_string(),
             subject_did: subject_did.to_string(),
             cred_type: "eid".to_string(),
             issued_at: 1_000,
@@ -2764,8 +2764,8 @@ mod tests {
 
     #[test]
     fn cred_subject_index_key_format_is_correct() {
-        let key = RocksDbBlockStore::cred_subject_index_key("did:bc:alice", "cred-1");
-        let prefix = RocksDbBlockStore::cred_subject_prefix("did:bc:alice");
+        let key = RocksDbBlockStore::cred_subject_index_key("did:goya:alice", "cred-1");
+        let prefix = RocksDbBlockStore::cred_subject_prefix("did:goya:alice");
         assert!(key.starts_with(&prefix));
         // cred_id follows the NUL separator
         assert_eq!(&key[prefix.len()..], b"cred-1");
@@ -2775,7 +2775,7 @@ mod tests {
     fn credentials_by_subject_did_returns_empty_for_unknown_subject() {
         let (store, _dir) = tmp_store();
         assert!(store
-            .credentials_by_subject_did("did:bc:ghost")
+            .credentials_by_subject_did("did:goya:ghost")
             .unwrap()
             .is_empty());
     }
@@ -2784,22 +2784,22 @@ mod tests {
     fn write_credential_is_queryable_by_subject_did() {
         let (store, _dir) = tmp_store();
         store
-            .write_credential(&cred_for_subject("cred-1", "did:bc:alice"))
+            .write_credential(&cred_for_subject("cred-1", "did:goya:alice"))
             .unwrap();
         store
-            .write_credential(&cred_for_subject("cred-2", "did:bc:alice"))
+            .write_credential(&cred_for_subject("cred-2", "did:goya:alice"))
             .unwrap();
         store
-            .write_credential(&cred_for_subject("cred-3", "did:bc:bob"))
+            .write_credential(&cred_for_subject("cred-3", "did:goya:bob"))
             .unwrap();
 
-        let alice = store.credentials_by_subject_did("did:bc:alice").unwrap();
+        let alice = store.credentials_by_subject_did("did:goya:alice").unwrap();
         let ids: Vec<&str> = alice.iter().map(|c| c.id.as_str()).collect();
         assert_eq!(ids.len(), 2);
         assert!(ids.contains(&"cred-1"));
         assert!(ids.contains(&"cred-2"));
 
-        let bob = store.credentials_by_subject_did("did:bc:bob").unwrap();
+        let bob = store.credentials_by_subject_did("did:goya:bob").unwrap();
         assert_eq!(bob.len(), 1);
         assert_eq!(bob[0].id, "cred-3");
     }
@@ -2807,24 +2807,24 @@ mod tests {
     #[test]
     fn cred_subject_index_does_not_cross_subject_boundaries() {
         let (store, _dir) = tmp_store();
-        // "did:bc:ali" is a prefix of "did:bc:alice" — confirm no bleed-over
+        // "did:goya:ali" is a prefix of "did:goya:alice" — confirm no bleed-over
         store
-            .write_credential(&cred_for_subject("cred-a", "did:bc:ali"))
+            .write_credential(&cred_for_subject("cred-a", "did:goya:ali"))
             .unwrap();
         store
-            .write_credential(&cred_for_subject("cred-b", "did:bc:alice"))
+            .write_credential(&cred_for_subject("cred-b", "did:goya:alice"))
             .unwrap();
 
         assert_eq!(
             store
-                .credentials_by_subject_did("did:bc:ali")
+                .credentials_by_subject_did("did:goya:ali")
                 .unwrap()
                 .len(),
             1
         );
         assert_eq!(
             store
-                .credentials_by_subject_did("did:bc:alice")
+                .credentials_by_subject_did("did:goya:alice")
                 .unwrap()
                 .len(),
             1
@@ -2837,7 +2837,7 @@ mod tests {
         Organization::new(
             id,
             format!("{id}MSP"),
-            vec![format!("did:bc:{id}:admin")],
+            vec![format!("did:goya:{id}:admin")],
             vec![],
             vec![],
         )

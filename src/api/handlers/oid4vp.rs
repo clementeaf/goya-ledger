@@ -11,6 +11,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::RwLock;
 
+fn base64url_decode(s: &str) -> Result<Vec<u8>, String> {
+    base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, s)
+        .map_err(|e| e.to_string())
+}
+
 fn err_dto(code: &str, msg: &str) -> ErrorDto {
     ErrorDto {
         code: code.to_string(),
@@ -108,15 +113,18 @@ pub struct VerificationResult {
     pub nonce_verified: bool,
 }
 
-/// In-memory request store for cross-device flow.
+/// In-memory request store for cross-device flow + issuer key registry.
 pub struct VpRequestStore {
     requests: RwLock<HashMap<String, AuthorizationRequest>>,
+    /// Issuer DID → hex-encoded public key. Used for VP signature verification.
+    issuer_keys: RwLock<HashMap<String, String>>,
 }
 
 impl VpRequestStore {
     pub fn new() -> Self {
         Self {
             requests: RwLock::new(HashMap::new()),
+            issuer_keys: RwLock::new(HashMap::new()),
         }
     }
 
@@ -130,12 +138,111 @@ impl VpRequestStore {
     pub fn get(&self, id: &str) -> Option<AuthorizationRequest> {
         self.requests.read().unwrap().get(id).cloned()
     }
+
+    /// Register an issuer's public key for VP verification.
+    pub fn register_issuer_key(&self, did: &str, pubkey_hex: &str) {
+        self.issuer_keys
+            .write()
+            .unwrap()
+            .insert(did.to_string(), pubkey_hex.to_string());
+    }
+
+    /// Look up an issuer's public key by DID.
+    pub fn resolve_issuer_key(&self, did: &str) -> Option<String> {
+        self.issuer_keys.read().unwrap().get(did).cloned()
+    }
 }
 
 impl Default for VpRequestStore {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// ── Presentation Definition Matching ─────────────────────────────────────
+
+/// Match a vp_token against a presentation_definition's input_descriptors.
+/// Checks: format compatibility, required field constraints satisfied.
+fn match_presentation_definition(
+    definition: &PresentationDefinition,
+    submission: &PresentationSubmission,
+    disclosed_claims: &serde_json::Value,
+    format: &str,
+) -> Result<(), String> {
+    if submission.definition_id != definition.id {
+        return Err(format!(
+            "definition_id mismatch: expected {}, got {}",
+            definition.id, submission.definition_id
+        ));
+    }
+
+    for descriptor in &definition.input_descriptors {
+        // Find matching entry in descriptor_map
+        let map_entry = submission
+            .descriptor_map
+            .iter()
+            .find(|e| e.id == descriptor.id);
+        let map_entry = match map_entry {
+            Some(e) => e,
+            None => {
+                return Err(format!(
+                    "missing descriptor_map entry for '{}'",
+                    descriptor.id
+                ));
+            }
+        };
+
+        // Check format compatibility
+        let format_ok = match format {
+            "vc+sd-jwt" => map_entry.format == "vc+sd-jwt" && descriptor.format.sd_jwt.is_some(),
+            "mso_mdoc" => map_entry.format == "mso_mdoc" && descriptor.format.mso_mdoc.is_some(),
+            _ => false,
+        };
+        if !format_ok {
+            return Err(format!(
+                "format mismatch for '{}': submitted {}, accepted {:?}",
+                descriptor.id, map_entry.format, format
+            ));
+        }
+
+        // Check field constraints
+        if let Some(constraints) = &descriptor.constraints {
+            for field in &constraints.fields {
+                if field.optional {
+                    continue;
+                }
+                // Check if any path matches a key in disclosed claims
+                let found = field.path.iter().any(|p| {
+                    // Simplified JSONPath: $.claim_name → check "claim_name" in claims
+                    let key = p.strip_prefix("$.").unwrap_or(p);
+                    claim_exists(disclosed_claims, key)
+                });
+                if !found {
+                    return Err(format!("required field not disclosed: {:?}", field.path));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Check if a claim key exists in a JSON value (flat or nested by namespace).
+fn claim_exists(claims: &serde_json::Value, key: &str) -> bool {
+    if let Some(obj) = claims.as_object() {
+        if obj.contains_key(key) {
+            return true;
+        }
+        // Check nested namespaces (mdoc style)
+        for v in obj.values() {
+            if let Some(inner) = v.as_object() {
+                if inner.contains_key(key) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 // ── Endpoints ─────────────────────────────────────────────────────────────
@@ -229,24 +336,43 @@ pub async fn submit_response(
 
     // Detect format from the vp_token
     let result = if body.vp_token.contains('~') {
-        verify_sd_jwt_presentation(&body.vp_token, &request.nonce)
+        verify_sd_jwt_presentation(&body.vp_token, &request.nonce, &store)
     } else {
-        // Try mdoc JSON
         verify_mdoc_presentation(&body.vp_token)
     };
 
-    match result {
-        Ok(vr) => Ok(HttpResponse::Ok().json(ApiResponse::success(vr, trace))),
-        Err(e) => Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto("VERIFICATION_FAILED", &e),
+    let vr = match result {
+        Ok(vr) => vr,
+        Err(e) => {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("VERIFICATION_FAILED", &e),
+                400,
+            )));
+        }
+    };
+
+    // Match against presentation_definition
+    let format = &vr.format;
+    if let Err(e) = match_presentation_definition(
+        &request.presentation_definition,
+        &body.presentation_submission,
+        &vr.claims,
+        format,
+    ) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("DEFINITION_MISMATCH", &e),
             400,
-        ))),
+        )));
     }
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(vr, trace)))
 }
 
-fn verify_sd_jwt_presentation(vp_token: &str, _nonce: &str) -> Result<VerificationResult, String> {
-    // ponytail: full verification requires the issuer's public key.
-    // For now, parse the JWT structure and validate format.
+fn verify_sd_jwt_presentation(
+    vp_token: &str,
+    _nonce: &str,
+    store: &VpRequestStore,
+) -> Result<VerificationResult, String> {
     let parts: Vec<&str> = vp_token.split('~').collect();
     if parts.is_empty() {
         return Err("empty vp_token".into());
@@ -257,25 +383,44 @@ fn verify_sd_jwt_presentation(vp_token: &str, _nonce: &str) -> Result<Verificati
         return Err("invalid JWT structure".into());
     }
 
-    let payload_bytes = base64::Engine::decode(
-        &base64::engine::general_purpose::URL_SAFE_NO_PAD,
-        jwt_parts[1],
-    )
-    .map_err(|e| e.to_string())?;
+    let payload_bytes = base64url_decode(jwt_parts[1])?;
     let payload: serde_json::Value =
         serde_json::from_slice(&payload_bytes).map_err(|e| e.to_string())?;
 
-    let disclosure_count = parts[1..].iter().filter(|p| !p.is_empty()).count();
+    let iss = payload["iss"].as_str().unwrap_or("");
+
+    // Attempt issuer pubkey lookup for signature verification
+    let sig_verified = if let Some(pubkey_hex) = store.resolve_issuer_key(iss) {
+        crate::identity::sd_jwt::verify_sd_jwt_vc(vp_token, &pubkey_hex).is_ok()
+    } else {
+        false
+    };
+
+    // Parse disclosed claims from disclosures
+    let mut disclosed = serde_json::Map::new();
+    for disclosure_b64 in parts[1..].iter().filter(|p| !p.is_empty()) {
+        if let Ok(bytes) = base64url_decode(disclosure_b64) {
+            if let Ok(arr) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                if let Some(arr) = arr.as_array() {
+                    if arr.len() >= 3 {
+                        if let Some(name) = arr[1].as_str() {
+                            disclosed.insert(name.to_string(), arr[2].clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Include JWT-level claims too
+    disclosed.insert("iss".to_string(), payload["iss"].clone());
+    disclosed.insert("sub".to_string(), payload["sub"].clone());
+    disclosed.insert("vct".to_string(), payload["vct"].clone());
 
     Ok(VerificationResult {
-        valid: true,
+        valid: sig_verified,
         format: "vc+sd-jwt".to_string(),
-        claims: serde_json::json!({
-            "iss": payload["iss"],
-            "sub": payload["sub"],
-            "vct": payload["vct"],
-            "disclosures_presented": disclosure_count,
-        }),
+        claims: serde_json::Value::Object(disclosed),
         nonce_verified: true,
     })
 }
@@ -305,6 +450,7 @@ fn verify_mdoc_presentation(vp_token: &str) -> Result<VerificationResult, String
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identity::signing::SigningProvider;
     use actix_web::{test, web, App};
 
     fn make_store() -> web::Data<VpRequestStore> {
@@ -320,7 +466,9 @@ mod tests {
                     sd_jwt: Some(FormatAlgs {
                         alg: vec!["EdDSA".to_string()],
                     }),
-                    mso_mdoc: None,
+                    mso_mdoc: Some(FormatAlgs {
+                        alg: vec!["EdDSA".to_string()],
+                    }),
                 },
                 constraints: Some(Constraints {
                     fields: vec![
@@ -395,10 +543,18 @@ mod tests {
 
     #[actix_web::test]
     async fn e2e_submit_sd_jwt_response() {
+        use crate::identity::sd_jwt::{issue_sd_jwt_vc, VcClaims};
+        use crate::identity::signing::SoftwareSigningProvider;
+
+        let provider = SoftwareSigningProvider::generate();
+        let iss_did = format!("did:goya:{}", &hex::encode(provider.public_key())[..16]);
+
         let store = make_store();
+        // Register issuer key for signature verification
+        store.register_issuer_key(&iss_did, &hex::encode(provider.public_key()));
         let app = vp_app!(store.clone());
 
-        // Create request first
+        // Create request
         let req = test::TestRequest::post()
             .uri("/api/v1/oid4vp/request")
             .set_json(serde_json::json!({
@@ -411,13 +567,10 @@ mod tests {
         let body: serde_json::Value = test::read_body_json(resp).await;
         let state = body["data"]["state"].as_str().unwrap().to_string();
 
-        // Issue a real SD-JWT for the response
-        use crate::identity::sd_jwt::{issue_sd_jwt_vc, VcClaims};
-        use crate::identity::signing::SoftwareSigningProvider;
-        let provider = SoftwareSigningProvider::generate();
+        // Issue SD-JWT with matching issuer DID
         let sd_jwt = issue_sd_jwt_vc(
             &VcClaims {
-                iss: "did:goya:issuer".into(),
+                iss: iss_did,
                 sub: "did:goya:holder".into(),
                 iat: 1_700_000_000,
                 exp: 1_731_536_000,
@@ -449,6 +602,7 @@ mod tests {
         let body: serde_json::Value = test::read_body_json(resp).await;
         assert_eq!(body["data"]["valid"], true);
         assert_eq!(body["data"]["format"], "vc+sd-jwt");
+        assert_eq!(body["data"]["claims"]["given_name"], "Juan");
     }
 
     #[actix_web::test]
@@ -470,6 +624,171 @@ mod tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 400);
+    }
+
+    #[actix_web::test]
+    async fn e2e_sd_jwt_without_issuer_key_returns_valid_false() {
+        use crate::identity::sd_jwt::{issue_sd_jwt_vc, VcClaims};
+        use crate::identity::signing::SoftwareSigningProvider;
+
+        let provider = SoftwareSigningProvider::generate();
+        let store = make_store();
+        // No issuer key registered
+        let app = vp_app!(store.clone());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/request")
+            .set_json(serde_json::json!({
+                "client_id": "v.example.com",
+                "response_uri": "https://v.example.com/cb",
+                "presentation_definition": test_definition(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let state = body["data"]["state"].as_str().unwrap().to_string();
+
+        let sd_jwt = issue_sd_jwt_vc(
+            &VcClaims {
+                iss: "did:goya:unknown".into(),
+                sub: "did:goya:holder".into(),
+                iat: 1_700_000_000,
+                exp: 1_731_536_000,
+                vct: "IdentityCredential".into(),
+                claims: vec![("given_name".into(), serde_json::json!("Ana"))],
+            },
+            &provider,
+        )
+        .unwrap();
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/response")
+            .set_json(serde_json::json!({
+                "vp_token": sd_jwt.compact,
+                "state": state,
+                "presentation_submission": {
+                    "id": "s1",
+                    "definition_id": "pid-request",
+                    "descriptor_map": [{"id":"identity","format":"vc+sd-jwt","path":"$"}]
+                }
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["valid"], false); // no issuer key → unverified
+        assert_eq!(body["data"]["format"], "vc+sd-jwt");
+    }
+
+    #[actix_web::test]
+    async fn e2e_definition_mismatch_rejects() {
+        use crate::identity::sd_jwt::{issue_sd_jwt_vc, VcClaims};
+        use crate::identity::signing::SoftwareSigningProvider;
+
+        let provider = SoftwareSigningProvider::generate();
+        let store = make_store();
+        let app = vp_app!(store.clone());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/request")
+            .set_json(serde_json::json!({
+                "client_id": "v.example.com",
+                "response_uri": "https://v.example.com/cb",
+                "presentation_definition": test_definition(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let state = body["data"]["state"].as_str().unwrap().to_string();
+
+        // SD-JWT WITHOUT given_name (required by definition)
+        let sd_jwt = issue_sd_jwt_vc(
+            &VcClaims {
+                iss: "did:goya:issuer2".into(),
+                sub: "did:goya:holder".into(),
+                iat: 1_700_000_000,
+                exp: 1_731_536_000,
+                vct: "IdentityCredential".into(),
+                claims: vec![("age_over_18".into(), serde_json::json!(true))],
+            },
+            &provider,
+        )
+        .unwrap();
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/response")
+            .set_json(serde_json::json!({
+                "vp_token": sd_jwt.compact,
+                "state": state,
+                "presentation_submission": {
+                    "id": "s1",
+                    "definition_id": "pid-request",
+                    "descriptor_map": [{"id":"identity","format":"vc+sd-jwt","path":"$"}]
+                }
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400); // missing required given_name
+    }
+
+    #[actix_web::test]
+    async fn match_definition_unit_valid() {
+        let def = test_definition();
+        let sub = PresentationSubmission {
+            id: "s1".into(),
+            definition_id: "pid-request".into(),
+            descriptor_map: vec![DescriptorMapEntry {
+                id: "identity".into(),
+                format: "vc+sd-jwt".into(),
+                path: "$".into(),
+            }],
+        };
+        let claims = serde_json::json!({"given_name": "Juan", "iss": "x", "sub": "y", "vct": "z"});
+        assert!(match_presentation_definition(&def, &sub, &claims, "vc+sd-jwt").is_ok());
+    }
+
+    #[actix_web::test]
+    async fn match_definition_unit_missing_field() {
+        let def = test_definition();
+        let sub = PresentationSubmission {
+            id: "s1".into(),
+            definition_id: "pid-request".into(),
+            descriptor_map: vec![DescriptorMapEntry {
+                id: "identity".into(),
+                format: "vc+sd-jwt".into(),
+                path: "$".into(),
+            }],
+        };
+        let claims = serde_json::json!({"iss": "x", "sub": "y"}); // no given_name
+        assert!(match_presentation_definition(&def, &sub, &claims, "vc+sd-jwt").is_err());
+    }
+
+    #[actix_web::test]
+    async fn match_definition_unit_wrong_format() {
+        let mut def = test_definition();
+        def.input_descriptors[0].format.mso_mdoc = None;
+        let sub = PresentationSubmission {
+            id: "s1".into(),
+            definition_id: "pid-request".into(),
+            descriptor_map: vec![DescriptorMapEntry {
+                id: "identity".into(),
+                format: "mso_mdoc".into(),
+                path: "$".into(),
+            }],
+        };
+        let claims = serde_json::json!({"given_name": "Juan"});
+        assert!(match_presentation_definition(&def, &sub, &claims, "mso_mdoc").is_err());
+    }
+
+    #[actix_web::test]
+    async fn issuer_key_registry_roundtrip() {
+        let store = VpRequestStore::new();
+        assert!(store.resolve_issuer_key("did:goya:abc").is_none());
+        store.register_issuer_key("did:goya:abc", "deadbeef");
+        assert_eq!(
+            store.resolve_issuer_key("did:goya:abc"),
+            Some("deadbeef".to_string())
+        );
     }
 
     #[actix_web::test]

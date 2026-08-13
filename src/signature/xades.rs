@@ -6,7 +6,7 @@
 //! compatible) since we control generation.
 
 use crate::crypto::hasher::{hash_with, HashAlgorithm};
-use crate::identity::signing::SigningAlgorithm;
+use crate::identity::signing::{SigningAlgorithm, SigningProvider};
 use crate::signature::{SignatureLevel, SignedEnvelope};
 
 /// XAdES-BES XML envelope wrapping a `SignedEnvelope`.
@@ -101,6 +101,124 @@ pub fn to_xades_t(envelope: &SignedEnvelope, tsa_token_b64: &str) -> XadesEnvelo
         xml,
         signature_id: bes.signature_id,
     }
+}
+
+/// Build an XAdES-BES envelope where `SignatureValue` is computed over the
+/// canonicalized `<ds:SignedInfo>` element (W3C XML Signature §3.1.2).
+///
+/// This is the standards-compliant path: the provider re-signs the actual
+/// SignedInfo XML, not the original application-level payload.
+pub fn to_xades_bes_signed(
+    envelope: &SignedEnvelope,
+    provider: &dyn SigningProvider,
+) -> Result<XadesEnvelope, String> {
+    let sig_id = format!("goya-sig-{}", &envelope.content_hash[..16]);
+    let sp_id = format!("goya-sp-{}", &envelope.content_hash[..16]);
+    let signing_time = timestamp_to_iso8601(envelope.signed_at);
+    let algo_uri = algorithm_uri(envelope.signature_algorithm);
+    let digest_algo_uri = "http://www.w3.org/2001/04/xmlenc#sha256";
+    let pubkey_b64 = hex_to_base64(&envelope.public_key);
+    let level_str = level_to_claimed_role(envelope.level);
+
+    let cert_digest = {
+        let pk_bytes = hex::decode(&envelope.public_key).unwrap_or_default();
+        let digest = hash_with(HashAlgorithm::Sha256, &pk_bytes);
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, digest)
+    };
+
+    let signed_props_xml = build_signed_properties(
+        &sp_id,
+        &signing_time,
+        digest_algo_uri,
+        &cert_digest,
+        &envelope.signer,
+        level_str,
+    );
+
+    let signed_props_digest = {
+        let digest = hash_with(HashAlgorithm::Sha256, signed_props_xml.as_bytes());
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, digest)
+    };
+
+    let doc_digest_b64 = hex_to_base64(&envelope.content_hash);
+
+    let signed_info = build_signed_info(
+        algo_uri,
+        digest_algo_uri,
+        &doc_digest_b64,
+        &signed_props_digest,
+        &sp_id,
+    );
+
+    // Sign the SignedInfo XML (W3C XML Signature §3.1.2)
+    let sig_bytes = provider
+        .sign(signed_info.as_bytes())
+        .map_err(|e| e.to_string())?;
+    let sig_value_b64 =
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &sig_bytes);
+
+    let xml = format!(
+        r##"<?xml version="1.0" encoding="UTF-8"?>
+<ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" Id="{sig_id}">
+{signed_info}
+  <ds:SignatureValue>{sig_value_b64}</ds:SignatureValue>
+  <ds:KeyInfo>
+    <ds:KeyValue>
+      <ds:PublicKey Algorithm="{algo_uri}">{pubkey_b64}</ds:PublicKey>
+    </ds:KeyValue>
+  </ds:KeyInfo>
+  <ds:Object>
+    <xades:QualifyingProperties Target="#{sig_id}">
+{signed_props_xml}
+    </xades:QualifyingProperties>
+  </ds:Object>
+</ds:Signature>"##
+    );
+
+    Ok(XadesEnvelope {
+        xml,
+        signature_id: sig_id,
+    })
+}
+
+/// Verify an XAdES envelope's signature over its SignedInfo element.
+///
+/// Extracts `<ds:SignedInfo>...</ds:SignedInfo>`, then verifies the
+/// `SignatureValue` against that XML using the embedded public key.
+pub fn verify_xades_signature(xml: &str) -> Result<bool, String> {
+    let fields = parse_xades_fields(xml).ok_or("failed to parse XAdES fields")?;
+
+    // Extract the raw SignedInfo element including leading whitespace,
+    // matching exactly what build_signed_info() produces and what was signed.
+    let si_marker = "<ds:SignedInfo>";
+    let si_pos = xml.find(si_marker).ok_or("missing <ds:SignedInfo>")?;
+    // Include leading whitespace on the same line (the indent from build_signed_info)
+    let si_start = xml[..si_pos].rfind('\n').map(|p| p + 1).unwrap_or(si_pos);
+    let si_end_marker = "</ds:SignedInfo>";
+    let si_end = xml.find(si_end_marker).ok_or("missing </ds:SignedInfo>")? + si_end_marker.len();
+    let signed_info_xml = &xml[si_start..si_end];
+
+    // Decode signature and public key from base64
+    let sig_bytes = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        fields.signature_value.trim(),
+    )
+    .map_err(|e| format!("bad SignatureValue base64: {e}"))?;
+    let sig_hex = hex::encode(&sig_bytes);
+
+    let pk_bytes = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        fields.public_key.trim(),
+    )
+    .map_err(|e| format!("bad PublicKey base64: {e}"))?;
+    let pk_hex = hex::encode(&pk_bytes);
+
+    Ok(crate::signature::verify_signature(
+        fields.algorithm,
+        &pk_hex,
+        signed_info_xml.as_bytes(),
+        &sig_hex,
+    ))
 }
 
 /// Extract and verify an XAdES envelope's core fields.
@@ -522,5 +640,89 @@ mod tests {
     fn hex_to_base64_invalid_hex_returns_empty() {
         let b64 = hex_to_base64("zzzz");
         assert!(b64.is_empty());
+    }
+
+    fn make_envelope_for(provider: &dyn SigningProvider) -> SignedEnvelope {
+        let content_hash = hex::encode(hash_with(HashAlgorithm::Sha256, b"test document content"));
+        let payload = format!("fes:did:goya:test:{content_hash}");
+        let signature = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+        SignedEnvelope {
+            level: SignatureLevel::Simple,
+            signer: "did:goya:test".to_string(),
+            content_hash,
+            signature,
+            public_key: hex::encode(provider.public_key()),
+            signature_algorithm: provider.algorithm(),
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+        }
+    }
+
+    #[test]
+    fn signed_xades_signs_signed_info() {
+        let provider = SoftwareSigningProvider::generate();
+        let env = make_envelope_for(&provider);
+        let xades = to_xades_bes_signed(&env, &provider).unwrap();
+        assert!(xades.xml.contains("<ds:SignedInfo>"));
+        assert!(xades.xml.contains("<ds:SignatureValue>"));
+    }
+
+    #[test]
+    fn signed_xades_verifies() {
+        let provider = SoftwareSigningProvider::generate();
+        let env = make_envelope_for(&provider);
+        let xades = to_xades_bes_signed(&env, &provider).unwrap();
+        assert!(verify_xades_signature(&xades.xml).unwrap());
+    }
+
+    #[test]
+    fn signed_xades_tampered_fails() {
+        let provider = SoftwareSigningProvider::generate();
+        let env = make_envelope_for(&provider);
+        let xades = to_xades_bes_signed(&env, &provider).unwrap();
+        let tampered = xades
+            .xml
+            .replace("<ds:DigestValue>", "<ds:DigestValue>TAMPERED");
+        assert!(!verify_xades_signature(&tampered).unwrap());
+    }
+
+    #[test]
+    fn signed_xades_wrong_key_fails() {
+        let provider = SoftwareSigningProvider::generate();
+        let other = SoftwareSigningProvider::generate();
+        let env = make_envelope_for(&provider);
+        let xades = to_xades_bes_signed(&env, &provider).unwrap();
+        let pk_b64_orig = hex_to_base64(&env.public_key);
+        let pk_b64_other = hex_to_base64(&hex::encode(other.public_key()));
+        let swapped = xades.xml.replace(&pk_b64_orig, &pk_b64_other);
+        assert!(!verify_xades_signature(&swapped).unwrap());
+    }
+
+    #[test]
+    fn signed_xades_mldsa65() {
+        use crate::identity::signing::MlDsaSigningProvider;
+        let provider = MlDsaSigningProvider::generate();
+        let env = make_envelope_for(&provider);
+        let xades = to_xades_bes_signed(&env, &provider).unwrap();
+        assert!(verify_xades_signature(&xades.xml).unwrap());
+    }
+
+    #[test]
+    fn signed_xades_rsa() {
+        use crate::identity::signing::RsaSigningProvider;
+        let provider = RsaSigningProvider::generate();
+        let env = make_envelope_for(&provider);
+        let xades = to_xades_bes_signed(&env, &provider).unwrap();
+        assert!(verify_xades_signature(&xades.xml).unwrap());
+    }
+
+    #[test]
+    fn signed_xades_parse_roundtrip() {
+        let provider = SoftwareSigningProvider::generate();
+        let env = make_envelope_for(&provider);
+        let xades = to_xades_bes_signed(&env, &provider).unwrap();
+        let fields = parse_xades_fields(&xades.xml).unwrap();
+        assert_eq!(fields.algorithm, SigningAlgorithm::Ed25519);
+        assert_eq!(fields.signing_time, "2023-11-14T22:13:20Z");
     }
 }

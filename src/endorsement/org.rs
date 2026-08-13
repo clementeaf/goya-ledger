@@ -47,8 +47,8 @@ mod tests {
         let org = Organization::new(
             "org1",
             "Org1MSP",
-            vec!["did:bc:admin1".to_string()],
-            vec!["did:bc:member1".to_string()],
+            vec!["did:goya:admin1".to_string()],
+            vec!["did:goya:member1".to_string()],
             vec![[0u8; 32]],
         )
         .unwrap();
@@ -66,7 +66,7 @@ mod tests {
             "org2",
             "Org2MSP",
             vec![],
-            vec!["did:bc:member1".to_string()],
+            vec!["did:goya:member1".to_string()],
             vec![],
         );
         assert!(result.is_none());

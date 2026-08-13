@@ -1,6 +1,7 @@
 pub mod crl_rfc5280;
 pub mod identity;
 pub mod ocsp;
+pub mod ocsp_der;
 pub mod ou;
 
 use crate::storage::errors::StorageResult;

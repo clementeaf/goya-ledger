@@ -1169,7 +1169,7 @@ mod tests {
     fn block_serde_roundtrip_with_endorsements() {
         use crate::endorsement::types::Endorsement;
         let e = Endorsement {
-            signer_did: "did:bc:alice".to_string(),
+            signer_did: "did:goya:alice".to_string(),
             org_id: "org1".to_string(),
             signature: vec![1u8; 64],
             signature_algorithm: Default::default(),

@@ -27,7 +27,7 @@ pub fn did_matches_pubkey(did: &str, pubkey_hex: &str) -> bool {
 /// DID representation
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DidDocument {
-    /// Decentralized Identifier (format: did:bc:abc123...)
+    /// Decentralized Identifier (format: did:goya:abc123...)
     pub did: String,
     /// Unix timestamp when DID was created
     pub created_at: u64,
@@ -90,9 +90,9 @@ impl DidDocument {
     }
 
     /// Create DID string from public key hash
-    /// Format: did:bc:<hex_pubkey_hash>
+    /// Format: did:goya:<hex_pubkey_hash>
     pub fn create_did(pubkey_hash: &str) -> String {
-        format!("did:bc:{pubkey_hash}")
+        format!("did:goya:{pubkey_hash}")
     }
 
     #[allow(dead_code)]
@@ -149,7 +149,7 @@ impl DidDocument {
     #[allow(dead_code)]
     /// Parse a DID string and validate format
     pub fn parse(did_str: &str) -> Result<(), String> {
-        if !did_str.starts_with("did:bc:") {
+        if !did_str.starts_with("did:goya:") {
             return Err("Invalid DID prefix".to_string());
         }
 
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn test_did_creation() {
         let did = DidDocument::new("abc123def456".to_string(), 1000);
-        assert_eq!(did.did, "did:bc:abc123def456");
+        assert_eq!(did.did, "did:goya:abc123def456");
         assert_eq!(did.created_at, 1000);
         assert!(did.is_active());
     }
@@ -186,15 +186,15 @@ mod tests {
     #[test]
     fn test_did_format_creation() {
         let did = DidDocument::create_did("test123");
-        assert_eq!(did, "did:bc:test123");
+        assert_eq!(did, "did:goya:test123");
     }
 
     #[test]
     fn test_did_from_pubkey() {
         let pubkey = [1u8; 32];
         let did = DidDocument::from_public_key(&pubkey);
-        assert!(did.starts_with("did:bc:"));
-        assert!(did.len() > 7); // "did:bc:" + hash
+        assert!(did.starts_with("did:goya:"));
+        assert!(did.len() > 7); // "did:goya:" + hash
     }
 
     #[test]
@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn test_parse_valid_did() {
-        let result = DidDocument::parse("did:bc:abc123");
+        let result = DidDocument::parse("did:goya:abc123");
         assert!(result.is_ok());
     }
 
@@ -249,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_parse_empty_hash() {
-        let result = DidDocument::parse("did:bc:");
+        let result = DidDocument::parse("did:goya:");
         assert!(result.is_err());
     }
 

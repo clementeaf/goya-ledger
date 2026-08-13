@@ -3,6 +3,7 @@
 use crate::api::errors::{ApiResponse, ApiResult, ErrorDto};
 use crate::app_state::AppState;
 use crate::msp::ocsp::{OcspRequest, OcspResponder};
+use crate::msp::ocsp_der::encode_ocsp_response_der;
 use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
 
@@ -105,6 +106,55 @@ pub async fn ocsp_status(
     Ok(HttpResponse::Ok().json(ApiResponse::success(resp, trace)))
 }
 
+/// Query certificate status and return DER-encoded OCSPResponse (RFC 6960).
+#[post("/ocsp/query/der")]
+pub async fn ocsp_query_der(
+    state: web::Data<AppState>,
+    body: web::Json<OcspRequest>,
+) -> ApiResult<HttpResponse> {
+    let ocsp = match get_ocsp(&state) {
+        Ok(o) => o,
+        Err(resp) => return Ok(resp),
+    };
+    let crl_store = match state.crl_store.as_ref() {
+        Some(s) => s,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("CRL_UNAVAILABLE", "CRL store is not configured"),
+                    503,
+                )),
+            );
+        }
+    };
+
+    let resp = ocsp.query(&body, crl_store.as_ref());
+
+    let signer = match state.signing_provider.as_ref() {
+        Some(s) => s,
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto("SIGNER_UNAVAILABLE", "Signing provider is not configured"),
+                    503,
+                )),
+            );
+        }
+    };
+
+    match encode_ocsp_response_der(&resp, signer.as_ref()) {
+        Ok(der) => Ok(HttpResponse::Ok()
+            .content_type("application/ocsp-response")
+            .body(der)),
+        Err(e) => Ok(
+            HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
+                err_dto("OCSP_DER_ERROR", &e.to_string()),
+                500,
+            )),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,9 +167,10 @@ mod tests {
         let mut state = AppState::test_default();
         let signer = Arc::new(SoftwareSigningProvider::generate());
         state.ocsp_responder = Some(Arc::new(OcspResponder::new(
-            signer,
+            signer.clone(),
             "did:goya:ocsp-test".into(),
         )));
+        state.signing_provider = Some(signer);
         let crl = Arc::new(MemoryCrlStore::new());
         let serials: Vec<String> = revoked_serials.iter().map(|s| s.to_string()).collect();
         crl.write_crl("msp1", &serials).unwrap();
@@ -224,5 +275,35 @@ mod tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 400);
+    }
+
+    #[actix_web::test]
+    async fn e2e_query_der_returns_binary() {
+        let state = make_ocsp_state(&[]);
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(ocsp_query_der)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/ocsp/query/der")
+            .set_json(serde_json::json!({
+                "msp_id": "msp1",
+                "serial": hex::encode([1u8; 8]),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(ct.contains("application/ocsp-response"));
+        let body = test::read_body(resp).await;
+        assert_eq!(body[0], 0x30, "DER must start with SEQUENCE tag");
     }
 }

@@ -23,8 +23,8 @@ mod tests {
             id: "tx-1".to_string(),
             block_height: 0,
             timestamp: 0,
-            input_did: "did:example:alice".to_string(),
-            output_recipient: "did:example:bob".to_string(),
+            input_did: "did:goya:alice".to_string(),
+            output_recipient: "did:goya:bob".to_string(),
             amount: 0,
             state: "pending".to_string(),
         }
@@ -45,7 +45,7 @@ mod tests {
 
     fn sample_endorsement(org: &str) -> Endorsement {
         Endorsement {
-            signer_did: format!("did:example:{org}"),
+            signer_did: format!("did:goya:{org}"),
             org_id: org.to_string(),
             signature: vec![0u8; 64],
             signature_algorithm: Default::default(),
@@ -58,7 +58,7 @@ mod tests {
     fn creates_endorsed_transaction_with_two_endorsements() {
         let proposal = TransactionProposal {
             tx: sample_tx(),
-            creator_did: "did:example:alice".to_string(),
+            creator_did: "did:goya:alice".to_string(),
             creator_signature: vec![0u8; 64],
             signature_algorithm: Default::default(),
             rwset: sample_rwset(),

@@ -61,14 +61,14 @@ mod tests {
     #[test]
     fn create_endorsement() {
         let e = Endorsement {
-            signer_did: "did:bc:alice".to_string(),
+            signer_did: "did:goya:alice".to_string(),
             org_id: "org1".to_string(),
             signature: vec![1u8; 64],
             signature_algorithm: Default::default(),
             payload_hash: [2u8; 32],
             timestamp: 1_000_000,
         };
-        assert_eq!(e.signer_did, "did:bc:alice");
+        assert_eq!(e.signer_did, "did:goya:alice");
         assert_eq!(e.org_id, "org1");
     }
 
@@ -76,7 +76,7 @@ mod tests {
     fn endorsement_supports_variable_length_signature() {
         // Ed25519-sized
         let e1 = Endorsement {
-            signer_did: "did:bc:bob".to_string(),
+            signer_did: "did:goya:bob".to_string(),
             org_id: "org2".to_string(),
             signature: vec![0u8; 64],
             signature_algorithm: Default::default(),
@@ -87,7 +87,7 @@ mod tests {
 
         // ML-DSA-65-sized
         let e2 = Endorsement {
-            signer_did: "did:bc:carol".to_string(),
+            signer_did: "did:goya:carol".to_string(),
             org_id: "org3".to_string(),
             signature: vec![0u8; 3309],
             signature_algorithm: Default::default(),
@@ -100,7 +100,7 @@ mod tests {
     #[test]
     fn serde_roundtrip_variable_signature() {
         let e = Endorsement {
-            signer_did: "did:bc:test".to_string(),
+            signer_did: "did:goya:test".to_string(),
             org_id: "org1".to_string(),
             signature: vec![42u8; 3309],
             signature_algorithm: Default::default(),

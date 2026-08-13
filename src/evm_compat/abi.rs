@@ -261,21 +261,21 @@ mod tests {
 
     #[test]
     fn did_to_address_deterministic() {
-        let a1 = did_to_address("did:bc:alice");
-        let a2 = did_to_address("did:bc:alice");
+        let a1 = did_to_address("did:goya:alice");
+        let a2 = did_to_address("did:goya:alice");
         assert_eq!(a1, a2);
     }
 
     #[test]
     fn did_to_address_differs() {
-        let a1 = did_to_address("did:bc:alice");
-        let a2 = did_to_address("did:bc:bob");
+        let a1 = did_to_address("did:goya:alice");
+        let a2 = did_to_address("did:goya:bob");
         assert_ne!(a1, a2);
     }
 
     #[test]
     fn did_to_address_20_bytes() {
-        let addr = did_to_address("did:bc:test");
+        let addr = did_to_address("did:goya:test");
         assert_eq!(addr.len(), 20);
     }
 }

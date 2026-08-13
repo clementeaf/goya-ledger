@@ -352,6 +352,43 @@ fn make_intermediate_params() -> Result<CertificateParams, PkiError> {
     Ok(params)
 }
 
+/// Build raw DER content for QCStatements (EN 319 412-5).
+/// Returns the SEQUENCE OF QCStatement bytes without the extension wrapper.
+pub fn build_qc_statements_der(profile: crate::pki_policy::CertProfileType) -> Vec<u8> {
+    let compliance_oid = parse_oid_str(crate::pki_policy::QC_COMPLIANCE_OID);
+    let compliance_oid_der = encode_oid_der(&compliance_oid);
+    let qc_compliance = encode_sequence(&[&compliance_oid_der]);
+
+    let type_oid = parse_oid_str(crate::pki_policy::QC_TYPE_OID);
+    let type_oid_der = encode_oid_der(&type_oid);
+
+    let qc_type_value_oid = match profile {
+        crate::pki_policy::CertProfileType::NaturalPerson => crate::pki_policy::QCT_ESIGN_OID,
+        crate::pki_policy::CertProfileType::LegalPerson => crate::pki_policy::QCT_ESEAL_OID,
+        crate::pki_policy::CertProfileType::WebAuthentication => crate::pki_policy::QCT_WEB_OID,
+    };
+    let qc_type_value_der = encode_oid_der(&parse_oid_str(qc_type_value_oid));
+    let qc_type_info = encode_sequence(&[&qc_type_value_der]);
+    let qc_type = encode_sequence(&[&type_oid_der, &qc_type_info]);
+
+    encode_sequence(&[&qc_compliance, &qc_type])
+}
+
+/// Build a DER-encoded QCStatements extension (OID 1.3.6.1.5.5.7.1.3).
+///
+/// EN 319 412-5: contains QcCompliance + QcType statements.
+/// QCStatements ::= SEQUENCE OF QCStatement
+/// QCStatement  ::= SEQUENCE { statementId OID, statementInfo ANY OPTIONAL }
+pub fn qc_statements_extension(profile: crate::pki_policy::CertProfileType) -> CustomExtension {
+    let content = build_qc_statements_der(profile);
+    // id-pe-qcStatements 1.3.6.1.5.5.7.1.3
+    CustomExtension::from_oid_content(&[1, 3, 6, 1, 5, 5, 7, 1, 3], content)
+}
+
+fn parse_oid_str(oid: &str) -> Vec<u64> {
+    oid.split('.').filter_map(|s| s.parse().ok()).collect()
+}
+
 // ── sign_node_cert ─────────────────────────────────────────────────────────
 
 #[allow(dead_code)]
@@ -991,5 +1028,62 @@ mod tests {
         assert!(msp.is_suspended(&serial));
         msp.revoke(&serial);
         assert!(!msp.is_suspended(&serial));
+    }
+
+    #[test]
+    fn qc_statements_der_natural_person() {
+        let der = build_qc_statements_der(crate::pki_policy::CertProfileType::NaturalPerson);
+        assert!(!der.is_empty());
+        assert_eq!(der[0], 0x30, "must be SEQUENCE");
+        let outer_len = der[1] as usize;
+        assert_eq!(der.len(), 2 + outer_len, "length must match");
+    }
+
+    #[test]
+    fn qc_statements_der_legal_person() {
+        let der = build_qc_statements_der(crate::pki_policy::CertProfileType::LegalPerson);
+        assert!(!der.is_empty());
+        assert_eq!(der[0], 0x30);
+    }
+
+    #[test]
+    fn qc_statements_der_web_auth() {
+        let der = build_qc_statements_der(crate::pki_policy::CertProfileType::WebAuthentication);
+        assert!(!der.is_empty());
+        assert_eq!(der[0], 0x30);
+    }
+
+    #[test]
+    fn qc_statements_profiles_produce_different_der() {
+        let np = build_qc_statements_der(crate::pki_policy::CertProfileType::NaturalPerson);
+        let lp = build_qc_statements_der(crate::pki_policy::CertProfileType::LegalPerson);
+        let wa = build_qc_statements_der(crate::pki_policy::CertProfileType::WebAuthentication);
+        assert_ne!(np, lp);
+        assert_ne!(lp, wa);
+        assert_ne!(np, wa);
+    }
+
+    #[test]
+    fn qc_statements_extension_builds() {
+        let ext = qc_statements_extension(crate::pki_policy::CertProfileType::NaturalPerson);
+        // Verify it's a valid CustomExtension (doesn't panic)
+        drop(ext);
+    }
+
+    #[test]
+    fn qc_statements_cert_with_extension() {
+        let (ca, _cert_pem, _key_pem) = make_ca();
+        let mut params = CertificateParams::new(vec!["test-qc".to_string()]).unwrap();
+        params
+            .distinguished_name
+            .push(DnType::CommonName, "test-qc");
+        params.is_ca = IsCa::NoCa;
+        params.custom_extensions.push(qc_statements_extension(
+            crate::pki_policy::CertProfileType::NaturalPerson,
+        ));
+        let key_pair = KeyPair::generate().unwrap();
+        let cert = params.signed_by(&key_pair, ca.cert(), ca.key()).unwrap();
+        let pem = der_to_pem_cert(cert.der().as_ref());
+        assert!(pem.contains("BEGIN CERTIFICATE"));
     }
 }

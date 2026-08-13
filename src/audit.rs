@@ -287,6 +287,17 @@ pub trait AuditStore: Send + Sync {
         Ok((total, purgeable))
     }
 
+    /// Purge entries older than the retention policy's max_retention_secs.
+    /// Returns the number of entries removed.
+    fn purge_expired(
+        &self,
+        policy: &crate::audit_retention::AuditRetentionPolicy,
+        now_secs: u64,
+    ) -> StorageResult<usize> {
+        let _ = (policy, now_secs);
+        Ok(0)
+    }
+
     /// Export entries as JSON with hash chain metadata for independent verification.
     fn export_json(&self, from: Option<&str>, to: Option<&str>) -> StorageResult<String> {
         let entries = self.query(from, to, None, None, usize::MAX)?;
@@ -373,6 +384,64 @@ impl AuditStore for MemoryAuditStore {
             .collect();
         Ok(filtered)
     }
+
+    fn purge_expired(
+        &self,
+        policy: &crate::audit_retention::AuditRetentionPolicy,
+        now_secs: u64,
+    ) -> StorageResult<usize> {
+        if !policy.auto_purge_enabled || policy.max_retention_secs == 0 {
+            return Ok(0);
+        }
+        let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
+        let before = entries.len();
+        entries.retain(|e| {
+            let ts = chrono::DateTime::parse_from_rfc3339(&e.timestamp)
+                .map(|dt| dt.timestamp() as u64)
+                .unwrap_or(0);
+            !policy.is_purgeable(ts, now_secs)
+        });
+        Ok(before - entries.len())
+    }
+}
+
+/// Spawn a background task that periodically purges expired audit entries.
+///
+/// Runs every `interval` and purges entries older than the policy's
+/// `max_retention_secs`. Set `shutdown` to `true` to stop the task.
+pub fn spawn_auto_purge_task(
+    store: std::sync::Arc<dyn AuditStore>,
+    policy: crate::audit_retention::AuditRetentionPolicy,
+    interval: std::time::Duration,
+    shutdown: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> tokio::task::JoinHandle<u64> {
+    tokio::spawn(async move {
+        let mut total_purged = 0u64;
+        loop {
+            tokio::time::sleep(interval).await;
+            if shutdown.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
+            if !policy.auto_purge_enabled {
+                continue;
+            }
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            match store.purge_expired(&policy, now) {
+                Ok(n) if n > 0 => {
+                    total_purged += n as u64;
+                    tracing::info!(purged = n, total = total_purged, "audit auto-purge cycle");
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!(error = %e, "audit auto-purge failed");
+                }
+            }
+        }
+        total_purged
+    })
 }
 
 #[cfg(test)]
@@ -1057,5 +1126,99 @@ mod tests {
         let doc: serde_json::Value = serde_json::from_str(&json_str).unwrap();
         let entries: Vec<AuditEntry> = serde_json::from_value(doc["entries"].clone()).unwrap();
         assert!(verify_audit_chain(&entries).is_ok());
+    }
+
+    #[test]
+    fn purge_expired_removes_old_entries() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_entry("2020-01-01T00:00:00Z", "org1", "/old"))
+            .unwrap();
+        store
+            .append(&make_entry("2026-07-01T00:00:00Z", "org1", "/new"))
+            .unwrap();
+
+        let policy = crate::audit_retention::AuditRetentionPolicy {
+            min_retention_secs: 365 * 24 * 3600,
+            max_retention_secs: 2 * 365 * 24 * 3600,
+            auto_purge_enabled: true,
+        };
+        let now = chrono::DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .timestamp() as u64;
+
+        let purged = store.purge_expired(&policy, now).unwrap();
+        assert_eq!(purged, 1);
+        let remaining = store.query(None, None, None, None, 100).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert!(remaining[0].path.contains("/new"));
+    }
+
+    #[test]
+    fn purge_disabled_does_nothing() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_entry("2020-01-01T00:00:00Z", "org1", "/old"))
+            .unwrap();
+
+        let policy = crate::audit_retention::AuditRetentionPolicy {
+            min_retention_secs: 365 * 24 * 3600,
+            max_retention_secs: 2 * 365 * 24 * 3600,
+            auto_purge_enabled: false,
+        };
+        let now = chrono::DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .timestamp() as u64;
+
+        let purged = store.purge_expired(&policy, now).unwrap();
+        assert_eq!(purged, 0);
+    }
+
+    #[test]
+    fn purge_max_zero_does_nothing() {
+        let store = MemoryAuditStore::new();
+        store
+            .append(&make_entry("2020-01-01T00:00:00Z", "org1", "/old"))
+            .unwrap();
+
+        let policy = crate::audit_retention::AuditRetentionPolicy {
+            min_retention_secs: 365 * 24 * 3600,
+            max_retention_secs: 0,
+            auto_purge_enabled: true,
+        };
+        let purged = store.purge_expired(&policy, 2_000_000_000).unwrap();
+        assert_eq!(purged, 0);
+    }
+
+    #[tokio::test]
+    async fn auto_purge_task_runs() {
+        let store = std::sync::Arc::new(MemoryAuditStore::new());
+        store
+            .append(&make_entry("2020-01-01T00:00:00Z", "org1", "/old"))
+            .unwrap();
+        store
+            .append(&make_entry("2026-07-01T00:00:00Z", "org1", "/new"))
+            .unwrap();
+
+        let policy = crate::audit_retention::AuditRetentionPolicy {
+            min_retention_secs: 365 * 24 * 3600,
+            max_retention_secs: 2 * 365 * 24 * 3600,
+            auto_purge_enabled: true,
+        };
+        let shutdown = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+        let handle = spawn_auto_purge_task(
+            store.clone(),
+            policy,
+            std::time::Duration::from_millis(50),
+            shutdown.clone(),
+        );
+
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        shutdown.store(true, std::sync::atomic::Ordering::Relaxed);
+        let total = handle.await.unwrap();
+        assert!(total >= 1);
+        let remaining = store.query(None, None, None, None, 100).unwrap();
+        assert_eq!(remaining.len(), 1);
     }
 }

@@ -180,8 +180,8 @@ mod tests {
             id: id.to_string(),
             block_height: 0,
             timestamp: 0,
-            input_did: "did:bc:alice".to_string(),
-            output_recipient: "did:bc:bob".to_string(),
+            input_did: "did:goya:alice".to_string(),
+            output_recipient: "did:goya:bob".to_string(),
             amount: 1,
             state: "pending".to_string(),
         }

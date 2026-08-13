@@ -103,11 +103,11 @@ pub struct TsaProvider {
     policy_oid: String,
     accuracy_secs: u32,
     time_source: Option<Arc<dyn TimeSource>>,
+    serial_path: Option<std::path::PathBuf>,
 }
 
 impl TsaProvider {
     pub fn new(signer: Arc<dyn SigningProvider>, tsa_name: String) -> Self {
-        // ponytail: seed serial from epoch seconds to avoid collisions across restarts
         let initial_serial = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -119,7 +119,26 @@ impl TsaProvider {
             policy_oid: TSA_POLICY_OID.to_string(),
             accuracy_secs: DEFAULT_ACCURACY_SECS,
             time_source: None,
+            serial_path: None,
         }
+    }
+
+    /// Enable serial persistence. Loads the last serial from `path` on init
+    /// (falls back to epoch-seeded if file missing), persists after each issuance.
+    pub fn with_serial_path(mut self, path: std::path::PathBuf) -> Self {
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            if let Ok(saved) = contents.trim().parse::<u64>() {
+                let epoch_seed = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                // Use whichever is higher: saved serial or epoch seed
+                let initial = saved.max(epoch_seed);
+                self.serial.store(initial, Ordering::SeqCst);
+            }
+        }
+        self.serial_path = Some(path);
+        self
     }
 
     pub fn with_accuracy(mut self, secs: u32) -> Self {
@@ -130,6 +149,23 @@ impl TsaProvider {
     pub fn with_time_source(mut self, ts: Arc<dyn TimeSource>) -> Self {
         self.time_source = Some(ts);
         self
+    }
+
+    /// Current serial value (for inspection/testing).
+    pub fn current_serial(&self) -> u64 {
+        self.serial.load(Ordering::SeqCst)
+    }
+
+    fn next_serial(&self) -> u64 {
+        let s = self.serial.fetch_add(1, Ordering::SeqCst);
+        self.persist_serial(s + 1);
+        s
+    }
+
+    fn persist_serial(&self, value: u64) {
+        if let Some(path) = &self.serial_path {
+            let _ = std::fs::write(path, value.to_string());
+        }
     }
 
     fn validate_signer(&self) -> Result<(), String> {
@@ -182,7 +218,7 @@ impl TsaProvider {
                 };
             }
         };
-        let serial = self.serial.fetch_add(1, Ordering::SeqCst);
+        let serial = self.next_serial();
 
         let tst_info = TstInfo {
             version: 1,
@@ -237,7 +273,7 @@ impl TsaProvider {
         let imprint_bytes = hex::decode(&req.message_imprint)
             .map_err(|e| rfc3161_der::Rfc3161Error::Invalid(e.to_string()))?;
 
-        let serial = self.serial.fetch_add(1, Ordering::SeqCst);
+        let serial = self.next_serial();
 
         let params = rfc3161_der::TstInfoParams {
             policy_oid: &self.policy_oid,
@@ -704,5 +740,98 @@ mod tests {
         let resp = tsa.issue(&req);
         assert_eq!(resp.status, 0);
         assert!(resp.token.is_some());
+    }
+
+    #[test]
+    fn serial_persists_to_disk() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let serial_path = dir.path().join("tsa_serial");
+
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa-persist".to_string())
+            .with_serial_path(serial_path.clone());
+
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: valid_imprint(),
+            nonce: None,
+            require_ordering: false,
+        };
+        let resp = tsa.issue(&req);
+        assert_eq!(resp.status, 0);
+
+        // File should exist with a serial value
+        let contents = std::fs::read_to_string(&serial_path).unwrap();
+        let saved: u64 = contents.trim().parse().unwrap();
+        assert!(saved > 0);
+    }
+
+    #[test]
+    fn serial_reloads_from_disk() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let serial_path = dir.path().join("tsa_serial");
+
+        // Write a known serial
+        std::fs::write(&serial_path, "999999999999").unwrap();
+
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa-reload".to_string())
+            .with_serial_path(serial_path);
+
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: valid_imprint(),
+            nonce: None,
+            require_ordering: false,
+        };
+        let resp = tsa.issue(&req);
+        let serial = resp.token.unwrap().tst_info.serial_number;
+        // Should be >= the saved value (may be epoch-seeded if higher)
+        assert!(serial >= 999_999_999_999);
+    }
+
+    #[test]
+    fn serial_survives_restart_simulation() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let serial_path = dir.path().join("tsa_serial");
+
+        let req = TimeStampRequest {
+            hash_algorithm: HashAlgorithm::Sha256,
+            message_imprint: valid_imprint(),
+            nonce: None,
+            require_ordering: false,
+        };
+
+        // "First boot"
+        let signer1 = Arc::new(SoftwareSigningProvider::generate());
+        let tsa1 = TsaProvider::new(signer1, "did:goya:tsa".to_string())
+            .with_serial_path(serial_path.clone());
+        let s1 = tsa1.issue(&req).token.unwrap().tst_info.serial_number;
+        let s2 = tsa1.issue(&req).token.unwrap().tst_info.serial_number;
+        assert_eq!(s2, s1 + 1);
+
+        // "Second boot" — should continue from where we left off
+        let signer2 = Arc::new(SoftwareSigningProvider::generate());
+        let tsa2 =
+            TsaProvider::new(signer2, "did:goya:tsa".to_string()).with_serial_path(serial_path);
+        let s3 = tsa2.issue(&req).token.unwrap().tst_info.serial_number;
+        assert!(s3 >= s2, "serial must not go backwards: s3={s3}, s2={s2}");
+    }
+
+    #[test]
+    fn serial_missing_file_uses_epoch_seed() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let serial_path = dir.path().join("nonexistent_serial");
+
+        let signer = Arc::new(SoftwareSigningProvider::generate());
+        let tsa =
+            TsaProvider::new(signer, "did:goya:tsa".to_string()).with_serial_path(serial_path);
+
+        let serial = tsa.current_serial();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        assert!(serial >= now - 2 && serial <= now + 2);
     }
 }

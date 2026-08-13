@@ -80,7 +80,7 @@ mod tests {
         Organization::new(
             id,
             format!("{id}MSP"),
-            vec![format!("did:bc:{id}:admin")],
+            vec![format!("did:goya:{id}:admin")],
             vec![],
             vec![],
         )

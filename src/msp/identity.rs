@@ -18,12 +18,12 @@ mod tests {
     #[test]
     fn create_identity() {
         let id = MspIdentity {
-            did: "did:bc:org1:alice".to_string(),
+            did: "did:goya:org1:alice".to_string(),
             org_id: "Org1".to_string(),
             role: MspRole::Member,
             public_key: [7u8; 32],
         };
-        assert_eq!(id.did, "did:bc:org1:alice");
+        assert_eq!(id.did, "did:goya:org1:alice");
         assert_eq!(id.org_id, "Org1");
         assert_eq!(id.role, MspRole::Member);
         assert_eq!(id.public_key, [7u8; 32]);
@@ -32,7 +32,7 @@ mod tests {
     #[test]
     fn serde_roundtrip() {
         let id = MspIdentity {
-            did: "did:bc:org2:bob".to_string(),
+            did: "did:goya:org2:bob".to_string(),
             org_id: "Org2".to_string(),
             role: MspRole::Admin,
             public_key: [255u8; 32],

@@ -1403,7 +1403,7 @@ impl Node {
 
                 // 4. Build endorsement
                 let pub_key = signer.public_key();
-                let signer_did = format!("did:key:{}", hex::encode(&pub_key));
+                let signer_did = crate::identity::did::did_from_pubkey_hex(&hex::encode(&pub_key));
                 let timestamp = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
@@ -2715,8 +2715,8 @@ mod tests {
             id: "tx-test".to_string(),
             block_height: 1,
             timestamp: 42,
-            input_did: "did:bc:alice".to_string(),
-            output_recipient: "did:bc:bob".to_string(),
+            input_did: "did:goya:alice".to_string(),
+            output_recipient: "did:goya:bob".to_string(),
             amount: 10,
             state: "pending".to_string(),
         }

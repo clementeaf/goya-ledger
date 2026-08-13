@@ -159,8 +159,8 @@ mod tests {
             "chaincode_id": "cc1",
             "transaction": {
                 "id": tx_id,
-                "input_did": "did:bc:alice",
-                "output_recipient": "did:bc:bob",
+                "input_did": "did:goya:alice",
+                "output_recipient": "did:goya:bob",
                 "amount": 10
             }
         })
@@ -222,8 +222,8 @@ mod tests {
             "chaincode_id": "",
             "transaction": {
                 "id": "tx-1",
-                "input_did": "did:bc:alice",
-                "output_recipient": "did:bc:bob",
+                "input_did": "did:goya:alice",
+                "output_recipient": "did:goya:bob",
                 "amount": 5
             }
         });

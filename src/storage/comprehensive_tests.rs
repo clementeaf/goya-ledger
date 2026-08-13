@@ -53,8 +53,8 @@ mod comprehensive_storage_tests {
             id: "tx1".to_string(),
             block_height: 1,
             timestamp: 1000,
-            input_did: "did:bc:input".to_string(),
-            output_recipient: "did:bc:output".to_string(),
+            input_did: "did:goya:input".to_string(),
+            output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
         };
@@ -65,7 +65,7 @@ mod comprehensive_storage_tests {
     fn test_create_identity_basic() {
         let (store, _dir) = temp_store();
         let identity = IdentityRecord {
-            did: "did:bc:1".to_string(),
+            did: "did:goya:1".to_string(),
             public_key: String::new(),
             created_at: 1000,
             updated_at: 2000,
@@ -79,8 +79,8 @@ mod comprehensive_storage_tests {
         let (store, _dir) = temp_store();
         let cred = Credential {
             id: "cred1".to_string(),
-            issuer_did: "did:bc:issuer".to_string(),
-            subject_did: "did:bc:subject".to_string(),
+            issuer_did: "did:goya:issuer".to_string(),
+            subject_did: "did:goya:subject".to_string(),
             cred_type: "eid".to_string(),
             issued_at: 1000,
             expires_at: 2000,
@@ -104,7 +104,7 @@ mod comprehensive_storage_tests {
     #[test]
     fn test_read_identity_not_found() {
         let (store, _dir) = temp_store();
-        assert!(store.read_identity("did:bc:notfound").is_err());
+        assert!(store.read_identity("did:goya:notfound").is_err());
     }
 
     #[test]
@@ -150,7 +150,7 @@ mod comprehensive_storage_tests {
     fn test_update_identity_status() {
         let (store, _dir) = temp_store();
         let mut identity = IdentityRecord {
-            did: "did:bc:1".to_string(),
+            did: "did:goya:1".to_string(),
             public_key: String::new(),
             created_at: 1000,
             updated_at: 2000,
@@ -191,8 +191,8 @@ mod comprehensive_storage_tests {
             id: "tx1".to_string(),
             block_height: 1,
             timestamp: 1000,
-            input_did: "did:bc:input".to_string(),
-            output_recipient: "did:bc:output".to_string(),
+            input_did: "did:goya:input".to_string(),
+            output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
         };
@@ -221,8 +221,8 @@ mod comprehensive_storage_tests {
             id: "tx1".to_string(),
             block_height: 1,
             timestamp: 1000,
-            input_did: "did:bc:input".to_string(),
-            output_recipient: "did:bc:output".to_string(),
+            input_did: "did:goya:input".to_string(),
+            output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
         };
@@ -266,8 +266,8 @@ mod comprehensive_storage_tests {
                 id: format!("tx{i}"),
                 block_height: i as u64,
                 timestamp: 1000 + i as u64,
-                input_did: "did:bc:input".to_string(),
-                output_recipient: "did:bc:output".to_string(),
+                input_did: "did:goya:input".to_string(),
+                output_recipient: "did:goya:output".to_string(),
                 amount: 100 * i as u64,
                 state: "confirmed".to_string(),
             })
@@ -320,8 +320,8 @@ mod comprehensive_storage_tests {
             id: "tx1".to_string(),
             block_height: 1,
             timestamp: 1000,
-            input_did: "did:bc:input".to_string(),
-            output_recipient: "did:bc:output".to_string(),
+            input_did: "did:goya:input".to_string(),
+            output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
         }];
@@ -356,8 +356,8 @@ mod comprehensive_storage_tests {
         let (store, _dir) = temp_store();
         let cred = Credential {
             id: "cred1".to_string(),
-            issuer_did: "did:bc:issuer".to_string(),
-            subject_did: "did:bc:subject".to_string(),
+            issuer_did: "did:goya:issuer".to_string(),
+            subject_did: "did:goya:subject".to_string(),
             cred_type: "eid".to_string(),
             issued_at: 1000,
             expires_at: 2000,
@@ -501,7 +501,7 @@ mod comprehensive_storage_tests {
     #[test]
     fn test_long_did_string() {
         let (store, _dir) = temp_store();
-        let long_did = format!("did:bc:{}", "x".repeat(1000));
+        let long_did = format!("did:goya:{}", "x".repeat(1000));
         let identity = IdentityRecord {
             did: long_did,
             public_key: String::new(),
@@ -559,8 +559,8 @@ mod comprehensive_storage_tests {
         let (store, _dir) = temp_store();
         let cred = Credential {
             id: "cred1".to_string(),
-            issuer_did: "did:bc:issuer".to_string(),
-            subject_did: "did:bc:subject".to_string(),
+            issuer_did: "did:goya:issuer".to_string(),
+            subject_did: "did:goya:subject".to_string(),
             cred_type: "eid".to_string(),
             issued_at: 1000,
             expires_at: 2000,
@@ -575,8 +575,8 @@ mod comprehensive_storage_tests {
         let (store, _dir) = temp_store();
         let cred = Credential {
             id: "cred1".to_string(),
-            issuer_did: "did:bc:issuer".to_string(),
-            subject_did: "did:bc:subject".to_string(),
+            issuer_did: "did:goya:issuer".to_string(),
+            subject_did: "did:goya:subject".to_string(),
             cred_type: "passport".to_string(),
             issued_at: 0,
             expires_at: 1000,
@@ -592,8 +592,8 @@ mod comprehensive_storage_tests {
             id: "tx1".to_string(),
             block_height: 1,
             timestamp: 1000,
-            input_did: "did:bc:input".to_string(),
-            output_recipient: "did:bc:output".to_string(),
+            input_did: "did:goya:input".to_string(),
+            output_recipient: "did:goya:output".to_string(),
             amount: 0,
             state: "confirmed".to_string(),
         };
@@ -607,8 +607,8 @@ mod comprehensive_storage_tests {
             id: "tx1".to_string(),
             block_height: 1,
             timestamp: 1000,
-            input_did: "did:bc:input".to_string(),
-            output_recipient: "did:bc:output".to_string(),
+            input_did: "did:goya:input".to_string(),
+            output_recipient: "did:goya:output".to_string(),
             amount: u64::MAX,
             state: "confirmed".to_string(),
         };
@@ -622,8 +622,8 @@ mod comprehensive_storage_tests {
             id: "tx1".to_string(),
             block_height: 0,
             timestamp: 1000,
-            input_did: "did:bc:input".to_string(),
-            output_recipient: "did:bc:output".to_string(),
+            input_did: "did:goya:input".to_string(),
+            output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "pending".to_string(),
         };
@@ -637,8 +637,8 @@ mod comprehensive_storage_tests {
             id: "tx1".to_string(),
             block_height: 1,
             timestamp: 1000,
-            input_did: "did:bc:input".to_string(),
-            output_recipient: "did:bc:output".to_string(),
+            input_did: "did:goya:input".to_string(),
+            output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "failed".to_string(),
         };
@@ -649,7 +649,7 @@ mod comprehensive_storage_tests {
     fn test_identity_suspended_status() {
         let (store, _dir) = temp_store();
         let identity = IdentityRecord {
-            did: "did:bc:1".to_string(),
+            did: "did:goya:1".to_string(),
             public_key: String::new(),
             created_at: 1000,
             updated_at: 2000,
@@ -662,7 +662,7 @@ mod comprehensive_storage_tests {
     fn test_identity_revoked_status() {
         let (store, _dir) = temp_store();
         let identity = IdentityRecord {
-            did: "did:bc:1".to_string(),
+            did: "did:goya:1".to_string(),
             public_key: String::new(),
             created_at: 1000,
             updated_at: 2000,
@@ -795,8 +795,8 @@ mod comprehensive_storage_tests {
                 id: format!("tx{i}"),
                 block_height: i as u64,
                 timestamp: 1000 + i as u64,
-                input_did: "did:bc:input".to_string(),
-                output_recipient: "did:bc:output".to_string(),
+                input_did: "did:goya:input".to_string(),
+                output_recipient: "did:goya:output".to_string(),
                 amount: 100,
                 state: "confirmed".to_string(),
             };

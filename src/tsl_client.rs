@@ -107,6 +107,66 @@ pub fn find_qualified_services<'a>(
     results
 }
 
+// ── TL Signature Verification (ETSI TS 119 612 §5.3) ─────────────────────
+
+/// Result of verifying a Trusted List's XAdES signature.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TlSignatureResult {
+    pub signed: bool,
+    pub signature_valid: bool,
+    pub signer_algorithm: Option<String>,
+    pub signing_time: Option<String>,
+}
+
+/// Verify the XAdES signature embedded in a Trusted List XML.
+///
+/// ETSI TS 119 612 §5.3 requires TLs to be signed with XAdES-BES.
+/// Returns verification result; `signed: false` if no `<ds:Signature>` found.
+pub fn verify_tl_signature(xml: &str) -> TlSignatureResult {
+    let sig_start = match xml.find("<ds:Signature") {
+        Some(pos) => pos,
+        None => {
+            return TlSignatureResult {
+                signed: false,
+                signature_valid: false,
+                signer_algorithm: None,
+                signing_time: None,
+            };
+        }
+    };
+    let sig_end_marker = "</ds:Signature>";
+    let sig_end = match xml.find(sig_end_marker) {
+        Some(pos) => pos + sig_end_marker.len(),
+        None => {
+            return TlSignatureResult {
+                signed: true,
+                signature_valid: false,
+                signer_algorithm: None,
+                signing_time: None,
+            };
+        }
+    };
+    let sig_xml = &xml[sig_start..sig_end];
+
+    let fields = crate::signature::xades::parse_xades_fields(sig_xml);
+    let (algorithm, signing_time) = match &fields {
+        Some(f) => (
+            Some(format!("{:?}", f.algorithm)),
+            Some(f.signing_time.clone()),
+        ),
+        None => (None, None),
+    };
+
+    let signature_valid = crate::signature::xades::verify_xades_signature(sig_xml).unwrap_or(false);
+
+    TlSignatureResult {
+        signed: true,
+        signature_valid,
+        signer_algorithm: algorithm,
+        signing_time,
+    }
+}
+
 // ── XML parsing helpers ───────────────────────────────────────────────────
 // ponytail: no XML crate. Fixed ETSI structure, string extraction.
 
@@ -384,5 +444,95 @@ mod tests {
         assert_eq!(tl.territory, "unknown");
         assert!(tl.tsp_entries.is_empty());
         assert!(tl.tl_pointers.is_empty());
+    }
+
+    #[test]
+    fn tl_without_signature_returns_unsigned() {
+        let result = verify_tl_signature(sample_country_tl());
+        assert!(!result.signed);
+        assert!(!result.signature_valid);
+    }
+
+    #[test]
+    fn tl_with_valid_xades_signature() {
+        use crate::crypto::hasher::{hash_with, HashAlgorithm};
+        use crate::identity::signing::{
+            SigningAlgorithm, SigningProvider, SoftwareSigningProvider,
+        };
+        use crate::signature::{SignatureLevel, SignedEnvelope};
+
+        let provider = SoftwareSigningProvider::generate();
+        let tl_content = sample_country_tl();
+        let content_hash = hex::encode(hash_with(HashAlgorithm::Sha256, tl_content.as_bytes()));
+
+        let env = SignedEnvelope {
+            level: SignatureLevel::Simple,
+            signer: "did:goya:tl-signer".to_string(),
+            content_hash,
+            signature: String::new(),
+            public_key: hex::encode(provider.public_key()),
+            signature_algorithm: SigningAlgorithm::Ed25519,
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+        };
+
+        let xades = crate::signature::xades::to_xades_bes_signed(&env, &provider).unwrap();
+
+        // Embed the XAdES signature into the TL XML
+        let signed_tl = tl_content.replace(
+            "</tsl:TrustServiceStatusList>",
+            &format!("{}\n</tsl:TrustServiceStatusList>", xades.xml),
+        );
+
+        let result = verify_tl_signature(&signed_tl);
+        assert!(result.signed);
+        assert!(result.signature_valid);
+        assert_eq!(result.signer_algorithm.as_deref(), Some("Ed25519"));
+        assert!(result.signing_time.is_some());
+    }
+
+    #[test]
+    fn tl_with_tampered_xades_signature() {
+        use crate::crypto::hasher::{hash_with, HashAlgorithm};
+        use crate::identity::signing::{
+            SigningAlgorithm, SigningProvider, SoftwareSigningProvider,
+        };
+        use crate::signature::{SignatureLevel, SignedEnvelope};
+
+        let provider = SoftwareSigningProvider::generate();
+        let tl_content = sample_country_tl();
+        let content_hash = hex::encode(hash_with(HashAlgorithm::Sha256, tl_content.as_bytes()));
+
+        let env = SignedEnvelope {
+            level: SignatureLevel::Simple,
+            signer: "did:goya:tl-signer".to_string(),
+            content_hash,
+            signature: String::new(),
+            public_key: hex::encode(provider.public_key()),
+            signature_algorithm: SigningAlgorithm::Ed25519,
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+        };
+
+        let xades = crate::signature::xades::to_xades_bes_signed(&env, &provider).unwrap();
+        let tampered_sig = xades
+            .xml
+            .replace("<ds:DigestValue>", "<ds:DigestValue>TAMPERED");
+        let signed_tl = tl_content.replace(
+            "</tsl:TrustServiceStatusList>",
+            &format!("{tampered_sig}\n</tsl:TrustServiceStatusList>"),
+        );
+
+        let result = verify_tl_signature(&signed_tl);
+        assert!(result.signed);
+        assert!(!result.signature_valid);
+    }
+
+    #[test]
+    fn tl_with_incomplete_signature() {
+        let xml = r#"<root><ds:Signature Id="test">incomplete</root>"#;
+        let result = verify_tl_signature(xml);
+        assert!(result.signed);
+        assert!(!result.signature_valid);
     }
 }

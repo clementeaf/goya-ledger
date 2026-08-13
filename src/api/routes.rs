@@ -267,7 +267,9 @@ impl ApiRoutes {
             .service(policy::get_cps_document)
             .service(policy::get_oids);
         // OCSP Responder (RFC 6960)
-        cfg.service(ocsp::ocsp_query).service(ocsp::ocsp_status);
+        cfg.service(ocsp::ocsp_query)
+            .service(ocsp::ocsp_query_der)
+            .service(ocsp::ocsp_status);
         // Trust Service List (ETSI TS 119 612)
         cfg.service(tsl::get_tsl);
         // OpenID4VCI (EUDI Wallet credential issuance)

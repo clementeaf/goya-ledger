@@ -4,6 +4,82 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.7.0] — 2026-08-13
+
+### Added — 10 final compliance gaps closed
+
+- **F3: OCSP DER encoding** (`src/msp/ocsp_der.rs`)
+  - RFC 6960 binary OCSPResponse: BasicOCSPResponse with BIT STRING signature, CertID, CertStatus (good/revoked/unknown), nonce extension
+  - `encode_ocsp_response_der()` + `verify_ocsp_response_der()` roundtrip
+  - `POST /api/v1/ocsp/query/der` — returns `application/ocsp-response`
+  - x509-parser interop test
+  - Ed25519 + ML-DSA-65 support, 11 tests
+- **F4: OpenID4VCI DPoP + WIA + c_nonce** (`src/api/handlers/oid4vci.rs`)
+  - DPoP proof validation (RFC 9449): typ, htm, htu, iat freshness, jti, JWK thumbprint binding
+  - Token endpoint returns `token_type: "DPoP"` + `dpop_jkt` when DPoP header present
+  - Wallet Instance Attestation (WIA) validation: typ, iss, sub, exp
+  - `verify_proof_jwt()` — c_nonce binding on credential endpoint (OpenID4VCI §7.2.1)
+  - Credential endpoint accepts both `Bearer` and `DPoP` authorization
+  - 20 tests
+- **F5: OpenID4VP presentation_definition matching** (`src/api/handlers/oid4vp.rs`)
+  - `match_presentation_definition()` — format compatibility, required field constraints, nested namespace support
+  - Issuer key registry on `VpRequestStore` — `register_issuer_key()` / `resolve_issuer_key()`
+  - SD-JWT signature verification via issuer key lookup; `valid: false` when key unknown
+  - Disclosed claims extraction from SD-JWT disclosures
+  - 6 tests
+- **F6: SD-JWT Key Binding JWT** (`src/identity/sd_jwt.rs`)
+  - `jwk_thumbprint()` — RFC 7638 JWK thumbprint for Ed25519/ML-DSA-65/RSA
+  - `issue_sd_jwt_vc_with_kb()` — SD-JWT with `cnf.jkt` holder key binding
+  - `present_sd_jwt_with_kb()` — presentation with KB-JWT (typ `kb+jwt`, `sd_hash`, `aud`, `nonce`)
+  - `verify_sd_jwt_vc()` updated — detects and verifies KB-JWT, sets `kb_verified`
+  - 5 tests
+- **F7: XAdES sign real SignedInfo** (`src/signature/xades.rs`)
+  - `to_xades_bes_signed()` — W3C XML Signature §3.1.2: SignatureValue over actual `<ds:SignedInfo>` XML
+  - `verify_xades_signature()` — extracts SignedInfo, verifies against embedded public key
+  - Ed25519, ML-DSA-65, RSA support
+  - 7 tests (roundtrip, tamper, wrong key, all algorithms)
+- **F8: ETSI TL signature verification** (`src/tsl_client.rs`)
+  - `verify_tl_signature()` — extracts `<ds:Signature>` from TL XML, verifies via XAdES
+  - `TlSignatureResult` — signed, signature_valid, signer_algorithm, signing_time
+  - 4 tests
+- **F9: QCStatements X.509 extension** (`src/pki.rs`)
+  - `build_qc_statements_der()` — EN 319 412-5: QcCompliance + QcType (esign/eseal/web)
+  - `qc_statements_extension()` — OID 1.3.6.1.5.5.7.1.3 CustomExtension for rcgen
+  - 6 tests (3 profiles, differentiation, extension build, cert issuance)
+- **F10: DID consolidation** — 142 occurrences across 19+ files
+  - `did:bc:` → `did:goya:`, `did:example:` → `did:goya:`, `did:key:` → `did_from_pubkey_hex()`
+  - `DidDocument::create_did()`, `parse()`, `from_public_key()` all use `did:goya:` prefix
+  - Zero non-`did:goya:` DID formats remain
+- **F11: Audit retention auto-purge** (`src/audit.rs`)
+  - `AuditStore::purge_expired()` — removes entries older than `max_retention_secs`
+  - `MemoryAuditStore` implementation via `Vec::retain`
+  - `spawn_auto_purge_task()` — tokio background task with configurable interval + AtomicBool shutdown
+  - 4 tests (purge, disabled noop, max_zero noop, async integration)
+- **F12: TSA serial persistence** (`src/tsa/mod.rs`)
+  - `with_serial_path()` — loads last serial from disk, takes `max(saved, epoch_seed)`
+  - `next_serial()` — atomic increment + persist to disk after each issuance
+  - Restart-safe: serial never goes backwards
+  - 4 tests (persist, reload, restart simulation, missing file fallback)
+
+### Changed
+
+- `OcspResponse` handler: `signing_provider` wired for DER encoding
+- `TokenRequest`: added `wallet_instance_attestation` field
+- `TokenResponse`: added `dpop_jkt` field, `token_type` switches to `"DPoP"`
+- `VpRequestStore`: added `issuer_keys` registry field
+- `VerifiedSdJwt`: added `kb_verified` field
+- `TsaProvider`: added `serial_path` field, `next_serial()` replaces raw `fetch_add`
+- `SigningProvider` import added to `xades.rs`
+- OCSP route registration includes `/ocsp/query/der`
+
+### Stats
+
+- 2184 lines added, 202 removed across 34 modified files + 1 new file
+- Suite total: 2493 passed, 0 failed, 3 ignored
+- All 10 compliance gaps closed (F3–F12)
+
+---
+
 ## [0.6.1] — 2026-08-13
 
 ### Added — Cert chain validation + RA-to-PKI bridge

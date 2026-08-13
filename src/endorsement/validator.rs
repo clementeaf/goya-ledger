@@ -217,7 +217,7 @@ mod tests {
     fn make_endorsement(sk: &SigningKey, payload_hash: [u8; 32], org_id: &str) -> Endorsement {
         let sig = sk.sign(&payload_hash).to_bytes().to_vec();
         Endorsement {
-            signer_did: format!("did:bc:{org_id}:signer"),
+            signer_did: format!("did:goya:{org_id}:signer"),
             org_id: org_id.to_string(),
             signature: sig,
             signature_algorithm: Default::default(),
@@ -240,7 +240,7 @@ mod tests {
         let payload = [1u8; 32];
         // signature bytes all zeros — invalid
         let e = Endorsement {
-            signer_did: "did:bc:x".to_string(),
+            signer_did: "did:goya:x".to_string(),
             org_id: "org1".to_string(),
             signature: vec![0u8; 64],
             signature_algorithm: Default::default(),
@@ -265,7 +265,7 @@ mod tests {
             let org = Organization::new(
                 *org_id,
                 format!("{org_id}MSP"),
-                vec![format!("did:bc:{org_id}:admin")],
+                vec![format!("did:goya:{org_id}:admin")],
                 vec![],
                 vec![*pk],
             )

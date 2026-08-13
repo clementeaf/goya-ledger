@@ -247,11 +247,11 @@ mod tests {
     #[test]
     fn test_identity_response_serialization() {
         let resp = IdentityResponse {
-            did: "did:bc:test".to_string(),
+            did: "did:goya:test".to_string(),
             public_key: "test_key".to_string(),
             created_at: Utc::now(),
         };
         let json = serde_json::to_string(&resp).unwrap();
-        assert!(json.contains("did:bc:test"));
+        assert!(json.contains("did:goya:test"));
     }
 }

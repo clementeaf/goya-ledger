@@ -314,7 +314,7 @@ mod tests {
 
     fn sample_endorsement() -> Endorsement {
         Endorsement {
-            signer_did: "did:example:admin".to_string(),
+            signer_did: "did:goya:admin".to_string(),
             org_id: "org1".to_string(),
             signature: vec![1u8; 64],
             signature_algorithm: Default::default(),
@@ -521,7 +521,7 @@ mod tests {
     ) -> Endorsement {
         use pqc_crypto_module::legacy::ed25519::Signer as _;
         Endorsement {
-            signer_did: format!("did:bc:{org_id}:admin"),
+            signer_did: format!("did:goya:{org_id}:admin"),
             org_id: org_id.to_string(),
             signature: sk.sign(&payload_hash).to_bytes().to_vec(),
             signature_algorithm: Default::default(),
@@ -538,7 +538,7 @@ mod tests {
             let org = Organization::new(
                 *org_id,
                 format!("{org_id}MSP"),
-                vec![format!("did:bc:{org_id}:admin")],
+                vec![format!("did:goya:{org_id}:admin")],
                 vec![],
                 vec![*pk],
             )
