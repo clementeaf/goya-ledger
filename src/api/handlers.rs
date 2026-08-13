@@ -15,6 +15,7 @@ pub mod compliance_auto;
 pub mod contact;
 pub mod contracts;
 pub mod credentials;
+pub mod crl;
 pub mod discovery;
 pub mod events;
 #[cfg(feature = "evm")]

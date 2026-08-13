@@ -82,6 +82,32 @@ pub fn to_pades_bes(envelope: &SignedEnvelope, options: &PadesOptions) -> PadesS
     }
 }
 
+/// Build a CMS PKCS#7 detached signature for PDF byte range (PAdES-BES).
+///
+/// This produces the DER bytes that go into the PDF `/Contents` field.
+/// The `pdf_byte_range` is the data covered by the signature (everything
+/// in the PDF except the `/Contents` hex placeholder).
+pub fn build_pades_cms(
+    pdf_byte_range: &[u8],
+    provider: &dyn crate::identity::signing::SigningProvider,
+    signing_time: u64,
+) -> Result<Vec<u8>, crate::signature::cades_der::CadesDerError> {
+    crate::signature::cades_der::build_cades_bes_der(pdf_byte_range, provider, signing_time)
+}
+
+/// Verify a PAdES CMS signature against PDF byte range data.
+pub fn verify_pades_cms(
+    cms_der: &[u8],
+    pdf_byte_range: &[u8],
+    public_key_hex: &str,
+) -> Result<bool, String> {
+    match crate::signature::cades_der::verify_cades_bes_der(cms_der, pdf_byte_range, public_key_hex)
+    {
+        Ok(_) => Ok(true),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 /// Extract core fields from a PAdES signature for verification.
 pub fn extract_pades_fields(sig: &PadesSignature) -> PadesFields {
     PadesFields {
@@ -256,5 +282,37 @@ mod tests {
         assert!(!json.contains("location"));
         assert!(!json.contains("reason"));
         assert!(!json.contains("contact_info"));
+    }
+
+    #[test]
+    fn pades_cms_roundtrip() {
+        let provider = SoftwareSigningProvider::generate();
+        let pdf_bytes = b"fake PDF byte range content";
+        let cms = build_pades_cms(pdf_bytes, &provider, 1700000000).unwrap();
+        assert_eq!(cms[0], 0x30, "CMS must start with SEQUENCE");
+        let pk_hex = hex::encode(provider.public_key());
+        assert!(verify_pades_cms(&cms, pdf_bytes, &pk_hex).unwrap());
+    }
+
+    #[test]
+    fn pades_cms_wrong_key_fails() {
+        let provider = SoftwareSigningProvider::generate();
+        let other = SoftwareSigningProvider::generate();
+        let pdf_data = b"pdf data";
+        let cms = build_pades_cms(pdf_data, &provider, 1700000000).unwrap();
+        let wrong_pk = hex::encode(other.public_key());
+        assert!(verify_pades_cms(&cms, pdf_data, &wrong_pk).is_err());
+    }
+
+    #[test]
+    fn pades_cms_interop_x509_parser() {
+        let provider = SoftwareSigningProvider::generate();
+        let cms = build_pades_cms(b"pdf content", &provider, 1700000000).unwrap();
+        let (rem, parsed) =
+            x509_parser::der_parser::parse_der(&cms).expect("x509-parser must parse PAdES CMS");
+        assert!(rem.is_empty());
+        let seq = parsed.as_sequence().unwrap();
+        let oid = seq[0].as_oid().unwrap();
+        assert_eq!(oid.to_string(), "1.2.840.113549.1.7.2"); // id-signedData
     }
 }

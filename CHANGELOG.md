@@ -4,6 +4,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.7.1] — 2026-08-13
+
+### Added — Production operational improvements
+
+- **RocksDB audit `purge_expired()`** (`src/storage/adapters.rs`)
+  - Iterates `audit_log` CF, parses entry JSON for timestamp, deletes purgeable keys
+  - Respects `auto_purge_enabled` and `max_retention_secs` policy flags
+  - 2 tests (purge + disabled noop)
+- **CRL Distribution Point** (`src/api/handlers/crl.rs`) — new file
+  - `GET /api/v1/crl` — serves DER-encoded RFC 5280 CRL (`application/pkix-crl`)
+  - `GET /api/v1/crl/pem` — serves PEM-encoded CRL (`application/x-pem-file`)
+  - Generates CRL on-the-fly from `CrlStore` + `NodeCaConfig`
+  - 2 tests (503 without store, 503 without CA)
+- **PAdES CMS PKCS#7** (`src/signature/pades.rs`)
+  - `build_pades_cms()` — CMS detached signature for PDF byte range via CAdES-BES DER
+  - `verify_pades_cms()` — verifies CMS against original PDF byte range
+  - x509-parser interop: id-signedData OID verified
+  - 3 tests (roundtrip, wrong key, interop)
+- **CAdES-XL long-term validation** (`src/signature/cades_der.rs`)
+  - `build_cades_xl_der()` — embeds certificate chain + CRL in unsigned attributes (ETSI TS 101 733 §6.3)
+  - `CadesXlParams` — input struct for cert chain + CRL DER bytes
+  - OIDs: `id-aa-ets-certValues` (1.2.840.113549.1.9.16.2.23), `id-aa-ets-revocationValues` (1.2.840.113549.1.9.16.2.24)
+  - Preserves original CAdES-T signature (verify roundtrip confirmed)
+  - 3 tests (embed, verify preservation, x509-parser interop)
+
+### Changed
+
+- `api/handlers.rs`: added `crl` module
+- `api/routes.rs`: registered CRL endpoints under OCSP section
+
+### Stats
+
+- 349 lines added across 5 modified files + 1 new file
+- Suite total: 2503 passed, 0 failed, 3 ignored
+
+---
+
 ## [0.7.0] — 2026-08-13
 
 ### Added — 10 final compliance gaps closed

@@ -392,6 +392,109 @@ pub fn build_cades_der(params: &CadesParams<'_>) -> Result<Vec<u8>, CadesDerErro
     Ok(der_seq(&[OID_SIGNED_DATA, &tlv(0xA0, &signed_data)]))
 }
 
+/// Parameters for CAdES-XL long-term validation data.
+pub struct CadesXlParams<'a> {
+    /// CAdES-T DER (must already contain a timestamp token).
+    pub cades_t_der: &'a [u8],
+    /// Certificate chain DER bytes (each certificate individually).
+    pub cert_chain: &'a [&'a [u8]],
+    /// CRL DER bytes (each CRL individually).
+    pub crls: &'a [&'a [u8]],
+}
+
+/// id-aa-ets-certValues 1.2.840.113549.1.9.16.2.23
+const OID_CERT_VALUES: &[u8] = &[
+    0x06, 0x0B, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x09, 0x10, 0x02, 0x17,
+];
+/// id-aa-ets-revocationValues 1.2.840.113549.1.9.16.2.24
+const OID_REVOCATION_VALUES: &[u8] = &[
+    0x06, 0x0B, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x09, 0x10, 0x02, 0x18,
+];
+
+/// Build CAdES-XL: embed certificate chain + CRL into unsigned attributes
+/// of an existing CAdES-T for long-term validation (ETSI TS 101 733 §6.3).
+///
+/// Appends `id-aa-ets-certValues` and `id-aa-ets-revocationValues` to the
+/// SignerInfo unsigned attributes.
+pub fn build_cades_xl_der(params: &CadesXlParams<'_>) -> Result<Vec<u8>, CadesDerError> {
+    let inv = |s: &str| CadesDerError::Invalid(s.into());
+
+    // Parse the input CAdES-T
+    let (ci, _) = parse_tlv(params.cades_t_der)?;
+    expect_tag(ci.tag, 0x30, "ContentInfo")?;
+    let ci_elems = parse_elements(ci.value)?;
+    if ci_elems.len() < 2 {
+        return Err(inv("ContentInfo too short"));
+    }
+
+    // Extract SignedData from [0] EXPLICIT
+    if ci_elems[1].tag != 0xA0 {
+        return Err(inv("missing [0] EXPLICIT"));
+    }
+    let (sd, _) = parse_tlv(ci_elems[1].value)?;
+    expect_tag(sd.tag, 0x30, "SignedData")?;
+    let sd_elems = parse_elements(sd.value)?;
+
+    // Find signerInfos SET (last SET)
+    let si_set_idx = sd_elems
+        .iter()
+        .rposition(|e| e.tag == 0x31)
+        .ok_or_else(|| inv("no signerInfos SET"))?;
+    let (si, _) = parse_tlv(sd_elems[si_set_idx].value)?;
+    expect_tag(si.tag, 0x30, "SignerInfo")?;
+
+    // Build cert values: SEQUENCE OF Certificate
+    let cert_refs = params.cert_chain.to_vec();
+    let cert_values_content = der_seq(&cert_refs);
+    let cert_values_attr = der_seq(&[OID_CERT_VALUES, &der_set(&[&cert_values_content])]);
+
+    // Build revocation values: SEQUENCE { crlVals [0] SEQUENCE OF CRL }
+    let crl_refs = params.crls.to_vec();
+    let crl_seq = der_seq(&crl_refs);
+    let revocation_values_content = der_seq(&[&tlv(0xA0, &crl_seq)]);
+    let revocation_values_attr = der_seq(&[
+        OID_REVOCATION_VALUES,
+        &der_set(&[&revocation_values_content]),
+    ]);
+
+    // Rebuild SignerInfo with additional unsigned attributes
+    let si_elems_inner = parse_elements(si.value)?;
+    let mut new_si_parts: Vec<Vec<u8>> = Vec::new();
+    let mut existing_unsigned = Vec::new();
+
+    for elem in &si_elems_inner {
+        if elem.tag == 0xA1 {
+            // Existing unsigned attributes — collect their content
+            existing_unsigned.extend_from_slice(elem.value);
+        } else {
+            new_si_parts.push(tlv(elem.tag, elem.value));
+        }
+    }
+
+    // Merge existing + new unsigned attributes
+    existing_unsigned.extend(&cert_values_attr);
+    existing_unsigned.extend(&revocation_values_attr);
+    new_si_parts.push(tlv(0xA1, &existing_unsigned));
+
+    let new_si_refs: Vec<&[u8]> = new_si_parts.iter().map(|v| v.as_slice()).collect();
+    let new_signer_info = der_seq(&new_si_refs);
+
+    // Rebuild SignedData with updated SignerInfo
+    let mut new_sd_parts: Vec<Vec<u8>> = Vec::new();
+    for (i, elem) in sd_elems.iter().enumerate() {
+        if i == si_set_idx {
+            new_sd_parts.push(der_set(&[&new_signer_info]));
+        } else {
+            new_sd_parts.push(tlv(elem.tag, elem.value));
+        }
+    }
+
+    let new_sd_refs: Vec<&[u8]> = new_sd_parts.iter().map(|v| v.as_slice()).collect();
+    let new_signed_data = der_seq(&new_sd_refs);
+
+    Ok(der_seq(&[OID_SIGNED_DATA, &tlv(0xA0, &new_signed_data)]))
+}
+
 fn signing_oid(alg: SigningAlgorithm) -> &'static [u8] {
     match alg {
         SigningAlgorithm::Ed25519 => OID_ED25519,
@@ -1212,5 +1315,74 @@ mod tests {
             verify_timestamp: true,
         };
         assert!(verify_cades_with_context(&der, b"ts verify", &pk_hex, &ctx).is_ok());
+    }
+
+    #[test]
+    fn cades_xl_embeds_cert_and_crl() {
+        let provider = SoftwareSigningProvider::generate();
+        let tsa_token = make_tsa_token(&[0u8; 64]);
+        let cades_t =
+            build_cades_t_der(b"xl content", &provider, 1_700_000_000, &tsa_token).unwrap();
+
+        let fake_cert = b"fake-certificate-der";
+        let fake_crl = b"fake-crl-der";
+
+        let xl = build_cades_xl_der(&CadesXlParams {
+            cades_t_der: &cades_t,
+            cert_chain: &[fake_cert.as_slice()],
+            crls: &[fake_crl.as_slice()],
+        })
+        .unwrap();
+
+        assert_eq!(xl[0], 0x30);
+        assert!(xl.len() > cades_t.len(), "XL must be larger than T");
+        // Should contain the cert and CRL bytes
+        let xl_hex = hex::encode(&xl);
+        let cert_hex = hex::encode(fake_cert);
+        let crl_hex = hex::encode(fake_crl);
+        assert!(xl_hex.contains(&cert_hex));
+        assert!(xl_hex.contains(&crl_hex));
+    }
+
+    #[test]
+    fn cades_xl_preserves_original_signature() {
+        let provider = SoftwareSigningProvider::generate();
+        let tsa_token = make_tsa_token(&[0u8; 64]);
+        let cades_t =
+            build_cades_t_der(b"xl verify", &provider, 1_700_000_000, &tsa_token).unwrap();
+
+        let xl = build_cades_xl_der(&CadesXlParams {
+            cades_t_der: &cades_t,
+            cert_chain: &[b"cert1".as_slice(), b"cert2".as_slice()],
+            crls: &[b"crl1".as_slice()],
+        })
+        .unwrap();
+
+        // The original signature should still verify
+        let pk_hex = hex::encode(provider.public_key());
+        let fields = verify_cades_bes_der(&xl, b"xl verify", &pk_hex).unwrap();
+        assert!(!fields.message_digest.is_empty());
+    }
+
+    #[test]
+    fn cades_xl_x509_parser_parses() {
+        let provider = SoftwareSigningProvider::generate();
+        let tsa_token = make_tsa_token(&[0u8; 64]);
+        let cades_t =
+            build_cades_t_der(b"xl interop", &provider, 1_700_000_000, &tsa_token).unwrap();
+
+        let xl = build_cades_xl_der(&CadesXlParams {
+            cades_t_der: &cades_t,
+            cert_chain: &[b"cert".as_slice()],
+            crls: &[b"crl".as_slice()],
+        })
+        .unwrap();
+
+        let (rem, parsed) =
+            x509_parser::der_parser::parse_der(&xl).expect("x509-parser must parse CAdES-XL");
+        assert!(rem.is_empty());
+        let seq = parsed.as_sequence().unwrap();
+        let oid = seq[0].as_oid().unwrap();
+        assert_eq!(oid.to_string(), "1.2.840.113549.1.7.2");
     }
 }

@@ -2302,6 +2302,45 @@ impl crate::audit::AuditStore for RocksDbBlockStore {
         }
         Ok(results)
     }
+
+    fn purge_expired(
+        &self,
+        policy: &crate::audit_retention::AuditRetentionPolicy,
+        now_secs: u64,
+    ) -> StorageResult<usize> {
+        if !policy.auto_purge_enabled || policy.max_retention_secs == 0 {
+            return Ok(0);
+        }
+        let cf = self
+            .db
+            .cf_handle(CF_AUDIT_LOG)
+            .ok_or_else(|| StorageError::RocksDbError("missing audit_log CF".to_string()))?;
+
+        let mut to_delete = Vec::new();
+        for item in self.db.iterator_cf(&cf, IteratorMode::Start) {
+            let (key_bytes, val_bytes) =
+                item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let ts = serde_json::from_slice::<crate::audit::AuditEntry>(&val_bytes)
+                .ok()
+                .and_then(|e| {
+                    chrono::DateTime::parse_from_rfc3339(&e.timestamp)
+                        .map(|dt| dt.timestamp() as u64)
+                        .ok()
+                })
+                .unwrap_or(0);
+            if policy.is_purgeable(ts, now_secs) {
+                to_delete.push(key_bytes.to_vec());
+            }
+        }
+
+        let count = to_delete.len();
+        for key in &to_delete {
+            self.db
+                .delete_cf(&cf, key)
+                .map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+        }
+        Ok(count)
+    }
 }
 
 // ── SandboxReportStore on RocksDB ────────────────────────────────────────────
@@ -3258,5 +3297,81 @@ mod tests {
         drop(store);
         let store2 = RocksDbBlockStore::new(dir.path()).unwrap();
         assert!(store2.block_exists(0).unwrap());
+    }
+
+    #[test]
+    fn rocksdb_audit_purge_expired() {
+        use crate::audit::{AuditAction, AuditEntry, AuditStore};
+        let (store, _dir) = tmp_store();
+
+        let old_entry = AuditEntry {
+            timestamp: "2020-01-01T00:00:00Z".to_string(),
+            action: AuditAction::HttpRequest,
+            method: "GET".to_string(),
+            path: "/old".to_string(),
+            org_id: "org1".to_string(),
+            source_ip: "127.0.0.1".to_string(),
+            status_code: 200,
+            trace_id: "t1".to_string(),
+            duration_ms: 0,
+            metadata: None,
+            previous_hash: String::new(),
+            entry_hash: String::new(),
+        };
+        let new_entry = AuditEntry {
+            timestamp: "2026-07-01T00:00:00Z".to_string(),
+            trace_id: "t2".to_string(),
+            path: "/new".to_string(),
+            ..old_entry.clone()
+        };
+
+        store.append(&old_entry).unwrap();
+        store.append(&new_entry).unwrap();
+
+        let policy = crate::audit_retention::AuditRetentionPolicy {
+            min_retention_secs: 365 * 24 * 3600,
+            max_retention_secs: 2 * 365 * 24 * 3600,
+            auto_purge_enabled: true,
+        };
+        let now = chrono::DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .timestamp() as u64;
+
+        let purged = AuditStore::purge_expired(&store, &policy, now).unwrap();
+        assert_eq!(purged, 1);
+
+        let remaining = store.query(None, None, None, None, 100).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert!(remaining[0].path.contains("/new"));
+    }
+
+    #[test]
+    fn rocksdb_audit_purge_disabled_noop() {
+        use crate::audit::{AuditAction, AuditEntry, AuditStore};
+        let (store, _dir) = tmp_store();
+
+        let entry = AuditEntry {
+            timestamp: "2020-01-01T00:00:00Z".to_string(),
+            action: AuditAction::HttpRequest,
+            method: "GET".to_string(),
+            path: "/x".to_string(),
+            org_id: "org1".to_string(),
+            source_ip: "127.0.0.1".to_string(),
+            status_code: 200,
+            trace_id: "t1".to_string(),
+            duration_ms: 0,
+            metadata: None,
+            previous_hash: String::new(),
+            entry_hash: String::new(),
+        };
+        store.append(&entry).unwrap();
+
+        let policy = crate::audit_retention::AuditRetentionPolicy {
+            min_retention_secs: 365 * 24 * 3600,
+            max_retention_secs: 2 * 365 * 24 * 3600,
+            auto_purge_enabled: false,
+        };
+        let purged = AuditStore::purge_expired(&store, &policy, 2_000_000_000).unwrap();
+        assert_eq!(purged, 0);
     }
 }
