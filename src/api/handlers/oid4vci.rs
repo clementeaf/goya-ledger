@@ -225,9 +225,14 @@ fn verify_proof_jwt(
         return Err(format!("proof aud mismatch: expected {expected_aud}"));
     }
 
-    // iat must be present
-    if payload.get("iat").and_then(|v| v.as_u64()).is_none() {
-        return Err("proof missing iat".into());
+    // iat must be present and within 5 minutes
+    let iat = payload
+        .get("iat")
+        .and_then(|v| v.as_u64())
+        .ok_or("proof missing iat")?;
+    let now = now_secs();
+    if now > iat + 300 || (iat > now && iat - now > 60) {
+        return Err("proof iat outside acceptable window".into());
     }
 
     Ok(())

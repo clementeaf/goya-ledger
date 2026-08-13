@@ -370,7 +370,7 @@ pub async fn submit_response(
 
 fn verify_sd_jwt_presentation(
     vp_token: &str,
-    _nonce: &str,
+    nonce: &str,
     store: &VpRequestStore,
 ) -> Result<VerificationResult, String> {
     let parts: Vec<&str> = vp_token.split('~').collect();
@@ -417,11 +417,40 @@ fn verify_sd_jwt_presentation(
     disclosed.insert("sub".to_string(), payload["sub"].clone());
     disclosed.insert("vct".to_string(), payload["vct"].clone());
 
+    // Verify nonce: check if the JWT payload contains a matching nonce,
+    // or if a KB-JWT with the nonce is appended.
+    let nonce_verified = if !nonce.is_empty() {
+        let jwt_nonce = payload.get("nonce").and_then(|v| v.as_str()).unwrap_or("");
+        if jwt_nonce == nonce {
+            true
+        } else {
+            // Check KB-JWT nonce (last ~-separated segment with dots)
+            let tail: Vec<&str> = parts[1..]
+                .iter()
+                .copied()
+                .filter(|p| !p.is_empty())
+                .collect();
+            tail.last()
+                .filter(|s| s.split('.').count() == 3)
+                .and_then(|kb| {
+                    let kb_parts: Vec<&str> = kb.split('.').collect();
+                    let payload_bytes = base64url_decode(kb_parts[1]).ok()?;
+                    let kb_payload: serde_json::Value =
+                        serde_json::from_slice(&payload_bytes).ok()?;
+                    let kb_nonce = kb_payload.get("nonce")?.as_str()?;
+                    Some(kb_nonce == nonce)
+                })
+                .unwrap_or(false)
+        }
+    } else {
+        true
+    };
+
     Ok(VerificationResult {
         valid: sig_verified,
         format: "vc+sd-jwt".to_string(),
         claims: serde_json::Value::Object(disclosed),
-        nonce_verified: true,
+        nonce_verified,
     })
 }
 
