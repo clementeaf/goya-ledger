@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: goya-node-4
+    runtime: docker
+    dockerfilePath: ./Dockerfile.fly
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: STORAGE_BACKEND
+        value: rocksdb
+      - key: STORAGE_PATH
+        value: /data/blocks
+      - key: ACL_MODE
+        value: permissive
+      - key: LOG_FORMAT
+        value: json
+      - key: RUST_LOG
+        value: info
+      - key: API_PORT
+        value: "8080"
+      - key: P2P_PORT
+        value: "8081"
+      - key: BIND_ADDR
+        value: 0.0.0.0
+      - key: NETWORK_ID
+        value: goya-testnet
+      - key: RATE_LIMIT_RPS
+        value: "50"
+      - key: AUTO_DISCOVERY_INTERVAL
+        value: "60"
+      # Set after all nodes are deployed:
+      # - key: BOOTSTRAP_NODES
+      #   value: "goya-node.fly.dev:8081,<railway-host>:8081,<oracle-ip>:8081"
