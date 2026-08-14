@@ -4,6 +4,51 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.9.1] — 2026-08-14
+
+### Added — EU/UAE digital identity critical gaps closed (5 of 5)
+
+- **mdoc Device Authentication** (`src/identity/mdoc.rs`) — ISO 18013-5 §9.1.3
+  - `DeviceAuth` struct — COSE_Sign1 proof of device key possession
+  - `sign_device_auth()` / `verify_device_auth()` — holder proves control of device_key in MSO
+  - `DeviceResponse` + `Document` structs — ISO 18013-5 §8.3 response format
+  - 3 tests (sign+verify, wrong key, session binding)
+- **mdoc Session Transcript** (`src/identity/mdoc.rs`) — ISO 18013-5 §9.1.5
+  - `SessionTranscript` struct — device_engagement + reader_key + handover
+  - `compute_session_transcript_hash()` — SHA-256 of CBOR-encoded transcript
+  - 2 tests (deterministic hash, roundtrip)
+- **OpenID4VCI authorization_code grant** (`src/api/handlers/oid4vci.rs`) — OpenID4VCI §3.4
+  - Token endpoint accepts both `pre-authorized_code` and `authorization_code` grant types
+  - `verify_pkce()` — PKCE S256 challenge verification (RFC 7636)
+  - `CredentialOffer` struct + `POST /credential_offer` endpoint (OpenID4VCI §4.1)
+  - Generates `openid-credential-offer://` URI with pre-authorized code
+  - 6 tests (auth_code flow, missing code, PKCE valid/invalid, credential offer, metadata grants)
+- **OpenID4VP DCQL** (`src/api/handlers/oid4vp.rs`) — OpenID4VP draft-24 §5.3
+  - `DcqlQuery`, `CredentialQuery`, `ClaimQuery` structs
+  - `match_dcql_query()` — validates format + required claims against disclosed data
+  - `create_request` accepts either `presentation_definition` or `dcql_query`; rejects neither
+  - `submit_response` dispatches to DCQL or PresentationDefinition matching
+  - 3 tests (valid, missing claim, format mismatch) + 1 E2E (create with DCQL) + 1 E2E (rejects neither)
+- **OpenID4VP response_mode + client_id_scheme** (`src/api/handlers/oid4vp.rs`) — OpenID4VP §7.3
+  - `AuthorizationRequest` now carries `response_mode` (default `direct_post`) and `client_id_scheme`
+  - Supports `direct_post.jwt` response mode declaration
+  - 1 E2E test (create request with response_mode + client_id_scheme)
+
+### Changed
+
+- `issuer_metadata`: `credentials_supported` (array) → `credential_configurations_supported` (object, draft-13+)
+- `issuer_metadata`: added `grant_types_supported` and `credential_offer_endpoint`
+- `issuer_metadata`: added `emirates_id` claim to SD-JWT configuration
+- `AuthorizationRequest.presentation_definition` → `Option<PresentationDefinition>` (DCQL alternative)
+- Token endpoint `unsupported_grant_type` message now lists both supported types
+
+### Stats
+
+- 16 new tests — suite total: 2534 passed, 0 failed, 3 ignored
+- 5 critical EU/UAE identity gaps closed (mdoc device auth, session transcript, authorization_code, DCQL, direct_post.jwt)
+
+---
+
 ## [0.9.0] — 2026-08-14
 
 ### Added — UAE regulatory compatibility (Federal Decree-Law 46/2021)

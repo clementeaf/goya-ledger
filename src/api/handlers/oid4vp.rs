@@ -70,13 +70,80 @@ pub struct FieldConstraint {
     pub optional: bool,
 }
 
+// ── DCQL — Digital Credentials Query Language (OpenID4VP draft-24 §5.3) ──
+
+/// DCQL query — simpler alternative to PresentationDefinition.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DcqlQuery {
+    pub credentials: Vec<CredentialQuery>,
+}
+
+/// A single credential requirement in DCQL.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CredentialQuery {
+    pub id: String,
+    pub format: String,
+    #[serde(default)]
+    pub claims: Vec<ClaimQuery>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<serde_json::Value>,
+}
+
+/// A claim requirement within a DCQL credential query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaimQuery {
+    pub path: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<Vec<serde_json::Value>>,
+}
+
+/// Match disclosed claims against a DCQL query.
+fn match_dcql_query(
+    query: &DcqlQuery,
+    format: &str,
+    disclosed_claims: &serde_json::Value,
+) -> Result<(), String> {
+    for cq in &query.credentials {
+        if cq.format != format {
+            return Err(format!(
+                "DCQL format mismatch for '{}': expected {}, got {format}",
+                cq.id, cq.format
+            ));
+        }
+        for claim in &cq.claims {
+            let found = claim.path.iter().any(|p| {
+                let key = p.strip_prefix("$.").unwrap_or(p);
+                claim_exists(disclosed_claims, key)
+            });
+            if !found {
+                return Err(format!(
+                    "DCQL required claim not disclosed: {:?}",
+                    claim.path
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn default_response_mode() -> String {
+    "direct_post".into()
+}
+
 /// Authorization request (stored for cross-device retrieval).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthorizationRequest {
     pub request_id: String,
     pub client_id: String,
     pub response_uri: String,
-    pub presentation_definition: PresentationDefinition,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub presentation_definition: Option<PresentationDefinition>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dcql_query: Option<DcqlQuery>,
+    #[serde(default = "default_response_mode")]
+    pub response_mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id_scheme: Option<String>,
     pub nonce: String,
     pub state: String,
     pub created_at: u64,
@@ -251,7 +318,14 @@ fn claim_exists(claims: &serde_json::Value, key: &str) -> bool {
 pub struct CreateRequestBody {
     pub client_id: String,
     pub response_uri: String,
-    pub presentation_definition: PresentationDefinition,
+    #[serde(default)]
+    pub presentation_definition: Option<PresentationDefinition>,
+    #[serde(default)]
+    pub dcql_query: Option<DcqlQuery>,
+    #[serde(default)]
+    pub response_mode: Option<String>,
+    #[serde(default)]
+    pub client_id_scheme: Option<String>,
 }
 
 /// Create a presentation request.
@@ -271,11 +345,27 @@ pub async fn create_request(
         .unwrap_or_default()
         .as_secs();
 
+    if body.presentation_definition.is_none() && body.dcql_query.is_none() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "INVALID_REQUEST",
+                "either presentation_definition or dcql_query required",
+            ),
+            400,
+        )));
+    }
+
     let request = AuthorizationRequest {
         request_id: trace.clone(),
         client_id: body.client_id.clone(),
         response_uri: body.response_uri.clone(),
         presentation_definition: body.presentation_definition.clone(),
+        dcql_query: body.dcql_query.clone(),
+        response_mode: body
+            .response_mode
+            .clone()
+            .unwrap_or_else(default_response_mode),
+        client_id_scheme: body.client_id_scheme.clone(),
         nonce: nonce.clone(),
         state: state.clone(),
         created_at: now,
@@ -351,14 +441,16 @@ pub async fn submit_response(
         }
     };
 
-    // Match against presentation_definition
+    // Match against presentation_definition or dcql_query
     let format = &vr.format;
-    if let Err(e) = match_presentation_definition(
-        &request.presentation_definition,
-        &body.presentation_submission,
-        &vr.claims,
-        format,
-    ) {
+    let match_result = if let Some(dcql) = &request.dcql_query {
+        match_dcql_query(dcql, format, &vr.claims)
+    } else if let Some(pd) = &request.presentation_definition {
+        match_presentation_definition(pd, &body.presentation_submission, &vr.claims, format)
+    } else {
+        Err("no presentation_definition or dcql_query in request".into())
+    };
+    if let Err(e) = match_result {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto("DEFINITION_MISMATCH", &e),
             400,
@@ -881,5 +973,114 @@ mod tests {
         let body: serde_json::Value = test::read_body_json(resp).await;
         assert_eq!(body["data"]["valid"], true);
         assert_eq!(body["data"]["format"], "mso_mdoc");
+    }
+
+    // ── DCQL + response_mode tests ─────────────────────────────────
+
+    #[actix_web::test]
+    async fn dcql_query_match_valid() {
+        let query = DcqlQuery {
+            credentials: vec![CredentialQuery {
+                id: "pid".into(),
+                format: "vc+sd-jwt".into(),
+                claims: vec![ClaimQuery {
+                    path: vec!["$.given_name".into()],
+                    values: None,
+                }],
+                meta: None,
+            }],
+        };
+        let claims = serde_json::json!({"given_name": "Juan", "iss": "x"});
+        assert!(match_dcql_query(&query, "vc+sd-jwt", &claims).is_ok());
+    }
+
+    #[actix_web::test]
+    async fn dcql_query_match_missing_claim() {
+        let query = DcqlQuery {
+            credentials: vec![CredentialQuery {
+                id: "pid".into(),
+                format: "vc+sd-jwt".into(),
+                claims: vec![ClaimQuery {
+                    path: vec!["$.given_name".into()],
+                    values: None,
+                }],
+                meta: None,
+            }],
+        };
+        let claims = serde_json::json!({"iss": "x"});
+        assert!(match_dcql_query(&query, "vc+sd-jwt", &claims).is_err());
+    }
+
+    #[actix_web::test]
+    async fn dcql_query_format_mismatch() {
+        let query = DcqlQuery {
+            credentials: vec![CredentialQuery {
+                id: "pid".into(),
+                format: "mso_mdoc".into(),
+                claims: vec![],
+                meta: None,
+            }],
+        };
+        let claims = serde_json::json!({});
+        assert!(match_dcql_query(&query, "vc+sd-jwt", &claims).is_err());
+    }
+
+    #[actix_web::test]
+    async fn e2e_create_request_with_dcql() {
+        let store = make_store();
+        let app = vp_app!(store);
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/request")
+            .set_json(serde_json::json!({
+                "client_id": "verifier.example.com",
+                "response_uri": "https://verifier.example.com/cb",
+                "dcql_query": {
+                    "credentials": [{
+                        "id": "pid",
+                        "format": "vc+sd-jwt",
+                        "claims": [{"path": ["$.given_name"]}]
+                    }]
+                }
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert!(body["data"]["request_id"].as_str().is_some());
+    }
+
+    #[actix_web::test]
+    async fn e2e_create_request_rejects_neither() {
+        let store = make_store();
+        let app = vp_app!(store);
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/request")
+            .set_json(serde_json::json!({
+                "client_id": "v.example.com",
+                "response_uri": "https://v.example.com/cb"
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    #[actix_web::test]
+    async fn e2e_create_request_with_response_mode() {
+        let store = make_store();
+        let app = vp_app!(store);
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/request")
+            .set_json(serde_json::json!({
+                "client_id": "v.example.com",
+                "response_uri": "https://v.example.com/cb",
+                "presentation_definition": test_definition(),
+                "response_mode": "direct_post.jwt",
+                "client_id_scheme": "x509_san_dns"
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert!(body["data"]["request_id"].as_str().is_some());
     }
 }

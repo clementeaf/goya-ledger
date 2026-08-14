@@ -73,6 +73,85 @@ pub struct VerifiedMdoc {
     pub algorithm: SigningAlgorithm,
 }
 
+// ── Device Authentication (ISO 18013-5 §9.1.3) ─────────────────────────
+
+/// Device authentication proof — holder proves possession of device_key.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceAuth {
+    /// COSE_Sign1 from the device key over session transcript.
+    pub device_signature: Vec<u8>,
+    /// Algorithm used.
+    pub algorithm: SigningAlgorithm,
+}
+
+/// ISO 18013-5 §8.3 DeviceResponse — top-level response from holder to verifier.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceResponse {
+    pub version: String,
+    pub documents: Vec<Document>,
+    pub status: u32,
+}
+
+/// A single document within a DeviceResponse.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Document {
+    pub doc_type: String,
+    pub issuer_signed: Mdoc,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_auth: Option<DeviceAuth>,
+}
+
+/// Session transcript for binding device auth to a specific session (ISO 18013-5 §9.1.5).
+pub struct SessionTranscript {
+    pub device_engagement: Vec<u8>,
+    pub reader_key: Vec<u8>,
+    pub handover: Vec<u8>,
+}
+
+/// Compute SHA-256 hash of CBOR-encoded session transcript.
+pub fn compute_session_transcript_hash(transcript: &SessionTranscript) -> Vec<u8> {
+    let parts = (
+        &transcript.device_engagement,
+        &transcript.reader_key,
+        &transcript.handover,
+    );
+    let mut buf = Vec::new();
+    ciborium::into_writer(&parts, &mut buf).expect("CBOR encode transcript");
+    hash_with(HashAlgorithm::Sha256, &buf).to_vec()
+}
+
+/// Sign device authentication — holder proves they control the device_key in the MSO.
+pub fn sign_device_auth(
+    provider: &dyn SigningProvider,
+    session_transcript: &[u8],
+) -> Result<DeviceAuth, String> {
+    let signature = provider
+        .sign(session_transcript)
+        .map_err(|e| e.to_string())?;
+    let cose = cbor_encode_cose_sign1(provider.algorithm(), session_transcript, &signature)?;
+    Ok(DeviceAuth {
+        device_signature: cose,
+        algorithm: provider.algorithm(),
+    })
+}
+
+/// Verify device authentication against the device_key declared in the MSO.
+pub fn verify_device_auth(
+    auth: &DeviceAuth,
+    device_key_hex: &str,
+    session_transcript: &[u8],
+) -> Result<(), String> {
+    let (payload, signature) = cbor_decode_cose_sign1(&auth.device_signature)?;
+    if payload != session_transcript {
+        return Err("device auth payload does not match session transcript".into());
+    }
+    let sig_hex = hex::encode(&signature);
+    if !crate::signature::verify_signature(auth.algorithm, device_key_hex, &payload, &sig_hex) {
+        return Err("device signature verification failed".into());
+    }
+    Ok(())
+}
+
 fn generate_random() -> String {
     use pqc_crypto_module::legacy::rng::OsRng;
     use rand_core::RngCore;
@@ -420,5 +499,70 @@ mod tests {
         // Direct verify would fail because disclosed ns not in MSO check
         // but the issuer_auth is still intact
         assert!(!presentation.issuer_auth_cbor.is_empty());
+    }
+
+    // ── Device Authentication tests ────────────────────────────────
+
+    #[test]
+    fn device_auth_sign_and_verify() {
+        let holder = SoftwareSigningProvider::generate();
+        let transcript = b"session-transcript-data";
+        let auth = sign_device_auth(&holder, transcript).unwrap();
+        let pk_hex = hex::encode(holder.public_key());
+        assert!(verify_device_auth(&auth, &pk_hex, transcript).is_ok());
+    }
+
+    #[test]
+    fn device_auth_wrong_key_fails() {
+        let holder = SoftwareSigningProvider::generate();
+        let other = SoftwareSigningProvider::generate();
+        let transcript = b"session-data";
+        let auth = sign_device_auth(&holder, transcript).unwrap();
+        let wrong_pk = hex::encode(other.public_key());
+        assert!(verify_device_auth(&auth, &wrong_pk, transcript).is_err());
+    }
+
+    #[test]
+    fn device_auth_bound_to_session() {
+        let holder = SoftwareSigningProvider::generate();
+        let transcript = b"original-session";
+        let auth = sign_device_auth(&holder, transcript).unwrap();
+        let pk_hex = hex::encode(holder.public_key());
+        assert!(verify_device_auth(&auth, &pk_hex, b"different-session").is_err());
+    }
+
+    #[test]
+    fn device_response_serde_roundtrip() {
+        let issuer = SoftwareSigningProvider::generate();
+        let holder = SoftwareSigningProvider::generate();
+        let mdoc = issue_mdoc(&pid_params(), &issuer).unwrap();
+        let auth = sign_device_auth(&holder, b"session").unwrap();
+        let resp = DeviceResponse {
+            version: "1.0".into(),
+            documents: vec![Document {
+                doc_type: mdoc.doc_type.clone(),
+                issuer_signed: mdoc,
+                device_auth: Some(auth),
+            }],
+            status: 0,
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: DeviceResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.version, "1.0");
+        assert_eq!(parsed.documents.len(), 1);
+        assert!(parsed.documents[0].device_auth.is_some());
+    }
+
+    #[test]
+    fn session_transcript_deterministic() {
+        let t = SessionTranscript {
+            device_engagement: b"engagement".to_vec(),
+            reader_key: b"reader".to_vec(),
+            handover: b"handover".to_vec(),
+        };
+        let h1 = compute_session_transcript_hash(&t);
+        let h2 = compute_session_transcript_hash(&t);
+        assert_eq!(h1, h2);
+        assert_eq!(h1.len(), 32);
     }
 }
