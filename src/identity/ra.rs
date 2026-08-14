@@ -79,6 +79,39 @@ impl std::fmt::Display for Jurisdiction {
     }
 }
 
+/// eIDAS Level of Assurance (Regulation 2015/1502).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EidasLoA {
+    /// Low — self-asserted identity.
+    #[default]
+    Low,
+    /// Substantial — verified identity with moderate assurance.
+    Substantial,
+    /// High — verified identity with high assurance (in-person or equivalent).
+    High,
+}
+
+impl std::fmt::Display for EidasLoA {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Low => write!(f, "low"),
+            Self::Substantial => write!(f, "substantial"),
+            Self::High => write!(f, "high"),
+        }
+    }
+}
+
+/// Derive eIDAS LoA from proofing method.
+pub fn loa_from_method(method: ProofingMethod) -> EidasLoA {
+    match method {
+        ProofingMethod::InPerson => EidasLoA::High,
+        ProofingMethod::VideoConference => EidasLoA::Substantial,
+        ProofingMethod::UaePass => EidasLoA::Substantial,
+        ProofingMethod::RemoteAutomated => EidasLoA::Low,
+    }
+}
+
 /// Identity proofing request submitted by a subscriber.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IdentityProofing {
@@ -110,6 +143,9 @@ pub struct IdentityProofing {
     /// Rejection reason (None if not rejected).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rejection_reason: Option<String>,
+    /// eIDAS Level of Assurance, derived from proofing method.
+    #[serde(default)]
+    pub loa: EidasLoA,
 }
 
 /// Validate a Chilean RUT format and check digit (modulo 11).
@@ -280,6 +316,7 @@ impl RaStore {
             national_id: None,
             jurisdiction: Jurisdiction::default(),
             legal_name,
+            loa: loa_from_method(method),
             method,
             status: ProofingStatus::Pending,
             requested_at,
@@ -736,6 +773,7 @@ mod tests {
             resolved_at: Some(1700001000),
             resolved_by: Some("did:goya:officer".into()),
             rejection_reason: None,
+            loa: EidasLoA::High,
         };
         let json = serde_json::to_string(&proofing).unwrap();
         let parsed: IdentityProofing = serde_json::from_str(&json).unwrap();

@@ -352,9 +352,35 @@ fn make_intermediate_params() -> Result<CertificateParams, PkiError> {
     Ok(params)
 }
 
+/// EN 319 412-5 QCStatement OIDs beyond QcCompliance and QcType.
+pub const QC_SSCD_OID: &str = "0.4.0.1862.1.4";
+pub const QC_RETENTION_OID: &str = "0.4.0.1862.1.3";
+pub const QC_LIMIT_VALUE_OID: &str = "0.4.0.1862.1.2";
+
+/// Extended QCStatements parameters for qualified certificates.
+pub struct QcStatementsParams {
+    pub profile: crate::pki_policy::CertProfileType,
+    /// Whether the signature is created by a QSCD (Qualified Signature Creation Device).
+    pub qscd: bool,
+    /// Retention period in years (QcRetentionPeriod). None = omit.
+    pub retention_years: Option<u32>,
+    /// Transaction limit value in cents (QcLimitValue). None = omit.
+    pub limit_value_cents: Option<u64>,
+}
+
 /// Build raw DER content for QCStatements (EN 319 412-5).
 /// Returns the SEQUENCE OF QCStatement bytes without the extension wrapper.
 pub fn build_qc_statements_der(profile: crate::pki_policy::CertProfileType) -> Vec<u8> {
+    build_qc_statements_der_ext(&QcStatementsParams {
+        profile,
+        qscd: false,
+        retention_years: None,
+        limit_value_cents: None,
+    })
+}
+
+/// Build extended QCStatements with QSCD, retention, and limit value.
+pub fn build_qc_statements_der_ext(params: &QcStatementsParams) -> Vec<u8> {
     let compliance_oid = parse_oid_str(crate::pki_policy::QC_COMPLIANCE_OID);
     let compliance_oid_der = encode_oid_der(&compliance_oid);
     let qc_compliance = encode_sequence(&[&compliance_oid_der]);
@@ -362,7 +388,7 @@ pub fn build_qc_statements_der(profile: crate::pki_policy::CertProfileType) -> V
     let type_oid = parse_oid_str(crate::pki_policy::QC_TYPE_OID);
     let type_oid_der = encode_oid_der(&type_oid);
 
-    let qc_type_value_oid = match profile {
+    let qc_type_value_oid = match params.profile {
         crate::pki_policy::CertProfileType::NaturalPerson => crate::pki_policy::QCT_ESIGN_OID,
         crate::pki_policy::CertProfileType::LegalPerson => crate::pki_policy::QCT_ESEAL_OID,
         crate::pki_policy::CertProfileType::WebAuthentication => crate::pki_policy::QCT_WEB_OID,
@@ -371,7 +397,37 @@ pub fn build_qc_statements_der(profile: crate::pki_policy::CertProfileType) -> V
     let qc_type_info = encode_sequence(&[&qc_type_value_der]);
     let qc_type = encode_sequence(&[&type_oid_der, &qc_type_info]);
 
-    encode_sequence(&[&qc_compliance, &qc_type])
+    let mut statements: Vec<Vec<u8>> = vec![qc_compliance, qc_type];
+
+    if params.qscd {
+        let sscd_oid_der = encode_oid_der(&parse_oid_str(QC_SSCD_OID));
+        statements.push(encode_sequence(&[&sscd_oid_der]));
+    }
+
+    if let Some(years) = params.retention_years {
+        let ret_oid_der = encode_oid_der(&parse_oid_str(QC_RETENTION_OID));
+        let years_der = encode_integer(years as u64);
+        statements.push(encode_sequence(&[&ret_oid_der, &years_der]));
+    }
+
+    if let Some(cents) = params.limit_value_cents {
+        let limit_oid_der = encode_oid_der(&parse_oid_str(QC_LIMIT_VALUE_OID));
+        let cents_der = encode_integer(cents);
+        statements.push(encode_sequence(&[&limit_oid_der, &cents_der]));
+    }
+
+    let refs: Vec<&[u8]> = statements.iter().map(|s| s.as_slice()).collect();
+    encode_sequence(&refs)
+}
+
+fn encode_integer(value: u64) -> Vec<u8> {
+    let mut bytes = value.to_be_bytes().to_vec();
+    while bytes.len() > 1 && bytes[0] == 0 && bytes[1] < 0x80 {
+        bytes.remove(0);
+    }
+    let mut der = vec![0x02, bytes.len() as u8];
+    der.extend_from_slice(&bytes);
+    der
 }
 
 /// Build a DER-encoded QCStatements extension (OID 1.3.6.1.5.5.7.1.3).
@@ -392,6 +448,23 @@ fn parse_oid_str(oid: &str) -> Vec<u64> {
 // ── sign_node_cert ─────────────────────────────────────────────────────────
 
 #[allow(dead_code)]
+/// Subject identity for qualified certificates (EN 319 412-2/3).
+#[derive(Debug, Clone, Default)]
+pub struct SubjectIdentity {
+    /// Given name (EN 319 412-2, natural person).
+    pub given_name: Option<String>,
+    /// Surname (EN 319 412-2, natural person).
+    pub surname: Option<String>,
+    /// Serial number — national ID (RUT, Emirates ID, EU national ID).
+    pub serial_number: Option<String>,
+    /// Country code (ISO 3166-1 alpha-2).
+    pub country: Option<String>,
+    /// Organization name (EN 319 412-3, legal person).
+    pub organization: Option<String>,
+    /// Organization identifier (EORI, LEI, VAT — EN 319 412-3).
+    pub organization_id: Option<String>,
+}
+
 /// Generate a new ECDSA P-256 key pair and issue a TLS certificate for
 /// `node_id`, signed by `ca`.
 ///
@@ -402,10 +475,56 @@ pub fn sign_node_cert(
     ca: &NodeCaConfig,
     ttl_days: u32,
 ) -> Result<IssuedNodeCert, PkiError> {
+    sign_node_cert_with_subject(node_id, ca, ttl_days, &SubjectIdentity::default())
+}
+
+/// Issue a certificate with full subject DN for qualified certificates.
+pub fn sign_node_cert_with_subject(
+    node_id: &str,
+    ca: &NodeCaConfig,
+    ttl_days: u32,
+    subject: &SubjectIdentity,
+) -> Result<IssuedNodeCert, PkiError> {
     let key_pair = KeyPair::generate()?;
 
     let mut params = CertificateParams::new(vec![node_id.to_string()])?;
     params.distinguished_name.push(DnType::CommonName, node_id);
+
+    if let Some(gn) = &subject.given_name {
+        // givenName OID 2.5.4.42
+        params
+            .distinguished_name
+            .push(DnType::CustomDnType(vec![2, 5, 4, 42]), gn.as_str());
+    }
+    if let Some(sn) = &subject.surname {
+        // surname OID 2.5.4.4
+        params
+            .distinguished_name
+            .push(DnType::CustomDnType(vec![2, 5, 4, 4]), sn.as_str());
+    }
+    if let Some(serial) = &subject.serial_number {
+        // serialNumber OID 2.5.4.5
+        params
+            .distinguished_name
+            .push(DnType::CustomDnType(vec![2, 5, 4, 5]), serial.as_str());
+    }
+    if let Some(c) = &subject.country {
+        params
+            .distinguished_name
+            .push(DnType::CountryName, c.as_str());
+    }
+    if let Some(org) = &subject.organization {
+        params
+            .distinguished_name
+            .push(DnType::OrganizationName, org.as_str());
+    }
+    if let Some(org_id) = &subject.organization_id {
+        // organizationIdentifier OID 2.5.4.97 (ETSI EN 319 412-1)
+        params
+            .distinguished_name
+            .push(DnType::CustomDnType(vec![2, 5, 4, 97]), org_id.as_str());
+    }
+
     params.is_ca = IsCa::NoCa;
     let now = time::OffsetDateTime::now_utc();
     params.not_before = now;

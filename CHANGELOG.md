@@ -4,6 +4,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.9.2] — 2026-08-14
+
+### Added — Certification readiness + EUDI Wallet interop simulation
+
+- **Extended QCStatements** (`src/pki.rs`) — EN 319 412-5
+  - `QcStatementsParams` struct with `qscd`, `retention_years`, `limit_value_cents`
+  - `build_qc_statements_der_ext()` — generates QcSSCD (0.4.0.1862.1.4), QcRetentionPeriod (0.4.0.1862.1.3), QcLimitValue (0.4.0.1862.1.2)
+  - `QC_SSCD_OID`, `QC_RETENTION_OID`, `QC_LIMIT_VALUE_OID` constants
+  - Backwards-compatible: `build_qc_statements_der()` delegates to ext with defaults
+- **Full subject DN for qualified certificates** (`src/pki.rs`) — EN 319 412-2/3
+  - `SubjectIdentity` struct: `given_name`, `surname`, `serial_number`, `country`, `organization`, `organization_id`
+  - `sign_node_cert_with_subject()` — issues certs with complete DN (givenName 2.5.4.42, surname 2.5.4.4, serialNumber 2.5.4.5, organizationIdentifier 2.5.4.97)
+  - `sign_node_cert()` unchanged (backwards-compatible, delegates with default identity)
+- **eIDAS Level of Assurance** (`src/identity/ra.rs`) — Regulation 2015/1502
+  - `EidasLoA` enum: `Low`, `Substantial`, `High`
+  - `loa_from_method()` — derives LoA from proofing method (InPerson→High, Video/UaePass→Substantial, Remote→Low)
+  - `IdentityProofing.loa` field (serde default, backwards-compatible)
+- **Certification readiness test suite** (`tests/certification_readiness.rs`) — 18 tests
+  - QCStatements: basic, QSCD, retention, limit value, profile differentiation
+  - Certificate DN: natural person (Arabic name + Emirates ID), legal person (org + VAT), backwards compat
+  - LoA eIDAS: all 4 proofing methods mapped correctly
+  - Multi-jurisdiction: RUT, Emirates ID, EU national ID validation
+  - SD-JWT VC structure validation with Arabic claims
+  - mdoc full verification flow (issuer auth + device auth)
+- **EUDI Wallet interop test suite** (`tests/eudi_wallet_interop.rs`) — 7 tests
+  - SD-JWT VC: issue PID → selective disclosure → verify (EUDI PID flow)
+  - SD-JWT VC: zero-disclosure presentation
+  - mdoc: issue → DeviceResponse with DeviceAuth → issuer verify + device verify
+  - PKCE S256 RFC 7636 roundtrip
+  - Cross-jurisdiction: EmiratesIDCredential (Arabic), ChileanPIDCredential
+  - DeviceResponse JSON wire format serialization roundtrip
+
+### Stats
+
+- 25 new integration tests + lib suite 2534 passed, 0 failed
+- 3 high-severity certification gaps closed (QCStatements, DN, LoA)
+- 2 simulation test suites validate certification + wallet interop readiness
+
+---
+
 ## [0.9.1] — 2026-08-14
 
 ### Added — EU/UAE digital identity critical gaps closed (5 of 5)
