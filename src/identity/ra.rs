@@ -1,6 +1,11 @@
-//! Registration Authority (RA) — identity proofing for Ley 19.799 Art. 15.
+//! Registration Authority (RA) — identity proofing.
 //!
-//! A PSC must verify subscriber identity before issuing certificates.
+//! Supports multiple jurisdictions:
+//! - Chile: Ley 19.799 Art. 15 (RUT validation)
+//! - UAE: Federal Decree-Law 46/2021 (Emirates ID validation)
+//! - EU: eIDAS Art. 24 (national ID)
+//!
+//! A TSP must verify subscriber identity before issuing certificates.
 //! This module manages the proofing lifecycle: request → verify → approve/reject.
 
 use serde::{Deserialize, Serialize};
@@ -36,6 +41,8 @@ pub enum ProofingMethod {
     VideoConference,
     /// Automated remote verification via trusted service.
     RemoteAutomated,
+    /// UAE Pass digital identity verification.
+    UaePass,
 }
 
 impl std::fmt::Display for ProofingMethod {
@@ -44,6 +51,30 @@ impl std::fmt::Display for ProofingMethod {
             Self::InPerson => write!(f, "in_person"),
             Self::VideoConference => write!(f, "video_conference"),
             Self::RemoteAutomated => write!(f, "remote_automated"),
+            Self::UaePass => write!(f, "uae_pass"),
+        }
+    }
+}
+
+/// Jurisdiction for identity proofing.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Jurisdiction {
+    /// Chile — Ley 19.799, RUT as national ID.
+    #[default]
+    Chile,
+    /// UAE — Federal Decree-Law 46/2021, Emirates ID as national ID.
+    Uae,
+    /// EU — eIDAS 910/2014, national ID per member state.
+    Eu,
+}
+
+impl std::fmt::Display for Jurisdiction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Chile => write!(f, "chile"),
+            Self::Uae => write!(f, "uae"),
+            Self::Eu => write!(f, "eu"),
         }
     }
 }
@@ -54,7 +85,14 @@ pub struct IdentityProofing {
     /// DID of the subscriber requesting proofing.
     pub did: String,
     /// Chilean RUT (Rol Unico Tributario), e.g. "12.345.678-5".
+    /// For UAE/EU, use `national_id` instead.
     pub rut: String,
+    /// National ID for non-Chilean jurisdictions (Emirates ID, EU national ID).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub national_id: Option<String>,
+    /// Jurisdiction for this proofing request.
+    #[serde(default)]
+    pub jurisdiction: Jurisdiction,
     /// Legal name as it appears on official documents.
     pub legal_name: String,
     /// Verification method used or requested.
@@ -134,6 +172,85 @@ fn compute_rut_check_digit(mut body: u64) -> String {
     }
 }
 
+/// Validate a UAE Emirates ID number.
+///
+/// Format: 784-YYYY-NNNNNNN-C (15 digits total).
+/// - 784 = UAE country code (ISO 3166)
+/// - YYYY = birth year
+/// - NNNNNNN = sequence number
+/// - C = check digit (Luhn algorithm)
+///
+/// Accepts formats: "784-1990-1234567-6", "784199012345671", "784 1990 1234567 1".
+/// Returns the normalized form (with hyphens) or an error.
+pub fn validate_emirates_id(id: &str) -> Result<String, String> {
+    let digits: String = id.chars().filter(|c| c.is_ascii_digit()).collect();
+
+    if digits.len() != 15 {
+        return Err(format!(
+            "Emirates ID must be 15 digits, got {}",
+            digits.len()
+        ));
+    }
+
+    if !digits.starts_with("784") {
+        return Err("Emirates ID must start with 784 (UAE country code)".into());
+    }
+
+    let year: u16 = digits[3..7]
+        .parse()
+        .map_err(|_| "Invalid birth year in Emirates ID")?;
+    if !(1900..=2100).contains(&year) {
+        return Err(format!("Implausible birth year in Emirates ID: {year}"));
+    }
+
+    let expected_check = compute_luhn_check(&digits[..14]);
+    let actual_check = digits.as_bytes()[14] - b'0';
+    if actual_check != expected_check {
+        return Err(format!(
+            "Emirates ID check digit mismatch: expected {expected_check}, got {actual_check}"
+        ));
+    }
+
+    Ok(format!(
+        "{}-{}-{}-{}",
+        &digits[0..3],
+        &digits[3..7],
+        &digits[7..14],
+        &digits[14..15]
+    ))
+}
+
+/// Compute Luhn check digit for a digit string.
+fn compute_luhn_check(digits: &str) -> u8 {
+    let mut sum: u32 = 0;
+    for (i, ch) in digits.chars().rev().enumerate() {
+        let mut d = ch.to_digit(10).unwrap_or(0);
+        if i % 2 == 0 {
+            d *= 2;
+            if d > 9 {
+                d -= 9;
+            }
+        }
+        sum += d;
+    }
+    ((10 - (sum % 10)) % 10) as u8
+}
+
+/// Validate a national ID based on jurisdiction.
+pub fn validate_national_id(id: &str, jurisdiction: Jurisdiction) -> Result<String, String> {
+    match jurisdiction {
+        Jurisdiction::Chile => validate_rut(id),
+        Jurisdiction::Uae => validate_emirates_id(id),
+        Jurisdiction::Eu => {
+            let trimmed = id.trim();
+            if trimmed.len() < 4 {
+                return Err("EU national ID too short".into());
+            }
+            Ok(trimmed.to_string())
+        }
+    }
+}
+
 /// In-memory Registration Authority store.
 pub struct RaStore {
     records: RwLock<HashMap<String, IdentityProofing>>,
@@ -160,6 +277,8 @@ impl RaStore {
         let proofing = IdentityProofing {
             did: did.clone(),
             rut: normalized_rut,
+            national_id: None,
+            jurisdiction: Jurisdiction::default(),
             legal_name,
             method,
             status: ProofingStatus::Pending,
@@ -313,6 +432,91 @@ mod tests {
         assert_eq!(compute_rut_check_digit(12345678), "5");
         assert_eq!(compute_rut_check_digit(10000013), "K");
         assert_eq!(compute_rut_check_digit(11111111), "1");
+    }
+
+    // ── Emirates ID validation ───────────────────────────────────────
+
+    #[test]
+    fn valid_emirates_id_with_hyphens() {
+        let result = validate_emirates_id("784-1990-1234567-6");
+        assert!(result.is_ok(), "Expected valid, got: {result:?}");
+    }
+
+    #[test]
+    fn valid_emirates_id_digits_only() {
+        let with_hyphens = validate_emirates_id("784-1990-1234567-6").unwrap();
+        let digits: String = with_hyphens
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .collect();
+        let result = validate_emirates_id(&digits);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), with_hyphens);
+    }
+
+    #[test]
+    fn emirates_id_wrong_country_code() {
+        let err = validate_emirates_id("123-1990-1234567-1").unwrap_err();
+        assert!(err.contains("784"));
+    }
+
+    #[test]
+    fn emirates_id_wrong_length() {
+        let err = validate_emirates_id("784-1990-123-1").unwrap_err();
+        assert!(err.contains("15 digits"));
+    }
+
+    #[test]
+    fn emirates_id_bad_check_digit() {
+        let err = validate_emirates_id("784-1990-1234567-9").unwrap_err();
+        assert!(err.contains("check digit"));
+    }
+
+    #[test]
+    fn emirates_id_implausible_year() {
+        let err = validate_emirates_id("784-1800-1234567-1").unwrap_err();
+        assert!(err.contains("Implausible"));
+    }
+
+    #[test]
+    fn validate_national_id_dispatches_chile() {
+        assert!(validate_national_id("12345678-5", Jurisdiction::Chile).is_ok());
+        assert!(validate_national_id("12345678-0", Jurisdiction::Chile).is_err());
+    }
+
+    #[test]
+    fn validate_national_id_dispatches_uae() {
+        assert!(validate_national_id("784-1990-1234567-6", Jurisdiction::Uae).is_ok());
+        assert!(validate_national_id("000-1990-1234567-1", Jurisdiction::Uae).is_err());
+    }
+
+    #[test]
+    fn validate_national_id_dispatches_eu() {
+        assert!(validate_national_id("DE123456789", Jurisdiction::Eu).is_ok());
+        assert!(validate_national_id("AB", Jurisdiction::Eu).is_err());
+    }
+
+    // ── Jurisdiction serde ─────────────────────────────────────────
+
+    #[test]
+    fn jurisdiction_default_is_chile() {
+        assert_eq!(Jurisdiction::default(), Jurisdiction::Chile);
+    }
+
+    #[test]
+    fn jurisdiction_serde_roundtrip() {
+        let json = serde_json::to_string(&Jurisdiction::Uae).unwrap();
+        assert_eq!(json, "\"uae\"");
+        let parsed: Jurisdiction = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, Jurisdiction::Uae);
+    }
+
+    #[test]
+    fn identity_proofing_backwards_compat() {
+        let legacy = r#"{"did":"did:goya:x","rut":"12345678-5","legal_name":"Test","method":"in_person","status":"pending","requested_at":0}"#;
+        let parsed: IdentityProofing = serde_json::from_str(legacy).unwrap();
+        assert_eq!(parsed.jurisdiction, Jurisdiction::Chile);
+        assert!(parsed.national_id.is_none());
     }
 
     // ── RaStore lifecycle ───────────────────────────────────────────
@@ -523,6 +727,8 @@ mod tests {
         let proofing = IdentityProofing {
             did: "did:goya:test".into(),
             rut: "12345678-5".into(),
+            national_id: None,
+            jurisdiction: Jurisdiction::default(),
             legal_name: "Test".into(),
             method: ProofingMethod::InPerson,
             status: ProofingStatus::Verified,

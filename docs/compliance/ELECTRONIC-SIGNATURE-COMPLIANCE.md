@@ -2,7 +2,9 @@
 
 Legal alignment mapping for the GOYA Ledger electronic signature framework.
 
-Covers three jurisdictions: Chile, European Union, and United States.
+Covers four jurisdictions: Chile, European Union, United States, and UAE.
+
+For detailed UAE compliance mapping, see [UAE-COMPLIANCE.md](UAE-COMPLIANCE.md).
 
 > **Disclaimer:** This document is a **self-assessment** mapping code features to legal requirements. It is not a certification, legal opinion, or formal audit result. No third-party auditor or legal authority has validated these claims. Organizations should seek independent legal counsel before relying on these mappings for compliance purposes.
 
@@ -193,7 +195,11 @@ Where `{bio}` = `SHA-256(sorted biometric commitments joined by ':')`.
 | Simple (FES) — Ed25519 | Done | — |
 | Advanced (FEA) — ML-DSA-65 + biometric | Done | — |
 | Qualified — QTSP certificate chain validation | Planned | When certified TSP available |
-| Timestamping Authority (TSA) integration — RFC 3161 | Planned | External TSA for legal timestamp |
-| Long-term signature preservation — CAdES/XAdES/PAdES | Planned | Archival signatures beyond key validity |
+| Timestamping Authority (TSA) integration — RFC 3161 | Done | — |
+| Long-term signature preservation — CAdES/XAdES/PAdES | Done | — |
 | eIDAS 2.0 EUDI Wallet interop | Planned | EU Digital Identity Wallet compatibility |
 | Chilean PSC (Prestador de Servicios de Certificación) integration | Planned | Accredited provider for FEA certification |
+| UAE TDRA QTSP licensing | Planned | When applying for TDRA trust service provider |
+| UAE Pass identity verification (live API) | Planned | Real-time Emirates ID verification |
+| UAE Emirates ID validation | Done | `validate_emirates_id()` in RA module |
+| Multi-jurisdiction RA (Chile/UAE/EU) | Done | `Jurisdiction` enum + `validate_national_id()` |

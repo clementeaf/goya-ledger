@@ -8,8 +8,11 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Default retention period: 7 years in seconds.
+/// Default retention period: 7 years in seconds (Chile, ETSI TS 102 042).
 pub const DEFAULT_RETENTION_SECS: u64 = 7 * 365 * 24 * 3600;
+
+/// UAE retention period: 15 years in seconds (Federal Decree-Law 46/2021 Art. 10).
+pub const UAE_RETENTION_SECS: u64 = 15 * 365 * 24 * 3600;
 
 /// Audit log retention policy.
 #[derive(Debug, Clone, Serialize, Deserialize)]

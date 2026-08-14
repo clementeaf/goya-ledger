@@ -4,6 +4,44 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.9.0] — 2026-08-14
+
+### Added — UAE regulatory compatibility (Federal Decree-Law 46/2021)
+
+- **Emirates ID validation** (`src/identity/ra.rs`)
+  - `validate_emirates_id()` — format 784-YYYY-NNNNNNN-C with Luhn check digit
+  - Accepts hyphenated, spaced, and raw digit formats; returns normalized form
+  - 6 tests (valid formats, wrong country code, wrong length, bad check digit, implausible year)
+- **Multi-jurisdiction Registration Authority**
+  - `Jurisdiction` enum: `Chile`, `Uae`, `Eu` (default `Chile`, backwards-compatible via `#[serde(default)]`)
+  - `validate_national_id()` — dispatches validation by jurisdiction (RUT, Emirates ID, EU national ID)
+  - `ProofingMethod::UaePass` — UAE Pass digital identity verification method
+  - `IdentityProofing` struct: `national_id` and `jurisdiction` fields (serde defaults preserve legacy JSON)
+  - 7 tests (dispatch per jurisdiction, serde roundtrip, backwards compat)
+- **UAE audit retention** (`src/audit_retention.rs`)
+  - `UAE_RETENTION_SECS` constant — 15 years per DL 46/2021 Art. 10 (was only 7-year Chilean default)
+- **UAE compliance documentation** (`docs/compliance/UAE-COMPLIANCE.md`)
+  - DL 46/2021 article-by-article mapping (Art. 1, 10, 11, 19, 20, 21)
+  - Cabinet Resolution 28/2023 (TDRA executive regulation)
+  - TDRA Trust Service Provider requirements mapped to GOYA modules
+  - Emirates ID / UAE Pass integration architecture
+  - PDPL (DL 45/2021) data protection assessment
+  - VARA (Dubai), ADGM (Abu Dhabi), SCA/CBUAE regulatory landscape
+  - 4-jurisdiction comparison table (Chile/EU/UAE/US)
+  - Gap analysis with severity and remediation path
+
+### Changed
+
+- `ELECTRONIC-SIGNATURE-COMPLIANCE.md` updated: 4 jurisdictions (was 3), UAE items in roadmap, TSA/CAdES/XAdES/PAdES marked as Done (were Planned)
+
+### Stats
+
+- 221 lines added across 3 modified files + 1 new file
+- Suite total: 2518 passed, 0 failed, 3 ignored
+- GOYA now covers Chile (Ley 19.799) / EU (eIDAS) / US (ESIGN) / UAE (DL 46/2021)
+
+---
+
 ## [0.8.0] — 2026-08-13
 
 ### Fixed — Security hardening (9 fixes)
