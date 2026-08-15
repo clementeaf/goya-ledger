@@ -478,6 +478,7 @@ mod tests {
             hash_algorithm: Default::default(),
             orderer_signature: None,
             commit_qc: None,
+            embedded_entries: Vec::new(),
         }
     }
 

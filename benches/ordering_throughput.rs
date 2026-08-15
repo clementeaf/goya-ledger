@@ -214,6 +214,7 @@ fn make_block(height: u64) -> Block {
         hash_algorithm: Default::default(),
         orderer_signature: None,
         commit_qc: None,
+        embedded_entries: Vec::new(),
     }
 }
 

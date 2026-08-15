@@ -71,6 +71,7 @@ pub fn stress_storage(ops: u64) -> ModuleStressResult {
             hash_algorithm: Default::default(),
             orderer_signature: None,
             commit_qc: None,
+            embedded_entries: Vec::new(),
         };
 
         let op_start = Instant::now();
@@ -957,6 +958,7 @@ mod tests {
                             hash_algorithm: Default::default(),
                             orderer_signature: None,
                             commit_qc: None,
+                            embedded_entries: Vec::new(),
                         };
                         if s.write_block(&block).is_err() {
                             errs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1585,6 +1587,7 @@ mod tests {
                             hash_algorithm: Default::default(),
                             orderer_signature: None,
                             commit_qc: None,
+                            embedded_entries: Vec::new(),
                         };
                         if s.write_block(&block).is_err() {
                             errs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1689,6 +1692,7 @@ mod tests {
                         hash_algorithm: Default::default(),
                         orderer_signature: None,
                         commit_qc: None,
+                        embedded_entries: Vec::new(),
                     };
                     if s.write_block(&block).is_err() {
                         e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

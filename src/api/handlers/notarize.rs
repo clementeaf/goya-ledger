@@ -231,7 +231,7 @@ pub async fn submit_notarization(
             input_did: entry.signer.clone(),
             output_recipient: entry.content_hash.clone(),
             amount: 0,
-            state: "notarize".to_string(),
+            state: serde_json::to_string(&entry).unwrap_or_else(|_| "notarize".to_string()),
         };
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
         let _ = pool.add(tx);
@@ -397,7 +397,7 @@ pub async fn notarize_pdf(
             input_did: entry.signer.clone(),
             output_recipient: entry.content_hash.clone(),
             amount: 0,
-            state: "notarize".to_string(),
+            state: serde_json::to_string(&entry).unwrap_or_else(|_| "notarize".to_string()),
         };
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
         let _ = pool.add(tx);

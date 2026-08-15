@@ -50,6 +50,9 @@ pub struct Block {
     /// BFT commit quorum certificate (absent for solo-ordered blocks).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commit_qc: Option<crate::consensus::bft::types::QuorumCertificate>,
+    /// Notarization entries embedded in this block for cross-node replication.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub embedded_entries: Vec<NotarizationEntry>,
 }
 
 mod vec_hex {
@@ -1157,6 +1160,7 @@ mod tests {
             hash_algorithm: Default::default(),
             orderer_signature: None,
             commit_qc: None,
+            embedded_entries: Vec::new(),
         }
     }
 
@@ -1195,6 +1199,7 @@ mod tests {
             hash_algorithm: Default::default(),
             orderer_signature: None,
             commit_qc: None,
+            embedded_entries: Vec::new(),
         };
         let json = serde_json::to_string(&block).unwrap();
         let decoded: Block = serde_json::from_str(&json).unwrap();

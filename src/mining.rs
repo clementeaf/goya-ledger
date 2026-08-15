@@ -128,6 +128,7 @@ impl MiningService {
             hash_algorithm: HashAlgorithm::default(),
             orderer_signature: None,
             commit_qc: None,
+            embedded_entries: Vec::new(),
         };
 
         // Write block and transactions

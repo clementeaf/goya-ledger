@@ -1259,6 +1259,16 @@ impl Node {
                 if matches!(role, NodeRole::Peer | NodeRole::PeerAndOrderer) {
                     if let Some(s) = &store {
                         let _ = s.write_block(&block);
+                        for entry in &block.embedded_entries {
+                            let _ = s.write_notarization(entry);
+                        }
+                        if !block.embedded_entries.is_empty() {
+                            log::info!(
+                                "Replicated {} notarization(s) from block {}",
+                                block.embedded_entries.len(),
+                                block.height
+                            );
+                        }
                     }
                 }
                 Ok(None)
@@ -2858,6 +2868,7 @@ mod tests {
             hash_algorithm: Default::default(),
             orderer_signature: None,
             commit_qc: None,
+            embedded_entries: Vec::new(),
         };
 
         Node::process_message(
@@ -2909,6 +2920,7 @@ mod tests {
             hash_algorithm: Default::default(),
             orderer_signature: None,
             commit_qc: None,
+            embedded_entries: Vec::new(),
         };
         let msg = Message::OrderedBlock(block);
         let json = serde_json::to_string(&msg).unwrap();
@@ -2963,6 +2975,7 @@ mod tests {
             hash_algorithm: Default::default(),
             orderer_signature: None,
             commit_qc: None,
+            embedded_entries: Vec::new(),
         };
         let msg = Message::StateResponse {
             blocks: vec![block],

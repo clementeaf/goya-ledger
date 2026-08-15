@@ -37,6 +37,7 @@ pub fn create_genesis_block(channel_id: &str, config: &ChannelConfig) -> Block {
         hash_algorithm: Default::default(),
         orderer_signature: None,
         commit_qc: None,
+        embedded_entries: Vec::new(),
     }
 }
 

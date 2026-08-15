@@ -47,6 +47,7 @@ fn make_pqc_block(height: u64, signer: &dyn SigningProvider) -> Block {
         hash_algorithm: HashAlgorithm::Sha3_256,
         orderer_signature: None,
         commit_qc: None,
+        embedded_entries: Vec::new(),
     }
 }
 
