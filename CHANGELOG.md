@@ -4,6 +4,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.10.0] — 2026-08-15
+
+### Changed — Post-quantum default + server-side PDF notarization
+
+- **ML-DSA-65 as default signing algorithm** (`src/main.rs`)
+  - Node defaults to ML-DSA-65 (FIPS 204) when `SIGNING_ALGORITHM` is unset (was Ed25519)
+  - Ed25519 remains available via `SIGNING_ALGORITHM=ed25519` but logs deprecation warning
+  - All node signatures (TSA, OCSP, endorsement, mining, FEA) are now post-quantum
+- **`/sign/fea` fix** — endpoint was using the node's generic provider (Ed25519 by default), causing FEA notarizations to be rejected by `validate_fes_fea`. Now correctly requires ML-DSA-65 with defense-in-depth guard
+- **`POST /notarize/pdf` rewritten to server-side signing (Option B)**
+  - Client sends only: `pdf_base64`, `signer`, `biometric_evidence`
+  - Node computes dimensional fingerprint, signs canonical_hash with ML-DSA-65, produces CAdES DER envelope
+  - Returns signature + public_key + fingerprint + cades_der in one roundtrip
+  - PQC key never leaves the node — more secure, simpler for clients
+- **Removed `fea_signing_provider`** — single ML-DSA-65 provider for all endpoints, no dual-key confusion
+
+### Fixed
+
+- `/sign/fea` returning Ed25519 keys instead of ML-DSA-65, causing `validate_fes_fea` to reject the node's own signature
+
+### Infrastructure
+
+- Deployed 4-node BFT testnet: Fly.io (Virginia, Singapore), AWS (Ireland), Oracle Cloud (Valparaíso ARM)
+- Added `fly.node2.toml` (CDG) and `fly.node3.toml` (NRT) configs
+
+### Stats
+
+- Suite total: 2539 passed, 0 failed, 3 ignored
+- FES and FEA both use ML-DSA-65 — algorithm difference eliminated, only biometric requirement distinguishes them
+
+---
+
 ## [0.9.2] — 2026-08-14
 
 ### Added — Certification readiness + EUDI Wallet interop simulation
