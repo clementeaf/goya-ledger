@@ -1,5 +1,5 @@
 //! BFT controller — bridges the RoundManager state machine with the P2P
-//! network and block storage. Runs as a tokio task.
+//! network and block storage. Mines blocks when this node is leader.
 
 use std::sync::Arc;
 
@@ -10,14 +10,15 @@ use crate::consensus::bft::round::{RoundAction, RoundEvent};
 use crate::consensus::bft::round_manager::{ManagerAction, RoundManager, RoundManagerConfig};
 use crate::consensus::bft::types::VoteMessage;
 use crate::identity::signing::SigningProvider;
+use crate::mining::MiningService;
 use crate::network::Node;
 use crate::storage::traits::Block;
+use crate::transaction::mempool::TransactionPool;
 
-/// Events fed into the BFT controller from the network layer or auto-mine loop.
+/// Events fed into the BFT controller from the network layer.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum BftEvent {
-    /// A new block is ready to be proposed (this node is leader).
-    ProposeBlock(Block),
     /// A BFT proposal arrived from a peer.
     Proposal {
         round: u64,
@@ -27,30 +28,20 @@ pub enum BftEvent {
     },
     /// A BFT vote arrived from a peer.
     Vote(VoteMessage),
-    /// Round timed out.
-    Timeout,
 }
 
-/// Verifier that delegates to the node's signing infrastructure.
 #[derive(Clone)]
-struct NodeVerifier {
-    _validators: Vec<(String, Vec<u8>)>,
-}
+struct NodeVerifier;
 
 impl SignatureVerifier for NodeVerifier {
-    fn verify(&self, voter_id: &str, payload: &[u8], signature: &[u8]) -> bool {
-        // ponytail: accept all signatures in testnet; real verification
-        // requires a validator registry mapping voter_id → public_key.
-        // For now, verify signature is non-empty (was signed by the sender).
-        let _ = (voter_id, payload);
+    fn verify(&self, _voter_id: &str, _payload: &[u8], signature: &[u8]) -> bool {
+        // ponytail: accept non-empty signatures in testnet
         !signature.is_empty()
     }
 }
 
-/// Run the BFT consensus loop.
-///
-/// Receives events via `rx`, drives the `RoundManager`, and emits network
-/// messages + block commits through the provided `node` and `store`.
+/// Run the BFT consensus loop. Mines when leader, votes when follower.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_bft_loop(
     node_id: String,
     validators: Vec<String>,
@@ -58,26 +49,31 @@ pub async fn run_bft_loop(
     node: Arc<Node>,
     store: Arc<dyn crate::storage::BlockStore>,
     signer: Arc<dyn SigningProvider>,
-    is_leader: Arc<std::sync::atomic::AtomicBool>,
+    mining_service: Arc<MiningService>,
+    tx_pool: Arc<std::sync::Mutex<TransactionPool>>,
 ) {
-    let verifier = NodeVerifier {
-        _validators: Vec::new(),
-    };
     let config = RoundManagerConfig::default();
-    let mut manager = RoundManager::new(node_id.clone(), validators.clone(), verifier, config);
-
-    // Pending block waiting for BFT finalization.
+    let mut manager = RoundManager::new(node_id.clone(), validators, NodeVerifier, config);
     let mut pending_block: Option<Block> = None;
 
-    // Start round 0.
     let action = manager.start();
-    is_leader.store(
-        manager.is_current_leader(),
-        std::sync::atomic::Ordering::Relaxed,
-    );
     handle_action(&action, &node, &signer, &node_id).await;
 
-    // Timeout task.
+    // If we're leader of round 0, try to mine immediately.
+    if manager.is_current_leader() {
+        try_mine_and_propose(
+            &mut manager,
+            &mut pending_block,
+            &node_id,
+            &node,
+            &signer,
+            &mining_service,
+            &tx_pool,
+            &store,
+        )
+        .await;
+    }
+
     let timeout_ms = manager.current_timeout_ms();
     #[allow(unused_mut)]
     let mut timeout = tokio::time::sleep(tokio::time::Duration::from_millis(timeout_ms));
@@ -87,64 +83,31 @@ pub async fn run_bft_loop(
         tokio::select! {
             Some(event) = rx.recv() => {
                 match event {
-                    BftEvent::ProposeBlock(block) => {
-                        if !manager.is_current_leader() {
-                            continue;
-                        }
-                        let block_hash = crate::mining::block_hash(&block);
-                        pending_block = Some(block.clone());
-
-                        // Broadcast proposal to peers.
-                        let block_data = serde_json::to_vec(&block).unwrap_or_default();
-                        let msg = crate::network::Message::BftProposal {
-                            round: manager.current_round(),
-                            block_hash,
-                            leader_id: node_id.clone(),
-                            block_data,
-                        };
-                        node.broadcast_message(&msg).await;
-
-                        // Feed to local round manager as leader.
-                        let action = manager.process_event(RoundEvent::StartAsLeader { block_hash });
-                        handle_action(&action, &node, &signer, &node_id).await;
-                        reset_timeout(&mut timeout, &manager);
-                    }
-
                     BftEvent::Proposal { round, block_hash, leader_id, block } => {
                         if round != manager.current_round() {
                             continue;
                         }
                         pending_block = Some(block);
                         let action = manager.process_event(RoundEvent::Proposal { block_hash, leader_id });
-                        let decided = handle_action(&action, &node, &signer, &node_id).await;
-                        if decided {
+                        if handle_action(&action, &node, &signer, &node_id).await {
                             if let Some(blk) = pending_block.take() {
                                 commit_block(blk, &manager, &store, &node).await;
                             }
-                            let adv = manager.advance_after_decide();
-                            handle_action(&adv, &node, &signer, &node_id).await;
+                            advance_round(&mut manager, &mut pending_block, &mut timeout, &node_id, &node, &signer, &mining_service, &tx_pool, &store).await;
+                        } else {
                             reset_timeout(&mut timeout, &manager);
                         }
                     }
-
                     BftEvent::Vote(vote) => {
                         let action = manager.process_event(RoundEvent::Vote(vote));
-                        let decided = handle_action(&action, &node, &signer, &node_id).await;
-                        if decided {
+                        if handle_action(&action, &node, &signer, &node_id).await {
                             if let Some(blk) = pending_block.take() {
                                 commit_block(blk, &manager, &store, &node).await;
                             }
-                            let adv = manager.advance_after_decide();
-                            handle_action(&adv, &node, &signer, &node_id).await;
+                            advance_round(&mut manager, &mut pending_block, &mut timeout, &node_id, &node, &signer, &mining_service, &tx_pool, &store).await;
+                        } else {
                             reset_timeout(&mut timeout, &manager);
                         }
-                    }
-
-                    BftEvent::Timeout => {
-                        let action = manager.on_timeout();
-                        handle_action(&action, &node, &signer, &node_id).await;
-                        pending_block = None;
-                        reset_timeout(&mut timeout, &manager);
                     }
                 }
             }
@@ -153,12 +116,99 @@ pub async fn run_bft_loop(
                 handle_action(&action, &node, &signer, &node_id).await;
                 pending_block = None;
                 reset_timeout(&mut timeout, &manager);
+                // New round after timeout — if we're the new leader, mine.
+                if manager.is_current_leader() {
+                    try_mine_and_propose(&mut manager, &mut pending_block, &node_id, &node, &signer, &mining_service, &tx_pool, &store).await;
+                }
             }
         }
-        is_leader.store(
-            manager.is_current_leader(),
-            std::sync::atomic::Ordering::Relaxed,
-        );
+    }
+}
+
+/// If mempool has transactions, mine a block and broadcast the BFT proposal.
+#[allow(clippy::too_many_arguments)]
+async fn try_mine_and_propose(
+    manager: &mut RoundManager<NodeVerifier>,
+    pending_block: &mut Option<Block>,
+    node_id: &str,
+    node: &Arc<Node>,
+    signer: &Arc<dyn SigningProvider>,
+    mining_service: &Arc<MiningService>,
+    tx_pool: &Arc<std::sync::Mutex<TransactionPool>>,
+    store: &Arc<dyn crate::storage::BlockStore>,
+) {
+    let txs = {
+        let mut pool = tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+        pool.drain_for_block(50)
+    };
+    if txs.is_empty() {
+        return;
+    }
+
+    let entries: Vec<crate::storage::traits::NotarizationEntry> = txs
+        .iter()
+        .filter(|tx| tx.id.starts_with("notarize:"))
+        .filter_map(|tx| serde_json::from_str(&tx.state).ok())
+        .collect();
+    let tx_count = txs.len();
+
+    match mining_service.mine_block("auto-miner", txs) {
+        Ok(height) => {
+            log::info!("⛏ BFT leader mined block {height} with {tx_count} tx(s)");
+            if let Ok(mut block) = store.read_block(height) {
+                block.embedded_entries = entries;
+                let block_hash = crate::mining::block_hash(&block);
+                *pending_block = Some(block.clone());
+
+                let block_data = serde_json::to_vec(&block).unwrap_or_default();
+                let msg = crate::network::Message::BftProposal {
+                    round: manager.current_round(),
+                    block_hash,
+                    leader_id: node_id.to_string(),
+                    block_data,
+                };
+                node.broadcast_message(&msg).await;
+
+                let action = manager.process_event(RoundEvent::StartAsLeader { block_hash });
+                handle_action(&action, node, signer, node_id).await;
+                log::info!(
+                    "BFT: proposed block {} at round {}",
+                    height,
+                    manager.current_round()
+                );
+            }
+        }
+        Err(e) => log::error!("BFT leader mine failed: {e}"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn advance_round(
+    manager: &mut RoundManager<NodeVerifier>,
+    pending_block: &mut Option<Block>,
+    timeout: &mut std::pin::Pin<&mut tokio::time::Sleep>,
+    node_id: &str,
+    node: &Arc<Node>,
+    signer: &Arc<dyn SigningProvider>,
+    mining_service: &Arc<MiningService>,
+    tx_pool: &Arc<std::sync::Mutex<TransactionPool>>,
+    store: &Arc<dyn crate::storage::BlockStore>,
+) {
+    let adv = manager.advance_after_decide();
+    handle_action(&adv, node, signer, node_id).await;
+    reset_timeout(timeout, manager);
+    if manager.is_current_leader() {
+        try_mine_and_propose(
+            manager,
+            pending_block,
+            node_id,
+            node,
+            signer,
+            mining_service,
+            tx_pool,
+            store,
+        )
+        .await;
     }
 }
 
@@ -172,8 +222,6 @@ fn reset_timeout(
         .reset(tokio::time::Instant::now() + tokio::time::Duration::from_millis(ms));
 }
 
-/// Process a ManagerAction: sign and broadcast votes, handle decisions.
-/// Returns `true` if the action was a Decide.
 async fn handle_action(
     action: &ManagerAction,
     node: &Arc<Node>,
@@ -218,7 +266,7 @@ async fn handle_action(
         } => {
             let is_me = leader_id == node_id;
             log::info!(
-                "BFT: new round {round}, leader={leader_id}{}",
+                "BFT: round {round}, leader={leader_id}{}",
                 if is_me { " (me)" } else { "" }
             );
             false

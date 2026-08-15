@@ -337,6 +337,10 @@ async fn async_main_inner() -> std::io::Result<()> {
         node_for_server.set_tls_acceptor(tokio_rustls::TlsAcceptor::from(Arc::new(server_cfg)));
     }
     // Compartir los mismos recursos compartidos
+    // BFT event channel — created early so node_for_server can route incoming BFT messages.
+    let (bft_tx, bft_rx) =
+        tokio::sync::mpsc::unbounded_channel::<crate::consensus::controller::BftEvent>();
+    node_for_server.bft_tx = Some(bft_tx.clone());
     node_for_server.peers = shared_peers;
     node_for_server.contract_sync_metrics = shared_contract_sync_metrics;
     node_for_server.pending_contract_broadcasts = shared_pending_broadcasts;
@@ -1010,10 +1014,6 @@ async fn async_main_inner() -> std::io::Result<()> {
     let bft_enabled = std::env::var("BFT_VALIDATORS")
         .ok()
         .filter(|v| !v.is_empty());
-    let (bft_tx, bft_rx) =
-        tokio::sync::mpsc::unbounded_channel::<crate::consensus::controller::BftEvent>();
-
-    let bft_is_leader = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
     if let Some(ref validator_csv) = bft_enabled {
         let validators: Vec<String> = validator_csv
@@ -1029,22 +1029,21 @@ async fn async_main_inner() -> std::io::Result<()> {
         let bft_node = node_arc.clone();
         let bft_store = gateway_store.clone();
         let bft_signer = signing_provider.clone();
-        let bft_leader_flag = bft_is_leader.clone();
+        let bft_mining = app_state
+            .mining_service
+            .clone()
+            .expect("MiningService required for BFT");
+        let bft_pool = app_state.tx_pool.clone();
         tokio::spawn(async move {
             crate::consensus::controller::run_bft_loop(
-                node_id,
-                validators,
-                bft_rx,
-                bft_node,
-                bft_store,
-                bft_signer,
-                bft_leader_flag,
+                node_id, validators, bft_rx, bft_node, bft_store, bft_signer, bft_mining, bft_pool,
             )
             .await;
         });
     }
 
-    {
+    // Solo mode auto-mine (only when BFT is not active).
+    if bft_enabled.is_none() {
         let mine_interval_secs: u64 = std::env::var("BLOCK_INTERVAL_SECS")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -1053,27 +1052,14 @@ async fn async_main_inner() -> std::io::Result<()> {
         let mine_tx_pool = app_state.tx_pool.clone();
         let mine_mining = app_state.mining_service.clone();
         let mine_node = node_arc.clone();
-        let mine_bft_tx = bft_tx.clone();
-        let mine_bft_enabled = bft_enabled.is_some();
-        let mine_is_leader = bft_is_leader.clone();
-        // In BFT mode, poll every 1s to catch the leader window (3s base timeout).
-        let effective_interval = if mine_bft_enabled {
-            1
-        } else {
-            mine_interval_secs
-        };
         tokio::spawn(async move {
             let mut interval =
-                tokio::time::interval(tokio::time::Duration::from_secs(effective_interval));
+                tokio::time::interval(tokio::time::Duration::from_secs(mine_interval_secs));
             loop {
                 interval.tick().await;
                 let Some(ref mining_service) = mine_mining else {
                     continue;
                 };
-                // In BFT mode, only mine when this node is the current leader.
-                if mine_bft_enabled && !mine_is_leader.load(std::sync::atomic::Ordering::Relaxed) {
-                    continue;
-                }
                 let txs = {
                     let mut pool = mine_tx_pool.lock().unwrap_or_else(|e| e.into_inner());
                     pool.drain_for_block(50)
@@ -1082,7 +1068,6 @@ async fn async_main_inner() -> std::io::Result<()> {
                     continue;
                 }
                 let tx_count = txs.len();
-                // Extract embedded notarization entries from transactions.
                 let entries: Vec<crate::storage::traits::NotarizationEntry> = txs
                     .iter()
                     .filter(|tx| tx.id.starts_with("notarize:"))
@@ -1096,28 +1081,17 @@ async fn async_main_inner() -> std::io::Result<()> {
                         );
                         if let Ok(mut block) = mine_store.read_block(height) {
                             block.embedded_entries = entries;
-                            if mine_bft_enabled {
-                                // BFT mode: propose through consensus.
-                                let _ = mine_bft_tx.send(
-                                    crate::consensus::controller::BftEvent::ProposeBlock(block),
-                                );
-                            } else {
-                                // Solo mode: broadcast directly.
-                                let node = mine_node.clone();
-                                tokio::spawn(async move {
-                                    node.broadcast_ordered_block(&block).await;
-                                });
-                            }
+                            let node = mine_node.clone();
+                            tokio::spawn(async move {
+                                node.broadcast_ordered_block(&block).await;
+                            });
                         }
                     }
                     Err(e) => log::error!("Auto-mine failed: {e}"),
                 }
             }
         });
-        log::info!(
-            "Auto-mine loop started (interval={mine_interval_secs}s, bft={})",
-            bft_enabled.is_some()
-        );
+        log::info!("Solo auto-mine loop started (interval=5s)");
     }
 
     let rate_limit_config = middleware::RateLimitConfig {
