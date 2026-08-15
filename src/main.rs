@@ -428,6 +428,17 @@ async fn async_main_inner() -> std::io::Result<()> {
         }
     };
 
+    // Dedicated ML-DSA-65 provider for FEA — independent of SIGNING_ALGORITHM.
+    let fea_signing_provider: Arc<dyn crate::identity::signing::SigningProvider> = {
+        use crate::identity::signing::SigningProvider as _;
+        let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+        log::info!(
+            "FEA signing provider: ML-DSA-65 (always post-quantum) | pubkey_len={} bytes",
+            provider.public_key().len()
+        );
+        Arc::new(provider)
+    };
+
     // Ordering backend: "raft" or "solo" (default)
     //
     // When ORDERING_BACKEND=raft, also reads:
@@ -858,6 +869,7 @@ async fn async_main_inner() -> std::io::Result<()> {
                 .with_signer(signing_provider.clone()),
         )),
         signing_provider: Some(signing_provider.clone()),
+        fea_signing_provider: Some(fea_signing_provider.clone()),
         tx_pool: Arc::new(std::sync::Mutex::new(
             transaction::mempool::TransactionPool::new(),
         )),

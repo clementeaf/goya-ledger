@@ -753,11 +753,24 @@ pub async fn sign_fea(
         }
     }
 
-    let provider = state.signing_provider.as_ref().ok_or_else(|| {
+    let provider = state.fea_signing_provider.as_ref().ok_or_else(|| {
         crate::api::errors::ApiError::StorageError {
-            reason: "signing provider not configured".into(),
+            reason: "FEA signing provider not configured — node requires fea_signing_provider (ML-DSA-65)".into(),
         }
     })?;
+
+    // Defense in depth: guard against misconfiguration at the AppState level.
+    if provider.algorithm() != crate::identity::signing::SigningAlgorithm::MlDsa65 {
+        return Ok(
+            HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
+                err_dto(
+                    "ALGORITHM_MISMATCH",
+                    "fea_signing_provider must be ML-DSA-65",
+                ),
+                500,
+            )),
+        );
+    }
 
     let bio_hash = compute_biometrics_hash(&body.biometric_evidence);
     let content_bytes = hex::decode(&body.content_hash).unwrap_or_default();
@@ -1721,6 +1734,69 @@ mod tests {
         assert_eq!(resp.status(), 400);
         let body: serde_json::Value = test::read_body_json(resp).await;
         assert_eq!(body["error"]["code"], "INVALID_BIOMETRIC");
+    }
+
+    #[actix_web::test]
+    async fn sign_fea_rejects_without_fea_provider() {
+        let mut state = AppState::test_default();
+        // Only generic Ed25519 provider — no fea_signing_provider.
+        state.signing_provider = Some(std::sync::Arc::new(SoftwareSigningProvider::generate()));
+        let state = web::Data::new(state);
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(sign_fea)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/sign/fea")
+            .set_json(serde_json::json!({
+                "content_hash": "a".repeat(64),
+                "signer": "did:goya:test",
+                "biometric_evidence": [{
+                    "evidence_type": "fingerprint",
+                    "commitment": "a".repeat(64),
+                    "captured_at": 1700000000u64,
+                }],
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 500);
+    }
+
+    #[actix_web::test]
+    async fn sign_fea_succeeds_with_mldsa65_provider() {
+        let mut state = AppState::test_default();
+        state.fea_signing_provider = Some(std::sync::Arc::new(MlDsaSigningProvider::generate()));
+        let state = web::Data::new(state);
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(sign_fea)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/sign/fea")
+            .set_json(serde_json::json!({
+                "content_hash": "a".repeat(64),
+                "signer": "did:goya:test",
+                "biometric_evidence": [{
+                    "evidence_type": "fingerprint",
+                    "commitment": "a".repeat(64),
+                    "captured_at": 1700000000u64,
+                }],
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["status"], "Success");
+        assert!(body["data"]["signature_algorithm"]
+            .as_str()
+            .unwrap()
+            .contains("MlDsa65"));
     }
 
     // ── E2E: Qualified rejected (QTSP not supported) ──────────────────

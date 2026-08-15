@@ -96,6 +96,8 @@ pub struct AppState {
     pub mining_service: Option<Arc<MiningService>>,
     /// Node signing provider (Ed25519 or ML-DSA-65).
     pub signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
+    /// Dedicated ML-DSA-65 provider for FEA endpoints (always post-quantum).
+    pub fea_signing_provider: Option<Arc<dyn crate::identity::signing::SigningProvider>>,
     /// New transaction pool backed by storage::Transaction.
     pub tx_pool: Arc<Mutex<crate::transaction::mempool::TransactionPool>>,
     /// HMAC secret for vault recovery blind indexing (NIST SP 800-185).
@@ -172,6 +174,7 @@ impl AppState {
             )),
             mining_service: None,
             signing_provider: None,
+            fea_signing_provider: None,
             tx_pool: Arc::new(Mutex::new(
                 crate::transaction::mempool::TransactionPool::new(),
             )),
