@@ -84,9 +84,15 @@ pub async fn run_bft_loop(
             Some(event) = rx.recv() => {
                 match event {
                     BftEvent::Proposal { round, block_hash, leader_id, block } => {
-                        if round != manager.current_round() {
-                            continue;
+                        // Sync rounds: if the proposal is from a future round,
+                        // catch up (leader is ahead of us due to timing).
+                        while manager.current_round() < round {
+                            let _ = manager.on_timeout();
                         }
+                        if round != manager.current_round() {
+                            continue; // stale proposal
+                        }
+                        reset_timeout(&mut timeout, &manager);
                         pending_block = Some(block);
                         let action = manager.process_event(RoundEvent::Proposal { block_hash, leader_id });
                         if handle_action(&action, &node, &signer, &node_id).await {
