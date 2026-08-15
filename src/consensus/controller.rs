@@ -116,8 +116,9 @@ pub async fn run_bft_loop(
                 handle_action(&action, &node, &signer, &node_id).await;
                 pending_block = None;
                 reset_timeout(&mut timeout, &manager);
-                // New round after timeout — if we're the new leader, mine.
-                if manager.is_current_leader() {
+                let am_leader = manager.is_current_leader();
+                log::info!("BFT timeout: advanced to round {}, am_leader={am_leader}", manager.current_round());
+                if am_leader {
                     try_mine_and_propose(&mut manager, &mut pending_block, &node_id, &node, &signer, &mining_service, &tx_pool, &store).await;
                 }
             }
@@ -139,7 +140,9 @@ async fn try_mine_and_propose(
 ) {
     let txs = {
         let mut pool = tx_pool.lock().unwrap_or_else(|e| e.into_inner());
-        pool.drain_for_block(50)
+        let drained = pool.drain_for_block(50);
+        log::info!("BFT try_mine: drained {} tx(s) from mempool", drained.len());
+        drained
     };
     if txs.is_empty() {
         return;
