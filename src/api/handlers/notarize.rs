@@ -222,6 +222,21 @@ pub async fn submit_notarization(
             reason: e.to_string(),
         })?;
 
+    // Enqueue as transaction so it gets included in the next block and propagated.
+    {
+        let tx = crate::storage::traits::Transaction {
+            id: format!("notarize:{}", entry.id),
+            block_height: 0,
+            timestamp: entry.notarized_at,
+            input_did: entry.signer.clone(),
+            output_recipient: entry.content_hash.clone(),
+            amount: 0,
+            state: "notarize".to_string(),
+        };
+        let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = pool.add(tx);
+    }
+
     Ok(HttpResponse::Created().json(ApiResponse::success(
         serde_json::json!({
             "id": entry.id,
@@ -373,6 +388,20 @@ pub async fn notarize_pdf(
         .map_err(|e| crate::api::errors::ApiError::StorageError {
             reason: e.to_string(),
         })?;
+
+    {
+        let tx = crate::storage::traits::Transaction {
+            id: format!("notarize:{}", entry.id),
+            block_height: 0,
+            timestamp: entry.notarized_at,
+            input_did: entry.signer.clone(),
+            output_recipient: entry.content_hash.clone(),
+            amount: 0,
+            state: "notarize".to_string(),
+        };
+        let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+        let _ = pool.add(tx);
+    }
 
     crate::audit::emit_if_present(
         &state.audit_store,

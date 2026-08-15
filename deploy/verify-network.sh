@@ -101,7 +101,7 @@ test_hash=$(echo "verify-network-$(date +%s)" | sha256sum | cut -d' ' -f1)
 # This will likely fail without proper signature, but tests the endpoint
 resp=$(curl -s --max-time 10 -X POST "${NODES[0]}/api/v1/notarize" \
   -H 'Content-Type: application/json' \
-  -d "{\"content_hash\":\"$test_hash\",\"signer\":\"did:goya:network-test\",\"signature\":\"0000\"}" 2>/dev/null || echo "{}")
+  -d "{\"content_hash\":\"$test_hash\",\"signer\":\"did:goya:network-test\",\"public_key\":\"$(printf '0%.0s' {1..64})\",\"signature\":\"$(printf '0%.0s' {1..128})\"}" 2>/dev/null || echo "{}")
 echo "  Response: $(echo "$resp" | head -c 200)"
 echo ""
 

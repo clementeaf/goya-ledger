@@ -1006,6 +1006,49 @@ async fn async_main_inner() -> std::io::Result<()> {
         });
     }
 
+    // ── Auto-mine loop: drain mempool → create block → broadcast ────────
+    {
+        let mine_interval_secs: u64 = std::env::var("BLOCK_INTERVAL_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(5);
+        let mine_store = gateway_store.clone();
+        let mine_tx_pool = app_state.tx_pool.clone();
+        let mine_mining = app_state.mining_service.clone();
+        let mine_node = node_arc.clone();
+        tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(tokio::time::Duration::from_secs(mine_interval_secs));
+            loop {
+                interval.tick().await;
+                let Some(ref mining_service) = mine_mining else {
+                    continue;
+                };
+                let txs = {
+                    let mut pool = mine_tx_pool.lock().unwrap_or_else(|e| e.into_inner());
+                    pool.drain_for_block(50)
+                };
+                if txs.is_empty() {
+                    continue;
+                }
+                let tx_count = txs.len();
+                match mining_service.mine_block("auto-miner", txs) {
+                    Ok(height) => {
+                        log::info!("⛏ Auto-mined block {height} with {tx_count} tx(s)");
+                        if let Ok(block) = mine_store.read_block(height) {
+                            let node = mine_node.clone();
+                            tokio::spawn(async move {
+                                node.broadcast_ordered_block(&block).await;
+                            });
+                        }
+                    }
+                    Err(e) => log::error!("Auto-mine failed: {e}"),
+                }
+            }
+        });
+        log::info!("Auto-mine loop started (interval={mine_interval_secs}s)");
+    }
+
     let rate_limit_config = middleware::RateLimitConfig {
         requests_per_minute: std::env::var("RATE_LIMIT_PER_MINUTE")
             .ok()
