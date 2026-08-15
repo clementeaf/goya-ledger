@@ -744,6 +744,38 @@ impl Node {
         loop {
             let n = stream.read(&mut buffer).await?;
             if n == 0 {
+                // EOF — try to parse whatever we accumulated before exiting.
+                if !accum.is_empty() {
+                    let msg_str = String::from_utf8_lossy(&accum);
+                    if let Ok(message) = serde_json::from_str::<Message>(&msg_str) {
+                        let _ = Self::process_message(
+                            message,
+                            &peers,
+                            contract_manager.clone(),
+                            checkpoint_manager.clone(),
+                            transaction_validator.clone(),
+                            my_p2p_address.clone(),
+                            Some(peer_addr_str.clone()),
+                            recent_receipts.clone(),
+                            rate_limits.clone(),
+                            network_id.clone(),
+                            role,
+                            ordering_service.clone(),
+                            store.clone(),
+                            gossip_block_tx.clone(),
+                            Some(&membership),
+                            chaincode_store.clone(),
+                            world_state.clone(),
+                            signing_provider.clone(),
+                            &node_org_id,
+                            raft_node.clone(),
+                            private_data_store.clone(),
+                            collection_registry.clone(),
+                            bft_tx.as_ref(),
+                        )
+                        .await;
+                    }
+                }
                 break;
             }
 
