@@ -2213,19 +2213,36 @@ impl Node {
             let guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
             guard.iter().cloned().collect()
         };
+        log::info!(
+            "Broadcasting block {} to {} peer(s): {:?}",
+            block.height,
+            peers.len(),
+            peers
+        );
         let msg = Message::OrderedBlock(block.clone());
         for peer_addr in &peers {
             let msg_json = match serde_json::to_string(&msg) {
                 Ok(j) => j,
-                Err(_) => continue,
+                Err(e) => {
+                    log::warn!("Failed to serialize block for {peer_addr}: {e}");
+                    continue;
+                }
             };
             let addr = peer_addr.clone();
             match self.open_stream(&addr).await {
                 Ok(mut stream) => {
-                    let _ = stream.write_all(msg_json.as_bytes()).await;
+                    if let Err(e) = stream.write_all(msg_json.as_bytes()).await {
+                        log::warn!("Failed to write block to {addr}: {e}");
+                    } else {
+                        log::info!(
+                            "Sent block {} to {addr} ({} bytes)",
+                            block.height,
+                            msg_json.len()
+                        );
+                    }
                 }
                 Err(e) => {
-                    log::debug!("Failed to send OrderedBlock to {addr}: {e}");
+                    log::warn!("Failed to connect to {addr} for block broadcast: {e}");
                 }
             }
         }
