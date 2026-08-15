@@ -127,6 +127,7 @@ impl MiningService {
             secondary_signature_algorithm: None,
             hash_algorithm: HashAlgorithm::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
 
         // Write block and transactions
@@ -159,7 +160,7 @@ impl MiningService {
 }
 
 /// Compute SHA-256 hash of a block (for parent_hash linkage).
-fn block_hash(block: &Block) -> [u8; 32] {
+pub fn block_hash(block: &Block) -> [u8; 32] {
     let data = format!(
         "{}:{}:{:?}:{:?}",
         block.height, block.timestamp, block.parent_hash, block.transactions

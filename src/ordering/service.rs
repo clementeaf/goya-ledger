@@ -139,6 +139,7 @@ impl OrderingService {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
 
         if let Some(provider) = &self.signing_provider {

@@ -70,6 +70,7 @@ pub fn stress_storage(ops: u64) -> ModuleStressResult {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
 
         let op_start = Instant::now();
@@ -955,6 +956,7 @@ mod tests {
                             secondary_signature_algorithm: None,
                             hash_algorithm: Default::default(),
                             orderer_signature: None,
+                            commit_qc: None,
                         };
                         if s.write_block(&block).is_err() {
                             errs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1582,6 +1584,7 @@ mod tests {
                             secondary_signature_algorithm: None,
                             hash_algorithm: Default::default(),
                             orderer_signature: None,
+                            commit_qc: None,
                         };
                         if s.write_block(&block).is_err() {
                             errs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1685,6 +1688,7 @@ mod tests {
                         secondary_signature_algorithm: None,
                         hash_algorithm: Default::default(),
                         orderer_signature: None,
+                        commit_qc: None,
                     };
                     if s.write_block(&block).is_err() {
                         e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

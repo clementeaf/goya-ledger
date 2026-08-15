@@ -44,6 +44,7 @@ fn empty_block(height: u64) -> Block {
         secondary_signature_algorithm: None,
         hash_algorithm: Default::default(),
         orderer_signature: None,
+        commit_qc: None,
     }
 }
 

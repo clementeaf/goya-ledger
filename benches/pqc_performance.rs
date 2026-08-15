@@ -113,6 +113,7 @@ fn make_pqc_block(height: u64, signer: &MlDsaSigningProvider) -> Block {
         secondary_signature_algorithm: None,
         hash_algorithm: HashAlgorithm::Sha3_256,
         orderer_signature: None,
+        commit_qc: None,
     }
 }
 

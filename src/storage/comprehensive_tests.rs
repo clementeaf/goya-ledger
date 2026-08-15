@@ -42,6 +42,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -138,6 +139,7 @@ mod comprehensive_storage_tests {
                 secondary_signature_algorithm: None,
                 hash_algorithm: Default::default(),
                 orderer_signature: None,
+                commit_qc: None,
             };
             assert!(store.write_block(&block).is_ok());
         }
@@ -180,6 +182,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_batch(&[block], &[]).is_ok());
     }
@@ -216,6 +219,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         let tx = Transaction {
             id: "tx1".to_string(),
@@ -253,6 +257,7 @@ mod comprehensive_storage_tests {
                 secondary_signature_algorithm: None,
                 hash_algorithm: Default::default(),
                 orderer_signature: None,
+                commit_qc: None,
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&blocks, &[]).is_ok());
@@ -293,6 +298,7 @@ mod comprehensive_storage_tests {
                 secondary_signature_algorithm: None,
                 hash_algorithm: Default::default(),
                 orderer_signature: None,
+                commit_qc: None,
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&blocks, &[]).is_ok());
@@ -315,6 +321,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         }];
         let txs = vec![Transaction {
             id: "tx1".to_string(),
@@ -346,6 +353,7 @@ mod comprehensive_storage_tests {
                 secondary_signature_algorithm: None,
                 hash_algorithm: Default::default(),
                 orderer_signature: None,
+                commit_qc: None,
             };
             assert!(store.write_batch(&[block], &[]).is_ok());
         }
@@ -393,6 +401,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         let block2 = Block {
             height: 2,
@@ -408,6 +417,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_batch(&[block1, block2], &[]).is_ok());
     }
@@ -431,6 +441,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -452,6 +463,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -473,6 +485,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -494,6 +507,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -529,6 +543,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -550,6 +565,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -690,6 +706,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -711,6 +728,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -752,6 +770,7 @@ mod comprehensive_storage_tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         let start = Instant::now();
         let _ = store.write_block(&block);
@@ -779,6 +798,7 @@ mod comprehensive_storage_tests {
                 secondary_signature_algorithm: None,
                 hash_algorithm: Default::default(),
                 orderer_signature: None,
+                commit_qc: None,
             };
             let _ = store.write_block(&block);
         }

@@ -47,6 +47,9 @@ pub struct Block {
     /// Orderer signature over the block hash (absent for legacy blocks).
     #[serde(default, skip_serializing_if = "Option::is_none", with = "opt_vec_hex")]
     pub orderer_signature: Option<Vec<u8>>,
+    /// BFT commit quorum certificate (absent for solo-ordered blocks).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_qc: Option<crate::consensus::bft::types::QuorumCertificate>,
 }
 
 mod vec_hex {
@@ -1153,6 +1156,7 @@ mod tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         }
     }
 
@@ -1190,6 +1194,7 @@ mod tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         let json = serde_json::to_string(&block).unwrap();
         let decoded: Block = serde_json::from_str(&json).unwrap();

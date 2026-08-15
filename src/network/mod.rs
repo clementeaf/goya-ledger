@@ -218,6 +218,8 @@ pub struct Node {
     pub store: Option<Arc<dyn crate::storage::traits::BlockStore>>,
     /// Sender side of the push-gossip channel for newly accepted blocks.
     pub gossip_block_tx: GossipBlockTx,
+    /// BFT event channel — routes incoming BFT messages to the consensus controller.
+    pub bft_tx: Option<tokio::sync::mpsc::UnboundedSender<crate::consensus::controller::BftEvent>>,
     /// Gossip membership table for alive-based liveness tracking.
     pub membership: gossip::MembershipTable,
     /// Organization ID of this node (used in alive messages and endorsements).
@@ -411,6 +413,7 @@ impl Node {
             ordering_service: None,
             store: None,
             gossip_block_tx: None,
+            bft_tx: None,
             membership: gossip::MembershipTable::new(gossip::ALIVE_TIMEOUT_MS),
             org_id: std::env::var("ORG_ID").unwrap_or_else(|_| "default".to_string()),
             alive_sequence: Arc::new(Mutex::new(0)),
@@ -611,6 +614,7 @@ impl Node {
                     let private_data_store_clone = private_data_store.clone();
                     let collection_registry_clone = collection_registry.clone();
                     let net_security_clone = net_security.clone();
+                    let bft_tx_clone = self.bft_tx.clone();
 
                     tokio::spawn(async move {
                         let boxed: Box<dyn AsyncStream> = if let Some(acceptor) = tls_acceptor_clone
@@ -650,6 +654,7 @@ impl Node {
                             private_data_store_clone,
                             collection_registry_clone,
                             net_security_clone,
+                            bft_tx_clone,
                         )
                         .await
                         {
@@ -693,6 +698,7 @@ impl Node {
         private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
         collection_registry: Option<Arc<dyn crate::private_data::CollectionRegistry>>,
         net_security: Arc<Mutex<NetworkSecurityManager>>,
+        bft_tx: Option<tokio::sync::mpsc::UnboundedSender<crate::consensus::controller::BftEvent>>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let peer_addr_str = format!("{}:{}", peer_addr.ip(), peer_addr.port());
         let mut buffer = vec![0u8; p2p_handler_buffer_size()];
@@ -805,6 +811,7 @@ impl Node {
                     raft_node.clone(),
                     private_data_store.clone(),
                     collection_registry.clone(),
+                    bft_tx.as_ref(),
                 )
                 .await?;
 
@@ -867,6 +874,7 @@ impl Node {
         _raft_node: RaftNodeHandle,
         private_data_store: Option<Arc<dyn crate::private_data::PrivateDataStore>>,
         collection_registry: Option<Arc<dyn crate::private_data::CollectionRegistry>>,
+        bft_tx: Option<&tokio::sync::mpsc::UnboundedSender<crate::consensus::controller::BftEvent>>,
     ) -> Result<Option<Message>, Box<dyn std::error::Error>> {
         match message {
             Message::Ping => Ok(Some(Message::Pong)),
@@ -1484,15 +1492,32 @@ impl Node {
                 Ok(None)
             }
 
-            // BFT consensus messages — handled by the BFT round manager
-            // outside of the generic message handler. Log and ignore here.
-            Message::BftProposal { .. }
-            | Message::BftVote(_)
-            | Message::BftQuorumCertificate(_)
-            | Message::BftViewChange { .. } => {
-                log::debug!(
-                    "BFT message received in generic handler — ignored (handled by BFT subsystem)"
-                );
+            Message::BftProposal {
+                round,
+                block_hash,
+                leader_id,
+                block_data,
+            } => {
+                if let Some(tx) = bft_tx {
+                    if let Ok(block) = serde_json::from_slice(&block_data) {
+                        let _ = tx.send(crate::consensus::controller::BftEvent::Proposal {
+                            round,
+                            block_hash,
+                            leader_id,
+                            block,
+                        });
+                    }
+                }
+                Ok(None)
+            }
+            Message::BftVote(vote) => {
+                if let Some(tx) = bft_tx {
+                    let _ = tx.send(crate::consensus::controller::BftEvent::Vote(vote));
+                }
+                Ok(None)
+            }
+            Message::BftQuorumCertificate(_) | Message::BftViewChange { .. } => {
+                log::debug!("BFT QC/ViewChange received — not yet handled");
                 Ok(None)
             }
         }
@@ -2139,6 +2164,29 @@ impl Node {
     ///
     /// Peers that receive `OrderedBlock` persist it to their local store,
     /// keeping the ledger in sync without pull-based state sync.
+    /// Broadcast any serializable Message to all connected peers.
+    pub async fn broadcast_message(&self, msg: &Message) {
+        let peers: Vec<String> = {
+            let guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
+            guard.iter().cloned().collect()
+        };
+        let msg_json = match serde_json::to_string(msg) {
+            Ok(j) => j,
+            Err(_) => return,
+        };
+        for peer_addr in &peers {
+            let addr = peer_addr.clone();
+            match self.open_stream(&addr).await {
+                Ok(mut stream) => {
+                    let _ = stream.write_all(msg_json.as_bytes()).await;
+                }
+                Err(e) => {
+                    log::debug!("Failed to broadcast to {addr}: {e}");
+                }
+            }
+        }
+    }
+
     pub async fn broadcast_ordered_block(&self, block: &crate::storage::traits::Block) {
         let peers: Vec<String> = {
             let guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
@@ -2779,6 +2827,7 @@ mod tests {
             None,      // raft_node
             None,      // private_data_store
             None,      // collection_registry
+            None,      // bft_tx
         )
         .await
         .unwrap();
@@ -2808,6 +2857,7 @@ mod tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
 
         Node::process_message(
@@ -2833,6 +2883,7 @@ mod tests {
             None,      // raft_node
             None,      // private_data_store
             None,      // collection_registry
+            None,      // bft_tx
         )
         .await
         .unwrap();
@@ -2857,6 +2908,7 @@ mod tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         let msg = Message::OrderedBlock(block);
         let json = serde_json::to_string(&msg).unwrap();
@@ -2910,6 +2962,7 @@ mod tests {
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
             orderer_signature: None,
+            commit_qc: None,
         };
         let msg = Message::StateResponse {
             blocks: vec![block],

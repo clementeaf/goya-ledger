@@ -1006,7 +1006,35 @@ async fn async_main_inner() -> std::io::Result<()> {
         });
     }
 
-    // ── Auto-mine loop: drain mempool → create block → broadcast ────────
+    // ── BFT consensus + auto-mine loop ─────────────────────────────────
+    let bft_enabled = std::env::var("BFT_VALIDATORS")
+        .ok()
+        .filter(|v| !v.is_empty());
+    let (bft_tx, bft_rx) =
+        tokio::sync::mpsc::unbounded_channel::<crate::consensus::controller::BftEvent>();
+
+    if let Some(ref validator_csv) = bft_enabled {
+        let validators: Vec<String> = validator_csv
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let node_id = format!("node-{p2p_port}");
+        log::info!(
+            "BFT consensus enabled: {} validators, node_id={node_id}",
+            validators.len()
+        );
+        let bft_node = node_arc.clone();
+        let bft_store = gateway_store.clone();
+        let bft_signer = signing_provider.clone();
+        tokio::spawn(async move {
+            crate::consensus::controller::run_bft_loop(
+                node_id, validators, bft_rx, bft_node, bft_store, bft_signer,
+            )
+            .await;
+        });
+    }
+
     {
         let mine_interval_secs: u64 = std::env::var("BLOCK_INTERVAL_SECS")
             .ok()
@@ -1016,6 +1044,8 @@ async fn async_main_inner() -> std::io::Result<()> {
         let mine_tx_pool = app_state.tx_pool.clone();
         let mine_mining = app_state.mining_service.clone();
         let mine_node = node_arc.clone();
+        let mine_bft_tx = bft_tx.clone();
+        let mine_bft_enabled = bft_enabled.is_some();
         tokio::spawn(async move {
             let mut interval =
                 tokio::time::interval(tokio::time::Duration::from_secs(mine_interval_secs));
@@ -1036,17 +1066,28 @@ async fn async_main_inner() -> std::io::Result<()> {
                     Ok(height) => {
                         log::info!("⛏ Auto-mined block {height} with {tx_count} tx(s)");
                         if let Ok(block) = mine_store.read_block(height) {
-                            let node = mine_node.clone();
-                            tokio::spawn(async move {
-                                node.broadcast_ordered_block(&block).await;
-                            });
+                            if mine_bft_enabled {
+                                // BFT mode: propose through consensus.
+                                let _ = mine_bft_tx.send(
+                                    crate::consensus::controller::BftEvent::ProposeBlock(block),
+                                );
+                            } else {
+                                // Solo mode: broadcast directly.
+                                let node = mine_node.clone();
+                                tokio::spawn(async move {
+                                    node.broadcast_ordered_block(&block).await;
+                                });
+                            }
                         }
                     }
                     Err(e) => log::error!("Auto-mine failed: {e}"),
                 }
             }
         });
-        log::info!("Auto-mine loop started (interval={mine_interval_secs}s)");
+        log::info!(
+            "Auto-mine loop started (interval={mine_interval_secs}s, bft={})",
+            bft_enabled.is_some()
+        );
     }
 
     let rate_limit_config = middleware::RateLimitConfig {

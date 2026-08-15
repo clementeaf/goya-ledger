@@ -9,6 +9,7 @@
 
 pub mod backend;
 pub mod bft;
+pub mod controller;
 pub mod dag;
 pub mod dpos;
 pub mod engine;

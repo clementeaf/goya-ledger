@@ -39,7 +39,7 @@ mod tests {
                 secondary_signature: None,
                 secondary_signature_algorithm: None,
                 hash_algorithm: Default::default(),
-                orderer_signature: None,
+                orderer_signature: None, commit_qc: None,
             };
             // Serialize and deserialize roundtrip must not panic
             let json = serde_json::to_string(&block).unwrap();

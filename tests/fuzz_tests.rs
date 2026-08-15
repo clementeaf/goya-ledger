@@ -257,7 +257,7 @@ proptest! {
             secondary_signature: None,
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
-            orderer_signature: None,
+            orderer_signature: None, commit_qc: None,
         };
 
         let write_result = store.write_block(&block);

@@ -143,7 +143,7 @@ proptest! {
             secondary_signature: None,
             secondary_signature_algorithm: None,
             hash_algorithm: hash_algo,
-            orderer_signature: None,
+            orderer_signature: None, commit_qc: None,
         };
 
         let json = serde_json::to_string(&block).unwrap();

@@ -257,6 +257,7 @@ impl ConsensusEngine {
                 secondary_signature_algorithm: block.secondary_signature_algorithm,
                 hash_algorithm: Default::default(),
                 orderer_signature: None,
+                commit_qc: None,
             };
             store
                 .write_block(&storage_block)
