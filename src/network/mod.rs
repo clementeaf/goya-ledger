@@ -778,11 +778,19 @@ impl Node {
                             }
                         }
 
-                        // Agregar el peer que se conectó a nuestra lista SOLO si pasó la validación
-                        if let Some(their_p2p_addr) = p2p_address {
+                        // Use the real socket IP with the declared P2P port.
+                        // Peers behind NAT/containers report 0.0.0.0 as their address;
+                        // the socket address is the only reliable reachable IP.
+                        {
+                            let p2p_port = p2p_address
+                                .as_deref()
+                                .and_then(|a| a.rsplit(':').next())
+                                .and_then(|p| p.parse::<u16>().ok())
+                                .unwrap_or(8081);
+                            let real_addr = format!("{}:{}", peer_addr.ip(), p2p_port);
                             let mut peers_guard = peers.lock().unwrap_or_else(|e| e.into_inner());
-                            peers_guard.insert(their_p2p_addr.clone());
-                            println!("📡 Peer agregado desde conexión entrante: {their_p2p_addr}");
+                            peers_guard.insert(real_addr.clone());
+                            println!("📡 Peer agregado desde conexión entrante: {real_addr}");
                         }
                         first_message = false;
                     }
@@ -1608,10 +1616,11 @@ impl Node {
                 println!("⚠️  Peer {address} no envió network_id, asumiendo compatibilidad");
             }
 
-            // Si el peer envió su dirección P2P, usarla; si no, usar la dirección de conexión
-            let peer_p2p_addr = p2p_address.unwrap_or_else(|| address.to_string());
+            // Always use the address we connected to — the peer's declared
+            // address may be 0.0.0.0 (behind NAT/container).
+            let peer_p2p_addr = address.to_string();
+            let _ = p2p_address; // ignored — not reachable from outside
 
-            // Agregar el peer a nuestra lista DESPUÉS de validar Network ID
             {
                 let mut peers = self.peers.lock().unwrap_or_else(|e| e.into_inner());
                 peers.insert(peer_p2p_addr.clone());
