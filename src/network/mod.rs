@@ -1576,7 +1576,7 @@ impl Node {
         let msg_json = serde_json::to_string(&version_msg)?;
         stream.write_all(msg_json.as_bytes()).await?;
 
-        let mut buffer = [0; 4096];
+        let mut buffer = vec![0u8; p2p_response_buffer_size()];
         let n = match stream.read(&mut buffer).await {
             Ok(0) => {
                 // Conexión cerrada sin respuesta - probablemente rechazada por el servidor
@@ -1813,7 +1813,7 @@ impl Node {
         let msg_json = serde_json::to_string(&get_peers_msg)?;
         stream.write_all(msg_json.as_bytes()).await?;
 
-        let mut buffer = [0; 4096];
+        let mut buffer = vec![0u8; p2p_response_buffer_size()];
         let n = match stream.read(&mut buffer).await {
             Ok(0) => return Err("Connection closed by peer".into()),
             Ok(n) => n,
