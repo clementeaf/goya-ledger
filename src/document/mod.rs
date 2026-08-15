@@ -10,5 +10,6 @@
 //! stored on the ledger via the notarization API.
 
 mod fingerprint;
+pub mod pdf_parser;
 
 pub use fingerprint::{DocumentFingerprint, VerificationVerdict};
