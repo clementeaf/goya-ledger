@@ -1019,7 +1019,7 @@ async fn async_main_inner() -> std::io::Result<()> {
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
-        let node_id = format!("node-{p2p_port}");
+        let node_id = std::env::var("BFT_NODE_ID").unwrap_or_else(|_| format!("node-{p2p_port}"));
         log::info!(
             "BFT consensus enabled: {} validators, node_id={node_id}",
             validators.len()
