@@ -746,6 +746,7 @@ impl Node {
             if n == 0 {
                 // EOF — try to parse whatever we accumulated before exiting.
                 if !accum.is_empty() {
+                    log::info!("P2P EOF with {} accumulated bytes from {peer_addr_str}", accum.len());
                     let msg_str = String::from_utf8_lossy(&accum);
                     if let Ok(message) = serde_json::from_str::<Message>(&msg_str) {
                         let _ = Self::process_message(
@@ -1554,6 +1555,10 @@ impl Node {
                 leader_id,
                 block_data,
             } => {
+                log::info!(
+                    "BFT: received proposal round={round} leader={leader_id} data_len={}",
+                    block_data.len()
+                );
                 if let Some(tx) = bft_tx {
                     if let Ok(block) = serde_json::from_slice(&block_data) {
                         let _ = tx.send(crate::consensus::controller::BftEvent::Proposal {
@@ -1562,13 +1567,23 @@ impl Node {
                             leader_id,
                             block,
                         });
+                    } else {
+                        log::warn!("BFT: failed to deserialize block_data");
                     }
+                } else {
+                    log::warn!("BFT: proposal received but bft_tx is None");
                 }
                 Ok(None)
             }
-            Message::BftVote(vote) => {
+            Message::BftVote(ref vote) => {
+                log::info!(
+                    "BFT: received vote phase={:?} voter={} round={}",
+                    vote.phase,
+                    vote.voter_id,
+                    vote.round
+                );
                 if let Some(tx) = bft_tx {
-                    let _ = tx.send(crate::consensus::controller::BftEvent::Vote(vote));
+                    let _ = tx.send(crate::consensus::controller::BftEvent::Vote(vote.clone()));
                 }
                 Ok(None)
             }
@@ -2231,14 +2246,21 @@ impl Node {
             Ok(j) => j,
             Err(_) => return,
         };
+        log::info!(
+            "P2P broadcast {} bytes to {} peer(s)",
+            msg_json.len(),
+            peers.len()
+        );
         for peer_addr in &peers {
             let addr = peer_addr.clone();
             match self.open_stream(&addr).await {
                 Ok(mut stream) => {
-                    let _ = stream.write_all(msg_json.as_bytes()).await;
+                    if let Err(e) = stream.write_all(msg_json.as_bytes()).await {
+                        log::warn!("P2P broadcast write to {addr} failed: {e}");
+                    }
                 }
                 Err(e) => {
-                    log::debug!("Failed to broadcast to {addr}: {e}");
+                    log::warn!("P2P broadcast connect to {addr} failed: {e}");
                 }
             }
         }
