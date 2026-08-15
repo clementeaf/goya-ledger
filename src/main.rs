@@ -1013,6 +1013,8 @@ async fn async_main_inner() -> std::io::Result<()> {
     let (bft_tx, bft_rx) =
         tokio::sync::mpsc::unbounded_channel::<crate::consensus::controller::BftEvent>();
 
+    let bft_is_leader = Arc::new(std::sync::atomic::AtomicBool::new(false));
+
     if let Some(ref validator_csv) = bft_enabled {
         let validators: Vec<String> = validator_csv
             .split(',')
@@ -1027,9 +1029,16 @@ async fn async_main_inner() -> std::io::Result<()> {
         let bft_node = node_arc.clone();
         let bft_store = gateway_store.clone();
         let bft_signer = signing_provider.clone();
+        let bft_leader_flag = bft_is_leader.clone();
         tokio::spawn(async move {
             crate::consensus::controller::run_bft_loop(
-                node_id, validators, bft_rx, bft_node, bft_store, bft_signer,
+                node_id,
+                validators,
+                bft_rx,
+                bft_node,
+                bft_store,
+                bft_signer,
+                bft_leader_flag,
             )
             .await;
         });
@@ -1046,6 +1055,7 @@ async fn async_main_inner() -> std::io::Result<()> {
         let mine_node = node_arc.clone();
         let mine_bft_tx = bft_tx.clone();
         let mine_bft_enabled = bft_enabled.is_some();
+        let mine_is_leader = bft_is_leader.clone();
         tokio::spawn(async move {
             let mut interval =
                 tokio::time::interval(tokio::time::Duration::from_secs(mine_interval_secs));
@@ -1054,6 +1064,10 @@ async fn async_main_inner() -> std::io::Result<()> {
                 let Some(ref mining_service) = mine_mining else {
                     continue;
                 };
+                // In BFT mode, only mine when this node is the current leader.
+                if mine_bft_enabled && !mine_is_leader.load(std::sync::atomic::Ordering::Relaxed) {
+                    continue;
+                }
                 let txs = {
                     let mut pool = mine_tx_pool.lock().unwrap_or_else(|e| e.into_inner());
                     pool.drain_for_block(50)

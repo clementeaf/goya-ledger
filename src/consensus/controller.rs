@@ -58,6 +58,7 @@ pub async fn run_bft_loop(
     node: Arc<Node>,
     store: Arc<dyn crate::storage::BlockStore>,
     signer: Arc<dyn SigningProvider>,
+    is_leader: Arc<std::sync::atomic::AtomicBool>,
 ) {
     let verifier = NodeVerifier {
         _validators: Vec::new(),
@@ -70,6 +71,10 @@ pub async fn run_bft_loop(
 
     // Start round 0.
     let action = manager.start();
+    is_leader.store(
+        manager.is_current_leader(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     handle_action(&action, &node, &signer, &node_id).await;
 
     // Timeout task.
@@ -150,6 +155,10 @@ pub async fn run_bft_loop(
                 reset_timeout(&mut timeout, &manager);
             }
         }
+        is_leader.store(
+            manager.is_current_leader(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
 }
 
