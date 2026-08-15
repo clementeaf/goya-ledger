@@ -1056,9 +1056,15 @@ async fn async_main_inner() -> std::io::Result<()> {
         let mine_bft_tx = bft_tx.clone();
         let mine_bft_enabled = bft_enabled.is_some();
         let mine_is_leader = bft_is_leader.clone();
+        // In BFT mode, poll every 1s to catch the leader window (3s base timeout).
+        let effective_interval = if mine_bft_enabled {
+            1
+        } else {
+            mine_interval_secs
+        };
         tokio::spawn(async move {
             let mut interval =
-                tokio::time::interval(tokio::time::Duration::from_secs(mine_interval_secs));
+                tokio::time::interval(tokio::time::Duration::from_secs(effective_interval));
             loop {
                 interval.tick().await;
                 let Some(ref mining_service) = mine_mining else {
