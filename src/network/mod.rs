@@ -740,6 +740,7 @@ impl Node {
         }
 
         let connection_result: Result<(), Box<dyn std::error::Error>> = async {
+        let mut accum = Vec::new();
         loop {
             let n = stream.read(&mut buffer).await?;
             if n == 0 {
@@ -755,8 +756,11 @@ impl Node {
                 }
             }
 
-            let message_str = String::from_utf8_lossy(&buffer[..n]);
+            // Accumulate chunks until we have a complete JSON message.
+            accum.extend_from_slice(&buffer[..n]);
+            let message_str = String::from_utf8_lossy(&accum);
             if let Ok(message) = serde_json::from_str::<Message>(&message_str) {
+            accum.clear();
                 // Si es el primer mensaje y es Version, validar network_id y responder
                 if first_message {
                     if let Message::Version {
