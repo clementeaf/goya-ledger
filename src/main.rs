@@ -404,7 +404,7 @@ async fn async_main_inner() -> std::io::Result<()> {
         use crate::identity::signing::SigningProvider as _;
         let algo = std::env::var("SIGNING_ALGORITHM").unwrap_or_default();
         match algo.to_lowercase().as_str() {
-            "ml-dsa-65" | "mldsa65" => {
+            "" | "ml-dsa-65" | "mldsa65" => {
                 let provider = crate::identity::signing::MlDsaSigningProvider::generate();
                 log::info!(
                     "Signing algorithm: ML-DSA-65 (FIPS 204, post-quantum) | pubkey_len={} bytes",
@@ -412,7 +412,8 @@ async fn async_main_inner() -> std::io::Result<()> {
                 );
                 Arc::new(provider)
             }
-            "" | "ed25519" => {
+            "ed25519" => {
+                log::warn!("SIGNING_ALGORITHM=ed25519 is deprecated — defaulting to ML-DSA-65 in future releases");
                 let provider = crate::identity::signing::SoftwareSigningProvider::generate();
                 log::info!(
                     "Signing algorithm: Ed25519 | pubkey_len={} bytes",
@@ -422,21 +423,10 @@ async fn async_main_inner() -> std::io::Result<()> {
             }
             other => {
                 panic!(
-                    "FATAL: Unknown SIGNING_ALGORITHM='{other}'. Accepted values: ed25519, ml-dsa-65"
+                    "FATAL: Unknown SIGNING_ALGORITHM='{other}'. Accepted values: ml-dsa-65, ed25519"
                 );
             }
         }
-    };
-
-    // Dedicated ML-DSA-65 provider for FEA — independent of SIGNING_ALGORITHM.
-    let fea_signing_provider: Arc<dyn crate::identity::signing::SigningProvider> = {
-        use crate::identity::signing::SigningProvider as _;
-        let provider = crate::identity::signing::MlDsaSigningProvider::generate();
-        log::info!(
-            "FEA signing provider: ML-DSA-65 (always post-quantum) | pubkey_len={} bytes",
-            provider.public_key().len()
-        );
-        Arc::new(provider)
     };
 
     // Ordering backend: "raft" or "solo" (default)
@@ -869,7 +859,6 @@ async fn async_main_inner() -> std::io::Result<()> {
                 .with_signer(signing_provider.clone()),
         )),
         signing_provider: Some(signing_provider.clone()),
-        fea_signing_provider: Some(fea_signing_provider.clone()),
         tx_pool: Arc::new(std::sync::Mutex::new(
             transaction::mempool::TransactionPool::new(),
         )),

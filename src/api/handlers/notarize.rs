@@ -753,19 +753,18 @@ pub async fn sign_fea(
         }
     }
 
-    let provider = state.fea_signing_provider.as_ref().ok_or_else(|| {
+    let provider = state.signing_provider.as_ref().ok_or_else(|| {
         crate::api::errors::ApiError::StorageError {
-            reason: "FEA signing provider not configured — node requires fea_signing_provider (ML-DSA-65)".into(),
+            reason: "signing provider not configured".into(),
         }
     })?;
 
-    // Defense in depth: guard against misconfiguration at the AppState level.
     if provider.algorithm() != crate::identity::signing::SigningAlgorithm::MlDsa65 {
         return Ok(
             HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
                 err_dto(
                     "ALGORITHM_MISMATCH",
-                    "fea_signing_provider must be ML-DSA-65",
+                    "FEA requires ML-DSA-65 but node signing provider is not post-quantum",
                 ),
                 500,
             )),
@@ -1737,9 +1736,8 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn sign_fea_rejects_without_fea_provider() {
+    async fn sign_fea_rejects_ed25519_provider() {
         let mut state = AppState::test_default();
-        // Only generic Ed25519 provider — no fea_signing_provider.
         state.signing_provider = Some(std::sync::Arc::new(SoftwareSigningProvider::generate()));
         let state = web::Data::new(state);
         let app = test::init_service(
@@ -1763,12 +1761,14 @@ mod tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 500);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"]["code"], "ALGORITHM_MISMATCH");
     }
 
     #[actix_web::test]
     async fn sign_fea_succeeds_with_mldsa65_provider() {
         let mut state = AppState::test_default();
-        state.fea_signing_provider = Some(std::sync::Arc::new(MlDsaSigningProvider::generate()));
+        state.signing_provider = Some(std::sync::Arc::new(MlDsaSigningProvider::generate()));
         let state = web::Data::new(state);
         let app = test::init_service(
             App::new()
