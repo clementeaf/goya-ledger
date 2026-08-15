@@ -239,37 +239,68 @@ pub async fn submit_notarization(
 // ── PDF Fingerprint endpoint ─────────────────────────────────────────────
 
 #[derive(Deserialize)]
-pub struct PdfFingerprintRequest {
+pub struct PdfNotarizeRequest {
     /// PDF file content, base64-encoded.
     pub pdf_base64: String,
     /// Signer DID.
     pub signer: String,
-    /// Public key (hex).
-    pub public_key: String,
-    /// Signature over the canonical_hash of the fingerprint.
-    pub signature: String,
-    #[serde(default)]
-    pub signature_level: SignatureLevel,
-    #[serde(default)]
-    pub signature_algorithm: SigningAlgorithm,
-    #[serde(default)]
+    /// Biometric evidence (required — FEA server-side signing).
     pub biometric_evidence: Vec<BiometricEvidence>,
 }
 
-/// Notarize a PDF with dimensional fingerprinting.
+/// Notarize a PDF with server-side ML-DSA-65 signature.
 ///
-/// Accepts a base64-encoded PDF, decomposes it into content/structure/metadata
-/// dimensions, and stores the per-dimension fingerprint on-chain.
-/// Verification can then distinguish "content changed" from "metadata changed".
+/// 1. Decodes PDF, computes dimensional fingerprint (content/structure/metadata).
+/// 2. Signs the canonical_hash with the node's ML-DSA-65 key.
+/// 3. Produces CAdES DER envelope with biometric commitment.
+/// 4. Stores on-chain and returns signature + fingerprint.
+///
+/// The client never handles PQC keys — they stay on the node.
 #[post("/notarize/pdf")]
 pub async fn notarize_pdf(
     state: web::Data<AppState>,
-    body: web::Json<PdfFingerprintRequest>,
+    body: web::Json<PdfNotarizeRequest>,
     req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace = uuid::Uuid::new_v4().to_string();
     let channel = channel_id_from_req(&req);
     let store = get_channel_store(&state, channel)?;
+
+    if body.biometric_evidence.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "BIOMETRIC_REQUIRED",
+                "PDF notarization requires at least one biometric evidence",
+            ),
+            400,
+        )));
+    }
+    for evidence in &body.biometric_evidence {
+        if let Err(e) = evidence.validate() {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BIOMETRIC", &e.to_string()),
+                400,
+            )));
+        }
+    }
+
+    let provider = state.signing_provider.as_ref().ok_or_else(|| {
+        crate::api::errors::ApiError::StorageError {
+            reason: "signing provider not configured".into(),
+        }
+    })?;
+
+    if provider.algorithm() != crate::identity::signing::SigningAlgorithm::MlDsa65 {
+        return Ok(
+            HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
+                err_dto(
+                    "ALGORITHM_MISMATCH",
+                    "PDF notarization requires ML-DSA-65 but node signing provider is not post-quantum",
+                ),
+                500,
+            )),
+        );
+    }
 
     let pdf_bytes =
         base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &body.pdf_base64)
@@ -279,48 +310,6 @@ pub async fn notarize_pdf(
 
     let fingerprint = crate::document::pdf_parser::fingerprint_pdf(&pdf_bytes)
         .map_err(|e| crate::api::errors::ApiError::StorageError { reason: e })?;
-
-    let effective_algorithm = crate::signature::verify::infer_algorithm_from_key(&body.public_key)
-        .unwrap_or(body.signature_algorithm);
-
-    if let Err(e) = crate::signature::validate_fes_fea(
-        body.signature_level,
-        effective_algorithm,
-        &body.biometric_evidence,
-        &body.public_key,
-    ) {
-        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-            err_dto("VALIDATION", &e.to_string()),
-            400,
-        )));
-    }
-
-    if body.signature_level == SignatureLevel::Simple
-        && !crate::identity::did::did_matches_pubkey(&body.signer, &body.public_key)
-    {
-        return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("SIGNER_MISMATCH", "signer DID does not match public key"),
-            401,
-        )));
-    }
-
-    let sign_msg = build_notarize_payload(
-        body.signature_level,
-        &body.signer,
-        &fingerprint.canonical_hash,
-        &body.biometric_evidence,
-    );
-    if !verify_signature(
-        effective_algorithm,
-        &body.public_key,
-        sign_msg.as_bytes(),
-        &body.signature,
-    ) {
-        return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
-            err_dto("INVALID_SIGNATURE", "signature verification failed"),
-            401,
-        )));
-    }
 
     if store
         .read_notarization_by_hash(&fingerprint.canonical_hash)
@@ -332,8 +321,39 @@ pub async fn notarize_pdf(
         )));
     }
 
+    let bio_hash = compute_biometrics_hash(&body.biometric_evidence);
+    let payload = format!(
+        "notarize_fea:{}:{}:{}",
+        body.signer, fingerprint.canonical_hash, bio_hash
+    );
+
+    let signature = provider.sign(payload.as_bytes()).map_err(|e| {
+        crate::api::errors::ApiError::StorageError {
+            reason: format!("signing failed: {e}"),
+        }
+    })?;
+
+    let content_bytes = hex::decode(&fingerprint.canonical_hash).unwrap_or_default();
+    let signing_content = [content_bytes.as_slice(), bio_hash.as_bytes()].concat();
+    let cades_params = crate::signature::cades_der::CadesParams {
+        content: &signing_content,
+        provider: provider.as_ref(),
+        signing_time: now_secs(),
+        signer_cert_der: None,
+        commitment: crate::signature::cades_der::CadesCommitment::Fea,
+        policy_oid: Some(crate::pki_policy::SIGNATURE_POLICY_OID),
+        tsa_token_der: None,
+    };
+
+    let cades_der = crate::signature::cades_der::build_cades_der(&cades_params).map_err(|e| {
+        crate::api::errors::ApiError::StorageError {
+            reason: format!("CAdES signing failed: {e}"),
+        }
+    })?;
+
     let block_height = store.get_latest_height().unwrap_or(0);
     let fp_json = serde_json::to_value(&fingerprint).unwrap_or_default();
+    let sig_hex = hex::encode(&signature);
 
     let entry = NotarizationEntry {
         id: uuid::Uuid::new_v4().to_string(),
@@ -342,9 +362,9 @@ pub async fn notarize_pdf(
         metadata: Some(serde_json::json!({ "fingerprint": fp_json })),
         notarized_at: now_secs(),
         block_height,
-        signature: body.signature.clone(),
-        signature_algorithm: effective_algorithm,
-        signature_level: body.signature_level,
+        signature: sig_hex.clone(),
+        signature_algorithm: provider.algorithm(),
+        signature_level: SignatureLevel::Advanced,
         biometric_evidence: body.biometric_evidence.clone(),
     };
 
@@ -353,6 +373,13 @@ pub async fn notarize_pdf(
         .map_err(|e| crate::api::errors::ApiError::StorageError {
             reason: e.to_string(),
         })?;
+
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::CertificateIssued,
+        "",
+        Some(format!("pdf_notarize:signer={}", body.signer)),
+    );
 
     Ok(HttpResponse::Created().json(ApiResponse::success(
         serde_json::json!({
@@ -365,10 +392,14 @@ pub async fn notarize_pdf(
                 "tables_hash": fingerprint.tables_hash,
                 "images_hash": fingerprint.images_hash,
             },
+            "signature": sig_hex,
+            "public_key": hex::encode(provider.public_key()),
+            "signature_algorithm": provider.algorithm(),
+            "cades_der": hex::encode(&cades_der),
+            "biometric_hash": bio_hash,
             "signer": entry.signer,
             "notarized_at": entry.notarized_at,
             "block_height": entry.block_height,
-            "signature_level": entry.signature_level,
         }),
         trace,
     )))
