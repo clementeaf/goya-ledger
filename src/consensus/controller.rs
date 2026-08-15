@@ -259,6 +259,29 @@ async fn handle_action(
                 phase,
                 qc.voter_count()
             );
+            // After phase completes, send our vote for the next phase.
+            let next_phase = match phase {
+                crate::consensus::bft::types::BftPhase::Prepare => {
+                    Some(crate::consensus::bft::types::BftPhase::PreCommit)
+                }
+                crate::consensus::bft::types::BftPhase::PreCommit => {
+                    Some(crate::consensus::bft::types::BftPhase::Commit)
+                }
+                _ => None,
+            };
+            if let (Some(next), Some(bh)) = (next_phase, qc.votes.first().map(|v| v.block_hash)) {
+                let mut vote = VoteMessage {
+                    block_hash: bh,
+                    round: qc.round,
+                    phase: next,
+                    voter_id: node_id.to_string(),
+                    signature: Vec::new(),
+                };
+                let payload = VoteMessage::signing_payload(next, &bh, qc.round);
+                vote.signature = signer.sign(&payload).unwrap_or_default();
+                let msg = crate::network::Message::BftVote(vote);
+                node.broadcast_message(&msg).await;
+            }
             false
         }
         ManagerAction::Round(RoundAction::Decide {
