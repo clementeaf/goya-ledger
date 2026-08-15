@@ -241,7 +241,8 @@ impl ApiRoutes {
             .service(alias::alias_by_did)
             .service(alias::alias_revoke);
         // Notarization (Proof of Existence)
-        cfg.service(notarize::submit_notarization)
+        cfg.service(notarize::notarize_pdf)
+            .service(notarize::submit_notarization)
             .service(notarize::verify_notarization)
             .service(notarize::verify_document)
             .service(notarize::get_notarization)
@@ -398,7 +399,8 @@ impl LightRoutes {
             .service(credentials::store_get_credentials_by_subject)
             .service(credentials::store_get_credentials_by_issuer);
         // Notarization (Proof of Existence)
-        cfg.service(notarize::submit_notarization)
+        cfg.service(notarize::notarize_pdf)
+            .service(notarize::submit_notarization)
             .service(notarize::verify_notarization)
             .service(notarize::verify_document)
             .service(notarize::get_notarization)

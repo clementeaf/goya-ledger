@@ -236,6 +236,144 @@ pub async fn submit_notarization(
     )))
 }
 
+// ── PDF Fingerprint endpoint ─────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct PdfFingerprintRequest {
+    /// PDF file content, base64-encoded.
+    pub pdf_base64: String,
+    /// Signer DID.
+    pub signer: String,
+    /// Public key (hex).
+    pub public_key: String,
+    /// Signature over the canonical_hash of the fingerprint.
+    pub signature: String,
+    #[serde(default)]
+    pub signature_level: SignatureLevel,
+    #[serde(default)]
+    pub signature_algorithm: SigningAlgorithm,
+    #[serde(default)]
+    pub biometric_evidence: Vec<BiometricEvidence>,
+}
+
+/// Notarize a PDF with dimensional fingerprinting.
+///
+/// Accepts a base64-encoded PDF, decomposes it into content/structure/metadata
+/// dimensions, and stores the per-dimension fingerprint on-chain.
+/// Verification can then distinguish "content changed" from "metadata changed".
+#[post("/notarize/pdf")]
+pub async fn notarize_pdf(
+    state: web::Data<AppState>,
+    body: web::Json<PdfFingerprintRequest>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, channel)?;
+
+    let pdf_bytes =
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &body.pdf_base64)
+            .map_err(|_| crate::api::errors::ApiError::StorageError {
+                reason: "invalid base64 in pdf_base64".into(),
+            })?;
+
+    let fingerprint = crate::document::pdf_parser::fingerprint_pdf(&pdf_bytes)
+        .map_err(|e| crate::api::errors::ApiError::StorageError { reason: e })?;
+
+    let effective_algorithm = crate::signature::verify::infer_algorithm_from_key(&body.public_key)
+        .unwrap_or(body.signature_algorithm);
+
+    if let Err(e) = crate::signature::validate_fes_fea(
+        body.signature_level,
+        effective_algorithm,
+        &body.biometric_evidence,
+        &body.public_key,
+    ) {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("VALIDATION", &e.to_string()),
+            400,
+        )));
+    }
+
+    if body.signature_level == SignatureLevel::Simple
+        && !crate::identity::did::did_matches_pubkey(&body.signer, &body.public_key)
+    {
+        return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
+            err_dto("SIGNER_MISMATCH", "signer DID does not match public key"),
+            401,
+        )));
+    }
+
+    let sign_msg = build_notarize_payload(
+        body.signature_level,
+        &body.signer,
+        &fingerprint.canonical_hash,
+        &body.biometric_evidence,
+    );
+    if !verify_signature(
+        effective_algorithm,
+        &body.public_key,
+        sign_msg.as_bytes(),
+        &body.signature,
+    ) {
+        return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
+            err_dto("INVALID_SIGNATURE", "signature verification failed"),
+            401,
+        )));
+    }
+
+    if store
+        .read_notarization_by_hash(&fingerprint.canonical_hash)
+        .is_ok()
+    {
+        return Ok(HttpResponse::Conflict().json(ApiResponse::<()>::error(
+            err_dto("ALREADY_NOTARIZED", "document already notarized"),
+            409,
+        )));
+    }
+
+    let block_height = store.get_latest_height().unwrap_or(0);
+    let fp_json = serde_json::to_value(&fingerprint).unwrap_or_default();
+
+    let entry = NotarizationEntry {
+        id: uuid::Uuid::new_v4().to_string(),
+        content_hash: fingerprint.canonical_hash.clone(),
+        signer: body.signer.clone(),
+        metadata: Some(serde_json::json!({ "fingerprint": fp_json })),
+        notarized_at: now_secs(),
+        block_height,
+        signature: body.signature.clone(),
+        signature_algorithm: effective_algorithm,
+        signature_level: body.signature_level,
+        biometric_evidence: body.biometric_evidence.clone(),
+    };
+
+    store
+        .write_notarization(&entry)
+        .map_err(|e| crate::api::errors::ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+
+    Ok(HttpResponse::Created().json(ApiResponse::success(
+        serde_json::json!({
+            "id": entry.id,
+            "canonical_hash": fingerprint.canonical_hash,
+            "fingerprint": {
+                "content_hash": fingerprint.content_hash,
+                "structure_hash": fingerprint.structure_hash,
+                "metadata_hash": fingerprint.metadata_hash,
+                "tables_hash": fingerprint.tables_hash,
+                "images_hash": fingerprint.images_hash,
+            },
+            "signer": entry.signer,
+            "notarized_at": entry.notarized_at,
+            "block_height": entry.block_height,
+            "signature_level": entry.signature_level,
+        }),
+        trace,
+    )))
+}
+
 /// Verify a document hash — returns the notarization record if it exists.
 #[get("/notarize/verify/{hash}")]
 pub async fn verify_notarization(
