@@ -778,19 +778,21 @@ impl Node {
                             }
                         }
 
-                        // Use the real socket IP with the declared P2P port.
-                        // Peers behind NAT/containers report 0.0.0.0 as their address;
-                        // the socket address is the only reliable reachable IP.
+                        // Use the peer's declared address if it's routable (not 0.0.0.0).
+                        // Fall back to socket IP + declared port otherwise.
                         {
-                            let p2p_port = p2p_address
-                                .as_deref()
-                                .and_then(|a| a.rsplit(':').next())
-                                .and_then(|p| p.parse::<u16>().ok())
-                                .unwrap_or(8081);
-                            let real_addr = format!("{}:{}", peer_addr.ip(), p2p_port);
+                            let declared = p2p_address.as_deref().unwrap_or("");
+                            let usable = if declared.starts_with("0.0.0.0") || declared.is_empty() {
+                                let port = declared.rsplit(':').next()
+                                    .and_then(|p| p.parse::<u16>().ok())
+                                    .unwrap_or(8081);
+                                format!("{}:{}", peer_addr.ip(), port)
+                            } else {
+                                declared.to_string()
+                            };
                             let mut peers_guard = peers.lock().unwrap_or_else(|e| e.into_inner());
-                            peers_guard.insert(real_addr.clone());
-                            println!("📡 Peer agregado desde conexión entrante: {real_addr}");
+                            peers_guard.insert(usable.clone());
+                            println!("📡 Peer agregado desde conexión entrante: {usable}");
                         }
                         first_message = false;
                     }
