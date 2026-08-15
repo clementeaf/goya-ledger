@@ -1,5 +1,5 @@
-app = "goya-node"
-primary_region = "iad"
+app = "goya-node-4"
+primary_region = "sin"
 
 [build]
   dockerfile = "Dockerfile.fly"
@@ -18,7 +18,6 @@ primary_region = "iad"
   RATE_LIMIT_RPM = "500"
   RATE_LIMIT_RPH = "10000"
   AUTO_DISCOVERY_INTERVAL = "60"
-  # BOOTSTRAP_NODES set via: flyctl secrets set BOOTSTRAP_NODES="host2:8081,host3:8081,host4:8081"
 
 [mounts]
   source = "goya_data"
