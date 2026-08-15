@@ -317,11 +317,15 @@ pub fn validate_fes_fea(
     if level == SignatureLevel::Qualified {
         return Err(SignatureError::QualifiedNotSupported);
     }
-    if !level.algorithm_satisfies(algorithm) {
+    // Infer algorithm from key size when declared algorithm doesn't match key length.
+    // Prevents mismatch when clients send default algorithm with a different key type.
+    let effective_algorithm =
+        crate::signature::verify::infer_algorithm_from_key(public_key_hex).unwrap_or(algorithm);
+    if !level.algorithm_satisfies(effective_algorithm) {
         return Err(SignatureError::AlgorithmMismatch {
             level,
             expected: level.required_algorithm(),
-            got: algorithm,
+            got: effective_algorithm,
         });
     }
     if level.requires_biometric() && evidence.is_empty() {
@@ -330,7 +334,8 @@ pub fn validate_fes_fea(
     for e in evidence {
         e.validate()?;
     }
-    validate_public_key(algorithm, public_key_hex).map_err(SignatureError::InvalidBiometric)?;
+    validate_public_key(effective_algorithm, public_key_hex)
+        .map_err(SignatureError::InvalidBiometric)?;
     Ok(())
 }
 
@@ -1053,6 +1058,7 @@ mod tests {
     fn validate_fes_fea_wrong_pk_size_rejected() {
         let pk = "aa".repeat(32); // Ed25519 size, but declared MlDsa65
         let bio = vec![dummy_bio(BiometricType::Fingerprint)];
+        // Inferred algorithm is Ed25519 (from key size), which doesn't satisfy Advanced
         let err = validate_fes_fea(
             SignatureLevel::Advanced,
             SigningAlgorithm::MlDsa65,
@@ -1060,7 +1066,7 @@ mod tests {
             &pk,
         )
         .unwrap_err();
-        assert!(matches!(err, SignatureError::InvalidBiometric(_)));
+        assert!(matches!(err, SignatureError::AlgorithmMismatch { .. }));
     }
 
     // ── TDD: Qualified rejected at API level ──────────────────────

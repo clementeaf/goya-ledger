@@ -97,6 +97,16 @@ pub fn verify_signature(
     }
 }
 
+/// Infer signing algorithm from public key hex length.
+pub fn infer_algorithm_from_key(public_key_hex: &str) -> Option<SigningAlgorithm> {
+    match public_key_hex.len() {
+        64 => Some(SigningAlgorithm::Ed25519),
+        3904 => Some(SigningAlgorithm::MlDsa65),
+        n if n >= 256 => Some(SigningAlgorithm::Rsa),
+        _ => None,
+    }
+}
+
 /// Validate public key hex length for the given algorithm.
 ///
 /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).
