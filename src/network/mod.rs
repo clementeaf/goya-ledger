@@ -504,26 +504,45 @@ impl Node {
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
-        // Read response with timeout
-        let mut buf = vec![0u8; p2p_response_buffer_size()];
-        let n = tokio::time::timeout(timeout, stream.read(&mut buf))
-            .await
-            .map_err(|_| -> Box<dyn std::error::Error + Send + Sync> {
-                Box::new(std::io::Error::new(
+        // Read response with timeout — accumulate TCP chunks until valid JSON or EOF.
+        let mut accum = Vec::new();
+        let mut buf = vec![0u8; 64 * 1024];
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::TimedOut,
                     format!("no response from {peer_address} within {timeout:?}"),
-                ))
-            })?
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
-
-        if n == 0 {
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof,
-                format!("peer {peer_address} closed connection without responding"),
-            )));
+                )));
+            }
+            let n = match tokio::time::timeout(remaining, stream.read(&mut buf)).await {
+                Ok(Ok(0)) if accum.is_empty() => {
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        format!("peer {peer_address} closed connection without responding"),
+                    )));
+                }
+                Ok(Ok(0)) => break, // EOF after partial data — try parse below
+                Ok(Ok(n)) => n,
+                Ok(Err(e)) => return Err(Box::new(e)),
+                Err(_) => {
+                    if accum.is_empty() {
+                        return Err(Box::new(std::io::Error::new(
+                            std::io::ErrorKind::TimedOut,
+                            format!("no response from {peer_address} within {timeout:?}"),
+                        )));
+                    }
+                    break; // timeout after partial data — try parse
+                }
+            };
+            accum.extend_from_slice(&buf[..n]);
+            if let Ok(msg) = serde_json::from_slice::<Message>(&accum) {
+                return Ok(msg);
+            }
         }
 
-        let response: Message = serde_json::from_slice(&buf[..n])
+        let response: Message = serde_json::from_slice(&accum)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
         Ok(response)
