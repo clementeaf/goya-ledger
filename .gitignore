@@ -85,5 +85,8 @@ cerulean-voto/
 sdks/
 
 
+# TLA+ model checker output
+spec/tla/states/
+
 # Build artifacts
 dist/
