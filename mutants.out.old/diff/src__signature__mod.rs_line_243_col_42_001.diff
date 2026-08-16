@@ -1,0 +1,21 @@
+--- src/signature/mod.rs
++++ replace || with && in SignedEnvelope::validate_structure
+@@ -235,17 +235,17 @@
+         }
+ 
+         // Validate each biometric commitment
+         for evidence in &self.biometric_evidence {
+             evidence.validate()?;
+         }
+ 
+         // Validate content_hash format
+-        if self.content_hash.len() != 64 || hex::decode(&self.content_hash).is_err() {
++        if self.content_hash.len() != 64 && /* ~ changed by cargo-mutants ~ */ hex::decode(&self.content_hash).is_err() {
+             return Err(SignatureError::InvalidContentHash);
+         }
+ 
+         Ok(())
+     }
+ }
+ 
+ /// Compute a deterministic hash over biometric commitments.

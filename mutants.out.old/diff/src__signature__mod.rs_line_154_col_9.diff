@@ -1,0 +1,28 @@
+--- src/signature/mod.rs
++++ replace BiometricEvidence::validate -> Result<(), SignatureError> with Ok(())
+@@ -146,24 +146,17 @@
+     /// Optional device or method identifier (e.g., "FingerprintReader-v2").
+     #[serde(skip_serializing_if = "Option::is_none")]
+     pub capture_device: Option<String>,
+ }
+ 
+ impl BiometricEvidence {
+     /// Validate that the commitment is a well-formed SHA-256 hex string.
+     pub fn validate(&self) -> Result<(), SignatureError> {
+-        if self.commitment.len() != 64 {
+-            return Err(SignatureError::InvalidBiometric(
+-                "commitment must be 64 hex characters (SHA-256)".into(),
+-            ));
+-        }
+-        hex::decode(&self.commitment)
+-            .map_err(|_| SignatureError::InvalidBiometric("commitment is not valid hex".into()))?;
+-        Ok(())
++        Ok(()) /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ // ── Signed envelope ──────────────────────────────────────────────────────────
+ 
+ /// A cryptographically signed envelope that wraps any signable payload.
+ ///
+ /// For Advanced (FEA) signatures, the biometric commitments are hashed

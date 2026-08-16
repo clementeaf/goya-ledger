@@ -1,0 +1,21 @@
+--- src/signature/mod.rs
++++ replace SignatureLevel::requires_biometric -> bool with true
+@@ -65,17 +65,17 @@
+         match self {
+             Self::Simple => SigningAlgorithm::Ed25519,
+             Self::Advanced | Self::Qualified => SigningAlgorithm::MlDsa65,
+         }
+     }
+ 
+     /// Whether biometric evidence is mandatory at this level.
+     pub fn requires_biometric(&self) -> bool {
+-        matches!(self, Self::Advanced | Self::Qualified)
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Whether the given algorithm satisfies this level's requirements.
+     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {
+         match self {
+             Self::Simple => true, // any algorithm accepted
+             Self::Advanced | Self::Qualified => alg.is_post_quantum(),
+         }

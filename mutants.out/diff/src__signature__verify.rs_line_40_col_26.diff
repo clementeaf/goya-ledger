@@ -1,0 +1,21 @@
+--- src/signature/verify.rs
++++ replace == with != in verify_mldsa65
+@@ -32,17 +32,17 @@
+ 
+ /// Verify an ML-DSA-65 (FIPS 204) signature over a message.
+ pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
+     let pub_bytes = match hex::decode(public_key_hex) {
+         Ok(b) if b.len() == 1952 => b,
+         _ => return false,
+     };
+     let sig_bytes = match hex::decode(signature_hex) {
+-        Ok(b) if b.len() == 3309 => b,
++        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 3309 => b,
+         _ => return false,
+     };
+     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};
+     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)
+     {
+         Ok(pk) => pk,
+         Err(_) => return false,
+     };

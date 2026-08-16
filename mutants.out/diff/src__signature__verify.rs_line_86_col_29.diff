@@ -1,0 +1,21 @@
+--- src/signature/verify.rs
++++ replace != with == in validate_public_key
+@@ -78,17 +78,17 @@
+     algorithm: SigningAlgorithm,
+     public_key_hex: &str,
+ ) -> Result<(), String> {
+     let expected_bytes = match algorithm {
+         SigningAlgorithm::Ed25519 => 32,
+         SigningAlgorithm::MlDsa65 => 1952,
+     };
+     let expected_hex = expected_bytes * 2;
+-    if public_key_hex.len() != expected_hex {
++    if public_key_hex.len() == /* ~ changed by cargo-mutants ~ */ expected_hex {
+         return Err(format!(
+             "public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})"
+         ));
+     }
+     if hex::decode(public_key_hex).is_err() {
+         return Err("public_key is not valid hex".into());
+     }
+     Ok(())

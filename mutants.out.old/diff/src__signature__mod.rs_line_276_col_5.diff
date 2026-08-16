@@ -1,0 +1,35 @@
+--- src/signature/mod.rs
++++ replace validate_fes_fea -> Result<(), SignatureError> with Ok(())
+@@ -268,31 +268,17 @@
+ /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,
+ /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.
+ pub fn validate_fes_fea(
+     level: SignatureLevel,
+     algorithm: SigningAlgorithm,
+     evidence: &[BiometricEvidence],
+     public_key_hex: &str,
+ ) -> Result<(), SignatureError> {
+-    if !level.algorithm_satisfies(algorithm) {
+-        return Err(SignatureError::AlgorithmMismatch {
+-            level,
+-            expected: level.required_algorithm(),
+-            got: algorithm,
+-        });
+-    }
+-    if level.requires_biometric() && evidence.is_empty() {
+-        return Err(SignatureError::BiometricRequired(level));
+-    }
+-    for e in evidence {
+-        e.validate()?;
+-    }
+-    validate_public_key(algorithm, public_key_hex).map_err(SignatureError::InvalidBiometric)?;
+-    Ok(())
++    Ok(()) /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ // ── Errors ───────────────────────────────────────────────────────────────────
+ 
+ /// Errors from signature-level validation.
+ #[derive(Debug, thiserror::Error)]
+ pub enum SignatureError {
+     #[error("signature level {level} requires {expected}, got {got}")]

@@ -1,0 +1,43 @@
+src/signature/mod.rs:65:9: replace SignatureLevel::required_algorithm -> SigningAlgorithm with Default::default()
+src/signature/mod.rs:73:9: replace SignatureLevel::requires_biometric -> bool with true
+src/signature/mod.rs:73:9: replace SignatureLevel::requires_biometric -> bool with false
+src/signature/mod.rs:78:9: replace SignatureLevel::algorithm_satisfies -> bool with true
+src/signature/mod.rs:78:9: replace SignatureLevel::algorithm_satisfies -> bool with false
+src/signature/mod.rs:87:9: replace <impl std::fmt::Display for SignatureLevel>::fmt -> std::fmt::Result with Ok(Default::default())
+src/signature/mod.rs:122:9: replace <impl std::fmt::Display for BiometricType>::fmt -> std::fmt::Result with Ok(Default::default())
+src/signature/mod.rs:154:9: replace BiometricEvidence::validate -> Result<(), SignatureError> with Ok(())
+src/signature/mod.rs:154:34: replace != with == in BiometricEvidence::validate
+src/signature/mod.rs:204:9: replace SignedEnvelope::signing_payload -> String with String::new()
+src/signature/mod.rs:204:9: replace SignedEnvelope::signing_payload -> String with "xyzzy".into()
+src/signature/mod.rs:224:9: replace SignedEnvelope::validate_structure -> Result<(), SignatureError> with Ok(())
+src/signature/mod.rs:224:12: delete ! in SignedEnvelope::validate_structure
+src/signature/mod.rs:233:44: replace && with || in SignedEnvelope::validate_structure
+src/signature/mod.rs:243:42: replace || with && in SignedEnvelope::validate_structure
+src/signature/mod.rs:243:36: replace != with == in SignedEnvelope::validate_structure
+src/signature/mod.rs:257:5: replace compute_biometrics_hash -> String with String::new()
+src/signature/mod.rs:257:5: replace compute_biometrics_hash -> String with "xyzzy".into()
+src/signature/mod.rs:276:5: replace validate_fes_fea -> Result<(), SignatureError> with Ok(())
+src/signature/mod.rs:276:8: delete ! in validate_fes_fea
+src/signature/mod.rs:283:35: replace && with || in validate_fes_fea
+src/signature/mod.rs:65:9: replace SignatureLevel::required_algorithm -> SigningAlgorithm with Default::default()
+src/signature/mod.rs:73:9: replace SignatureLevel::requires_biometric -> bool with true
+src/signature/mod.rs:73:9: replace SignatureLevel::requires_biometric -> bool with false
+src/signature/mod.rs:78:9: replace SignatureLevel::algorithm_satisfies -> bool with true
+src/signature/mod.rs:78:9: replace SignatureLevel::algorithm_satisfies -> bool with false
+src/signature/mod.rs:87:9: replace <impl std::fmt::Display for SignatureLevel>::fmt -> std::fmt::Result with Ok(Default::default())
+src/signature/mod.rs:122:9: replace <impl std::fmt::Display for BiometricType>::fmt -> std::fmt::Result with Ok(Default::default())
+src/signature/mod.rs:154:9: replace BiometricEvidence::validate -> Result<(), SignatureError> with Ok(())
+src/signature/mod.rs:154:34: replace != with == in BiometricEvidence::validate
+src/signature/mod.rs:204:9: replace SignedEnvelope::signing_payload -> String with String::new()
+src/signature/mod.rs:204:9: replace SignedEnvelope::signing_payload -> String with "xyzzy".into()
+src/signature/mod.rs:224:9: replace SignedEnvelope::validate_structure -> Result<(), SignatureError> with Ok(())
+src/signature/mod.rs:224:12: delete ! in SignedEnvelope::validate_structure
+src/signature/mod.rs:233:44: replace && with || in SignedEnvelope::validate_structure
+src/signature/mod.rs:243:42: replace || with && in SignedEnvelope::validate_structure
+src/signature/mod.rs:243:36: replace != with == in SignedEnvelope::validate_structure
+src/signature/mod.rs:257:5: replace compute_biometrics_hash -> String with String::new()
+src/signature/mod.rs:257:5: replace compute_biometrics_hash -> String with "xyzzy".into()
+src/signature/mod.rs:276:5: replace validate_fes_fea -> Result<(), SignatureError> with Ok(())
+src/signature/mod.rs:276:8: delete ! in validate_fes_fea
+src/signature/mod.rs:283:35: replace && with || in validate_fes_fea
+src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with true

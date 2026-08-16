@@ -1,0 +1,44 @@
+--- src/signature/mod.rs
++++ replace SignedEnvelope::validate_structure -> Result<(), SignatureError> with Ok(())
+@@ -216,40 +216,17 @@
+     ///
+     /// Checks:
+     /// - Algorithm matches the claimed level
+     /// - Biometric evidence present when required
+     /// - All biometric commitments are valid hex
+     /// - Content hash is valid SHA-256 hex
+     pub fn validate_structure(&self) -> Result<(), SignatureError> {
+         // Algorithm must satisfy level requirements
+-        if !self.level.algorithm_satisfies(self.signature_algorithm) {
+-            return Err(SignatureError::AlgorithmMismatch {
+-                level: self.level,
+-                expected: self.level.required_algorithm(),
+-                got: self.signature_algorithm,
+-            });
+-        }
+-
+-        // Biometric evidence required for Advanced/Qualified
+-        if self.level.requires_biometric() && self.biometric_evidence.is_empty() {
+-            return Err(SignatureError::BiometricRequired(self.level));
+-        }
+-
+-        // Validate each biometric commitment
+-        for evidence in &self.biometric_evidence {
+-            evidence.validate()?;
+-        }
+-
+-        // Validate content_hash format
+-        if self.content_hash.len() != 64 || hex::decode(&self.content_hash).is_err() {
+-            return Err(SignatureError::InvalidContentHash);
+-        }
+-
+-        Ok(())
++        Ok(()) /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ /// Compute a deterministic hash over biometric commitments.
+ ///
+ /// Sorts commitments alphabetically, joins with ':', then SHA-256 hashes.
+ /// This ensures the same set of evidence always produces the same hash
+ /// regardless of submission order.

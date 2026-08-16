@@ -1,0 +1,21 @@
+--- src/signature/mod.rs
++++ replace && with || in SignedEnvelope::validate_structure
+@@ -225,17 +225,17 @@
+             return Err(SignatureError::AlgorithmMismatch {
+                 level: self.level,
+                 expected: self.level.required_algorithm(),
+                 got: self.signature_algorithm,
+             });
+         }
+ 
+         // Biometric evidence required for Advanced/Qualified
+-        if self.level.requires_biometric() && self.biometric_evidence.is_empty() {
++        if self.level.requires_biometric() || /* ~ changed by cargo-mutants ~ */ self.biometric_evidence.is_empty() {
+             return Err(SignatureError::BiometricRequired(self.level));
+         }
+ 
+         // Validate each biometric commitment
+         for evidence in &self.biometric_evidence {
+             evidence.validate()?;
+         }
+ 

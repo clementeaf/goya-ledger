@@ -1,0 +1,24 @@
+--- src/signature/verify.rs
++++ replace verify_signature -> bool with false
+@@ -60,20 +60,17 @@
+ ///
+ /// Returns `true` if the signature is valid for the given message and public key.
+ pub fn verify_signature(
+     algorithm: SigningAlgorithm,
+     public_key_hex: &str,
+     message: &[u8],
+     signature_hex: &str,
+ ) -> bool {
+-    match algorithm {
+-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),
+-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),
+-    }
++    false /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Validate public key hex length for the given algorithm.
+ ///
+ /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).
+ pub fn validate_public_key(
+     algorithm: SigningAlgorithm,
+     public_key_hex: &str,

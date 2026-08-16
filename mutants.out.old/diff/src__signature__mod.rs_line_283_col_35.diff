@@ -1,0 +1,21 @@
+--- src/signature/mod.rs
++++ replace && with || in validate_fes_fea
+@@ -275,17 +275,17 @@
+ ) -> Result<(), SignatureError> {
+     if !level.algorithm_satisfies(algorithm) {
+         return Err(SignatureError::AlgorithmMismatch {
+             level,
+             expected: level.required_algorithm(),
+             got: algorithm,
+         });
+     }
+-    if level.requires_biometric() && evidence.is_empty() {
++    if level.requires_biometric() || /* ~ changed by cargo-mutants ~ */ evidence.is_empty() {
+         return Err(SignatureError::BiometricRequired(level));
+     }
+     for e in evidence {
+         e.validate()?;
+     }
+     validate_public_key(algorithm, public_key_hex).map_err(SignatureError::InvalidBiometric)?;
+     Ok(())
+ }

@@ -1,0 +1,2818 @@
+[
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::required_algorithm -> SigningAlgorithm with Default::default()\n@@ -57,20 +57,17 @@\n     /// Requires a Qualified Trust Service Provider (QTSP).\n     /// Reserved for when a certified TSP issues the signing certificate.\n     Qualified,\n }\n \n impl SignatureLevel {\n     /// Minimum signing algorithm required for this level.\n     pub fn required_algorithm(&self) -> SigningAlgorithm {\n-        match self {\n-            Self::Simple => SigningAlgorithm::Ed25519,\n-            Self::Advanced | Self::Qualified => SigningAlgorithm::MlDsa65,\n-        }\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n         matches!(self, Self::Advanced | Self::Qualified)\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::required_algorithm",
+      "return_type": "-> SigningAlgorithm",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 69
+        },
+        "start": {
+          "column": 5,
+          "line": 63
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:65:9: replace SignatureLevel::required_algorithm -> SigningAlgorithm with Default::default()",
+    "package": "rust-bc",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 68
+      },
+      "start": {
+        "column": 9,
+        "line": 65
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::requires_biometric -> bool with true\n@@ -65,17 +65,17 @@\n         match self {\n             Self::Simple => SigningAlgorithm::Ed25519,\n             Self::Advanced | Self::Qualified => SigningAlgorithm::MlDsa65,\n         }\n     }\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n-        matches!(self, Self::Advanced | Self::Qualified)\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {\n         match self {\n             Self::Simple => true, // any algorithm accepted\n             Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n         }\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::requires_biometric",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 74
+        },
+        "start": {
+          "column": 5,
+          "line": 71
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:73:9: replace SignatureLevel::requires_biometric -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 57,
+        "line": 73
+      },
+      "start": {
+        "column": 9,
+        "line": 73
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::requires_biometric -> bool with false\n@@ -65,17 +65,17 @@\n         match self {\n             Self::Simple => SigningAlgorithm::Ed25519,\n             Self::Advanced | Self::Qualified => SigningAlgorithm::MlDsa65,\n         }\n     }\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n-        matches!(self, Self::Advanced | Self::Qualified)\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {\n         match self {\n             Self::Simple => true, // any algorithm accepted\n             Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n         }\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::requires_biometric",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 74
+        },
+        "start": {
+          "column": 5,
+          "line": 71
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:73:9: replace SignatureLevel::requires_biometric -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 57,
+        "line": 73
+      },
+      "start": {
+        "column": 9,
+        "line": 73
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::algorithm_satisfies -> bool with true\n@@ -70,20 +70,17 @@\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n         matches!(self, Self::Advanced | Self::Qualified)\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {\n-        match self {\n-            Self::Simple => true, // any algorithm accepted\n-            Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n-        }\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl std::fmt::Display for SignatureLevel {\n     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n         match self {\n             Self::Simple => write!(f, \"Simple (FES)\"),\n             Self::Advanced => write!(f, \"Advanced (FEA)\"),\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::algorithm_satisfies",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 82
+        },
+        "start": {
+          "column": 5,
+          "line": 76
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:78:9: replace SignatureLevel::algorithm_satisfies -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 81
+      },
+      "start": {
+        "column": 9,
+        "line": 78
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::algorithm_satisfies -> bool with false\n@@ -70,20 +70,17 @@\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n         matches!(self, Self::Advanced | Self::Qualified)\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {\n-        match self {\n-            Self::Simple => true, // any algorithm accepted\n-            Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n-        }\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl std::fmt::Display for SignatureLevel {\n     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n         match self {\n             Self::Simple => write!(f, \"Simple (FES)\"),\n             Self::Advanced => write!(f, \"Advanced (FEA)\"),\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::algorithm_satisfies",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 82
+        },
+        "start": {
+          "column": 5,
+          "line": 76
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:78:9: replace SignatureLevel::algorithm_satisfies -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 81
+      },
+      "start": {
+        "column": 9,
+        "line": 78
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace <impl std::fmt::Display for SignatureLevel>::fmt -> std::fmt::Result with Ok(Default::default())\n@@ -79,21 +79,17 @@\n             Self::Simple => true, // any algorithm accepted\n             Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n         }\n     }\n }\n \n impl std::fmt::Display for SignatureLevel {\n     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n-        match self {\n-            Self::Simple => write!(f, \"Simple (FES)\"),\n-            Self::Advanced => write!(f, \"Advanced (FEA)\"),\n-            Self::Qualified => write!(f, \"Qualified\"),\n-        }\n+        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n // ── Biometric evidence ───────────────────────────────────────────────────────\n \n /// Type of biometric or identity evidence.\n ///\n /// Extensible: new variants can be added without breaking serialization\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "<impl std::fmt::Display for SignatureLevel>::fmt",
+      "return_type": "-> std::fmt::Result",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 92
+        },
+        "start": {
+          "column": 5,
+          "line": 86
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:87:9: replace <impl std::fmt::Display for SignatureLevel>::fmt -> std::fmt::Result with Ok(Default::default())",
+    "package": "rust-bc",
+    "replacement": "Ok(Default::default())",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 91
+      },
+      "start": {
+        "column": 9,
+        "line": 87
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace <impl std::fmt::Display for BiometricType>::fmt -> std::fmt::Result with Ok(Default::default())\n@@ -114,25 +114,17 @@\n     /// Government-issued ID document hash.\n     GovernmentId,\n     /// Extensible: any other identity factor.\n     Other(String),\n }\n \n impl std::fmt::Display for BiometricType {\n     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n-        match self {\n-            Self::Fingerprint => write!(f, \"fingerprint\"),\n-            Self::FacialRecognition => write!(f, \"facial_recognition\"),\n-            Self::Rut => write!(f, \"rut\"),\n-            Self::Iris => write!(f, \"iris\"),\n-            Self::Voice => write!(f, \"voice\"),\n-            Self::GovernmentId => write!(f, \"government_id\"),\n-            Self::Other(name) => write!(f, \"other:{name}\"),\n-        }\n+        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n /// A single piece of biometric or identity evidence.\n ///\n /// The `commitment` is a SHA-256 hash of the raw biometric data.\n /// Raw data never enters the system — only commitments are stored.\n #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "<impl std::fmt::Display for BiometricType>::fmt",
+      "return_type": "-> std::fmt::Result",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 131
+        },
+        "start": {
+          "column": 5,
+          "line": 121
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:122:9: replace <impl std::fmt::Display for BiometricType>::fmt -> std::fmt::Result with Ok(Default::default())",
+    "package": "rust-bc",
+    "replacement": "Ok(Default::default())",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 130
+      },
+      "start": {
+        "column": 9,
+        "line": 122
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace BiometricEvidence::validate -> Result<(), SignatureError> with Ok(())\n@@ -146,24 +146,17 @@\n     /// Optional device or method identifier (e.g., \"FingerprintReader-v2\").\n     #[serde(skip_serializing_if = \"Option::is_none\")]\n     pub capture_device: Option<String>,\n }\n \n impl BiometricEvidence {\n     /// Validate that the commitment is a well-formed SHA-256 hex string.\n     pub fn validate(&self) -> Result<(), SignatureError> {\n-        if self.commitment.len() != 64 {\n-            return Err(SignatureError::InvalidBiometric(\n-                \"commitment must be 64 hex characters (SHA-256)\".into(),\n-            ));\n-        }\n-        hex::decode(&self.commitment)\n-            .map_err(|_| SignatureError::InvalidBiometric(\"commitment is not valid hex\".into()))?;\n-        Ok(())\n+        Ok(()) /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n // ── Signed envelope ──────────────────────────────────────────────────────────\n \n /// A cryptographically signed envelope that wraps any signable payload.\n ///\n /// For Advanced (FEA) signatures, the biometric commitments are hashed\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "BiometricEvidence::validate",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 162
+        },
+        "start": {
+          "column": 5,
+          "line": 152
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:154:9: replace BiometricEvidence::validate -> Result<(), SignatureError> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 15,
+        "line": 161
+      },
+      "start": {
+        "column": 9,
+        "line": 154
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace != with == in BiometricEvidence::validate\n@@ -146,17 +146,17 @@\n     /// Optional device or method identifier (e.g., \"FingerprintReader-v2\").\n     #[serde(skip_serializing_if = \"Option::is_none\")]\n     pub capture_device: Option<String>,\n }\n \n impl BiometricEvidence {\n     /// Validate that the commitment is a well-formed SHA-256 hex string.\n     pub fn validate(&self) -> Result<(), SignatureError> {\n-        if self.commitment.len() != 64 {\n+        if self.commitment.len() == /* ~ changed by cargo-mutants ~ */ 64 {\n             return Err(SignatureError::InvalidBiometric(\n                 \"commitment must be 64 hex characters (SHA-256)\".into(),\n             ));\n         }\n         hex::decode(&self.commitment)\n             .map_err(|_| SignatureError::InvalidBiometric(\"commitment is not valid hex\".into()))?;\n         Ok(())\n     }\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "BiometricEvidence::validate",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 162
+        },
+        "start": {
+          "column": 5,
+          "line": 152
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:154:34: replace != with == in BiometricEvidence::validate",
+    "package": "rust-bc",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 36,
+        "line": 154
+      },
+      "start": {
+        "column": 34,
+        "line": 154
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignedEnvelope::signing_payload -> String with String::new()\n@@ -196,25 +196,17 @@\n     pub signed_at: u64,\n }\n \n impl SignedEnvelope {\n     /// Compute the canonical signing payload for this envelope.\n     ///\n     /// The payload is the byte string that was (or should have been) signed.\n     pub fn signing_payload(&self) -> String {\n-        match self.level {\n-            SignatureLevel::Simple => {\n-                format!(\"fes:{}:{}\", self.signer, self.content_hash)\n-            }\n-            SignatureLevel::Advanced | SignatureLevel::Qualified => {\n-                let bio_hash = compute_biometrics_hash(&self.biometric_evidence);\n-                format!(\"fea:{}:{}:{}\", self.signer, self.content_hash, bio_hash)\n-            }\n-        }\n+        String::new() /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Validate the envelope's structural integrity (not the cryptographic signature).\n     ///\n     /// Checks:\n     /// - Algorithm matches the claimed level\n     /// - Biometric evidence present when required\n     /// - All biometric commitments are valid hex\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::signing_payload",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 213
+        },
+        "start": {
+          "column": 5,
+          "line": 200
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:204:9: replace SignedEnvelope::signing_payload -> String with String::new()",
+    "package": "rust-bc",
+    "replacement": "String::new()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 212
+      },
+      "start": {
+        "column": 9,
+        "line": 204
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignedEnvelope::signing_payload -> String with \"xyzzy\".into()\n@@ -196,25 +196,17 @@\n     pub signed_at: u64,\n }\n \n impl SignedEnvelope {\n     /// Compute the canonical signing payload for this envelope.\n     ///\n     /// The payload is the byte string that was (or should have been) signed.\n     pub fn signing_payload(&self) -> String {\n-        match self.level {\n-            SignatureLevel::Simple => {\n-                format!(\"fes:{}:{}\", self.signer, self.content_hash)\n-            }\n-            SignatureLevel::Advanced | SignatureLevel::Qualified => {\n-                let bio_hash = compute_biometrics_hash(&self.biometric_evidence);\n-                format!(\"fea:{}:{}:{}\", self.signer, self.content_hash, bio_hash)\n-            }\n-        }\n+        \"xyzzy\".into() /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Validate the envelope's structural integrity (not the cryptographic signature).\n     ///\n     /// Checks:\n     /// - Algorithm matches the claimed level\n     /// - Biometric evidence present when required\n     /// - All biometric commitments are valid hex\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::signing_payload",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 213
+        },
+        "start": {
+          "column": 5,
+          "line": 200
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:204:9: replace SignedEnvelope::signing_payload -> String with \"xyzzy\".into()",
+    "package": "rust-bc",
+    "replacement": "\"xyzzy\".into()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 212
+      },
+      "start": {
+        "column": 9,
+        "line": 204
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignedEnvelope::validate_structure -> Result<(), SignatureError> with Ok(())\n@@ -216,40 +216,17 @@\n     ///\n     /// Checks:\n     /// - Algorithm matches the claimed level\n     /// - Biometric evidence present when required\n     /// - All biometric commitments are valid hex\n     /// - Content hash is valid SHA-256 hex\n     pub fn validate_structure(&self) -> Result<(), SignatureError> {\n         // Algorithm must satisfy level requirements\n-        if !self.level.algorithm_satisfies(self.signature_algorithm) {\n-            return Err(SignatureError::AlgorithmMismatch {\n-                level: self.level,\n-                expected: self.level.required_algorithm(),\n-                got: self.signature_algorithm,\n-            });\n-        }\n-\n-        // Biometric evidence required for Advanced/Qualified\n-        if self.level.requires_biometric() && self.biometric_evidence.is_empty() {\n-            return Err(SignatureError::BiometricRequired(self.level));\n-        }\n-\n-        // Validate each biometric commitment\n-        for evidence in &self.biometric_evidence {\n-            evidence.validate()?;\n-        }\n-\n-        // Validate content_hash format\n-        if self.content_hash.len() != 64 || hex::decode(&self.content_hash).is_err() {\n-            return Err(SignatureError::InvalidContentHash);\n-        }\n-\n-        Ok(())\n+        Ok(()) /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n /// Compute a deterministic hash over biometric commitments.\n ///\n /// Sorts commitments alphabetically, joins with ':', then SHA-256 hashes.\n /// This ensures the same set of evidence always produces the same hash\n /// regardless of submission order.\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:224:9: replace SignedEnvelope::validate_structure -> Result<(), SignatureError> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 15,
+        "line": 247
+      },
+      "start": {
+        "column": 9,
+        "line": 224
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ delete ! in SignedEnvelope::validate_structure\n@@ -216,17 +216,17 @@\n     ///\n     /// Checks:\n     /// - Algorithm matches the claimed level\n     /// - Biometric evidence present when required\n     /// - All biometric commitments are valid hex\n     /// - Content hash is valid SHA-256 hex\n     pub fn validate_structure(&self) -> Result<(), SignatureError> {\n         // Algorithm must satisfy level requirements\n-        if !self.level.algorithm_satisfies(self.signature_algorithm) {\n+        if  /* ~ changed by cargo-mutants ~ */self.level.algorithm_satisfies(self.signature_algorithm) {\n             return Err(SignatureError::AlgorithmMismatch {\n                 level: self.level,\n                 expected: self.level.required_algorithm(),\n                 got: self.signature_algorithm,\n             });\n         }\n \n         // Biometric evidence required for Advanced/Qualified\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "UnaryOperator",
+    "name": "src/signature/mod.rs:224:12: delete ! in SignedEnvelope::validate_structure",
+    "package": "rust-bc",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 13,
+        "line": 224
+      },
+      "start": {
+        "column": 12,
+        "line": 224
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace && with || in SignedEnvelope::validate_structure\n@@ -225,17 +225,17 @@\n             return Err(SignatureError::AlgorithmMismatch {\n                 level: self.level,\n                 expected: self.level.required_algorithm(),\n                 got: self.signature_algorithm,\n             });\n         }\n \n         // Biometric evidence required for Advanced/Qualified\n-        if self.level.requires_biometric() && self.biometric_evidence.is_empty() {\n+        if self.level.requires_biometric() || /* ~ changed by cargo-mutants ~ */ self.biometric_evidence.is_empty() {\n             return Err(SignatureError::BiometricRequired(self.level));\n         }\n \n         // Validate each biometric commitment\n         for evidence in &self.biometric_evidence {\n             evidence.validate()?;\n         }\n \n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:233:44: replace && with || in SignedEnvelope::validate_structure",
+    "package": "rust-bc",
+    "replacement": "||",
+    "span": {
+      "end": {
+        "column": 46,
+        "line": 233
+      },
+      "start": {
+        "column": 44,
+        "line": 233
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace || with && in SignedEnvelope::validate_structure\n@@ -235,17 +235,17 @@\n         }\n \n         // Validate each biometric commitment\n         for evidence in &self.biometric_evidence {\n             evidence.validate()?;\n         }\n \n         // Validate content_hash format\n-        if self.content_hash.len() != 64 || hex::decode(&self.content_hash).is_err() {\n+        if self.content_hash.len() != 64 && /* ~ changed by cargo-mutants ~ */ hex::decode(&self.content_hash).is_err() {\n             return Err(SignatureError::InvalidContentHash);\n         }\n \n         Ok(())\n     }\n }\n \n /// Compute a deterministic hash over biometric commitments.\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:243:42: replace || with && in SignedEnvelope::validate_structure",
+    "package": "rust-bc",
+    "replacement": "&&",
+    "span": {
+      "end": {
+        "column": 44,
+        "line": 243
+      },
+      "start": {
+        "column": 42,
+        "line": 243
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace != with == in SignedEnvelope::validate_structure\n@@ -235,17 +235,17 @@\n         }\n \n         // Validate each biometric commitment\n         for evidence in &self.biometric_evidence {\n             evidence.validate()?;\n         }\n \n         // Validate content_hash format\n-        if self.content_hash.len() != 64 || hex::decode(&self.content_hash).is_err() {\n+        if self.content_hash.len() == /* ~ changed by cargo-mutants ~ */ 64 || hex::decode(&self.content_hash).is_err() {\n             return Err(SignatureError::InvalidContentHash);\n         }\n \n         Ok(())\n     }\n }\n \n /// Compute a deterministic hash over biometric commitments.\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:243:36: replace != with == in SignedEnvelope::validate_structure",
+    "package": "rust-bc",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 38,
+        "line": 243
+      },
+      "start": {
+        "column": 36,
+        "line": 243
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace compute_biometrics_hash -> String with String::new()\n@@ -249,25 +249,17 @@\n }\n \n /// Compute a deterministic hash over biometric commitments.\n ///\n /// Sorts commitments alphabetically, joins with ':', then SHA-256 hashes.\n /// This ensures the same set of evidence always produces the same hash\n /// regardless of submission order.\n pub fn compute_biometrics_hash(evidence: &[BiometricEvidence]) -> String {\n-    if evidence.is_empty() {\n-        return \"0\".repeat(64); // null hash for no evidence\n-    }\n-    let mut commitments: Vec<&str> = evidence.iter().map(|e| e.commitment.as_str()).collect();\n-    commitments.sort();\n-    let joined = commitments.join(\":\");\n-    use pqc_crypto_module::legacy::sha256::Digest;\n-    let hash = pqc_crypto_module::legacy::sha256::Sha256::digest(joined.as_bytes());\n-    hex::encode(hash)\n+    String::new() /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,\n /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.\n pub fn validate_fes_fea(\n     level: SignatureLevel,\n     algorithm: SigningAlgorithm,\n     evidence: &[BiometricEvidence],\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "compute_biometrics_hash",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 266
+        },
+        "start": {
+          "column": 1,
+          "line": 251
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:257:5: replace compute_biometrics_hash -> String with String::new()",
+    "package": "rust-bc",
+    "replacement": "String::new()",
+    "span": {
+      "end": {
+        "column": 22,
+        "line": 265
+      },
+      "start": {
+        "column": 5,
+        "line": 257
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace compute_biometrics_hash -> String with \"xyzzy\".into()\n@@ -249,25 +249,17 @@\n }\n \n /// Compute a deterministic hash over biometric commitments.\n ///\n /// Sorts commitments alphabetically, joins with ':', then SHA-256 hashes.\n /// This ensures the same set of evidence always produces the same hash\n /// regardless of submission order.\n pub fn compute_biometrics_hash(evidence: &[BiometricEvidence]) -> String {\n-    if evidence.is_empty() {\n-        return \"0\".repeat(64); // null hash for no evidence\n-    }\n-    let mut commitments: Vec<&str> = evidence.iter().map(|e| e.commitment.as_str()).collect();\n-    commitments.sort();\n-    let joined = commitments.join(\":\");\n-    use pqc_crypto_module::legacy::sha256::Digest;\n-    let hash = pqc_crypto_module::legacy::sha256::Sha256::digest(joined.as_bytes());\n-    hex::encode(hash)\n+    \"xyzzy\".into() /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,\n /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.\n pub fn validate_fes_fea(\n     level: SignatureLevel,\n     algorithm: SigningAlgorithm,\n     evidence: &[BiometricEvidence],\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "compute_biometrics_hash",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 266
+        },
+        "start": {
+          "column": 1,
+          "line": 251
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:257:5: replace compute_biometrics_hash -> String with \"xyzzy\".into()",
+    "package": "rust-bc",
+    "replacement": "\"xyzzy\".into()",
+    "span": {
+      "end": {
+        "column": 22,
+        "line": 265
+      },
+      "start": {
+        "column": 5,
+        "line": 257
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace validate_fes_fea -> Result<(), SignatureError> with Ok(())\n@@ -268,31 +268,17 @@\n /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,\n /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.\n pub fn validate_fes_fea(\n     level: SignatureLevel,\n     algorithm: SigningAlgorithm,\n     evidence: &[BiometricEvidence],\n     public_key_hex: &str,\n ) -> Result<(), SignatureError> {\n-    if !level.algorithm_satisfies(algorithm) {\n-        return Err(SignatureError::AlgorithmMismatch {\n-            level,\n-            expected: level.required_algorithm(),\n-            got: algorithm,\n-        });\n-    }\n-    if level.requires_biometric() && evidence.is_empty() {\n-        return Err(SignatureError::BiometricRequired(level));\n-    }\n-    for e in evidence {\n-        e.validate()?;\n-    }\n-    validate_public_key(algorithm, public_key_hex).map_err(SignatureError::InvalidBiometric)?;\n-    Ok(())\n+    Ok(()) /* ~ changed by cargo-mutants ~ */\n }\n \n // ── Errors ───────────────────────────────────────────────────────────────────\n \n /// Errors from signature-level validation.\n #[derive(Debug, thiserror::Error)]\n pub enum SignatureError {\n     #[error(\"signature level {level} requires {expected}, got {got}\")]\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "validate_fes_fea",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 291
+        },
+        "start": {
+          "column": 1,
+          "line": 268
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:276:5: replace validate_fes_fea -> Result<(), SignatureError> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 290
+      },
+      "start": {
+        "column": 5,
+        "line": 276
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ delete ! in validate_fes_fea\n@@ -268,17 +268,17 @@\n /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,\n /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.\n pub fn validate_fes_fea(\n     level: SignatureLevel,\n     algorithm: SigningAlgorithm,\n     evidence: &[BiometricEvidence],\n     public_key_hex: &str,\n ) -> Result<(), SignatureError> {\n-    if !level.algorithm_satisfies(algorithm) {\n+    if  /* ~ changed by cargo-mutants ~ */level.algorithm_satisfies(algorithm) {\n         return Err(SignatureError::AlgorithmMismatch {\n             level,\n             expected: level.required_algorithm(),\n             got: algorithm,\n         });\n     }\n     if level.requires_biometric() && evidence.is_empty() {\n         return Err(SignatureError::BiometricRequired(level));\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "validate_fes_fea",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 291
+        },
+        "start": {
+          "column": 1,
+          "line": 268
+        }
+      }
+    },
+    "genre": "UnaryOperator",
+    "name": "src/signature/mod.rs:276:8: delete ! in validate_fes_fea",
+    "package": "rust-bc",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 9,
+        "line": 276
+      },
+      "start": {
+        "column": 8,
+        "line": 276
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace && with || in validate_fes_fea\n@@ -275,17 +275,17 @@\n ) -> Result<(), SignatureError> {\n     if !level.algorithm_satisfies(algorithm) {\n         return Err(SignatureError::AlgorithmMismatch {\n             level,\n             expected: level.required_algorithm(),\n             got: algorithm,\n         });\n     }\n-    if level.requires_biometric() && evidence.is_empty() {\n+    if level.requires_biometric() || /* ~ changed by cargo-mutants ~ */ evidence.is_empty() {\n         return Err(SignatureError::BiometricRequired(level));\n     }\n     for e in evidence {\n         e.validate()?;\n     }\n     validate_public_key(algorithm, public_key_hex).map_err(SignatureError::InvalidBiometric)?;\n     Ok(())\n }\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "validate_fes_fea",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 291
+        },
+        "start": {
+          "column": 1,
+          "line": 268
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:283:35: replace && with || in validate_fes_fea",
+    "package": "rust-bc",
+    "replacement": "||",
+    "span": {
+      "end": {
+        "column": 37,
+        "line": 283
+      },
+      "start": {
+        "column": 35,
+        "line": 283
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::required_algorithm -> SigningAlgorithm with Default::default()\n@@ -57,20 +57,17 @@\n     /// Requires a Qualified Trust Service Provider (QTSP).\n     /// Reserved for when a certified TSP issues the signing certificate.\n     Qualified,\n }\n \n impl SignatureLevel {\n     /// Minimum signing algorithm required for this level.\n     pub fn required_algorithm(&self) -> SigningAlgorithm {\n-        match self {\n-            Self::Simple => SigningAlgorithm::Ed25519,\n-            Self::Advanced | Self::Qualified => SigningAlgorithm::MlDsa65,\n-        }\n+        Default::default() /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n         matches!(self, Self::Advanced | Self::Qualified)\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::required_algorithm",
+      "return_type": "-> SigningAlgorithm",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 69
+        },
+        "start": {
+          "column": 5,
+          "line": 63
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:65:9: replace SignatureLevel::required_algorithm -> SigningAlgorithm with Default::default()",
+    "package": "rust-bc",
+    "replacement": "Default::default()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 68
+      },
+      "start": {
+        "column": 9,
+        "line": 65
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::requires_biometric -> bool with true\n@@ -65,17 +65,17 @@\n         match self {\n             Self::Simple => SigningAlgorithm::Ed25519,\n             Self::Advanced | Self::Qualified => SigningAlgorithm::MlDsa65,\n         }\n     }\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n-        matches!(self, Self::Advanced | Self::Qualified)\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {\n         match self {\n             Self::Simple => true, // any algorithm accepted\n             Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n         }\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::requires_biometric",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 74
+        },
+        "start": {
+          "column": 5,
+          "line": 71
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:73:9: replace SignatureLevel::requires_biometric -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 57,
+        "line": 73
+      },
+      "start": {
+        "column": 9,
+        "line": 73
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::requires_biometric -> bool with false\n@@ -65,17 +65,17 @@\n         match self {\n             Self::Simple => SigningAlgorithm::Ed25519,\n             Self::Advanced | Self::Qualified => SigningAlgorithm::MlDsa65,\n         }\n     }\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n-        matches!(self, Self::Advanced | Self::Qualified)\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {\n         match self {\n             Self::Simple => true, // any algorithm accepted\n             Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n         }\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::requires_biometric",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 74
+        },
+        "start": {
+          "column": 5,
+          "line": 71
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:73:9: replace SignatureLevel::requires_biometric -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 57,
+        "line": 73
+      },
+      "start": {
+        "column": 9,
+        "line": 73
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::algorithm_satisfies -> bool with true\n@@ -70,20 +70,17 @@\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n         matches!(self, Self::Advanced | Self::Qualified)\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {\n-        match self {\n-            Self::Simple => true, // any algorithm accepted\n-            Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n-        }\n+        true /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl std::fmt::Display for SignatureLevel {\n     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n         match self {\n             Self::Simple => write!(f, \"Simple (FES)\"),\n             Self::Advanced => write!(f, \"Advanced (FEA)\"),\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::algorithm_satisfies",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 82
+        },
+        "start": {
+          "column": 5,
+          "line": 76
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:78:9: replace SignatureLevel::algorithm_satisfies -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 81
+      },
+      "start": {
+        "column": 9,
+        "line": 78
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignatureLevel::algorithm_satisfies -> bool with false\n@@ -70,20 +70,17 @@\n \n     /// Whether biometric evidence is mandatory at this level.\n     pub fn requires_biometric(&self) -> bool {\n         matches!(self, Self::Advanced | Self::Qualified)\n     }\n \n     /// Whether the given algorithm satisfies this level's requirements.\n     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {\n-        match self {\n-            Self::Simple => true, // any algorithm accepted\n-            Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n-        }\n+        false /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n impl std::fmt::Display for SignatureLevel {\n     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n         match self {\n             Self::Simple => write!(f, \"Simple (FES)\"),\n             Self::Advanced => write!(f, \"Advanced (FEA)\"),\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignatureLevel::algorithm_satisfies",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 82
+        },
+        "start": {
+          "column": 5,
+          "line": 76
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:78:9: replace SignatureLevel::algorithm_satisfies -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 81
+      },
+      "start": {
+        "column": 9,
+        "line": 78
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace <impl std::fmt::Display for SignatureLevel>::fmt -> std::fmt::Result with Ok(Default::default())\n@@ -79,21 +79,17 @@\n             Self::Simple => true, // any algorithm accepted\n             Self::Advanced | Self::Qualified => alg.is_post_quantum(),\n         }\n     }\n }\n \n impl std::fmt::Display for SignatureLevel {\n     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n-        match self {\n-            Self::Simple => write!(f, \"Simple (FES)\"),\n-            Self::Advanced => write!(f, \"Advanced (FEA)\"),\n-            Self::Qualified => write!(f, \"Qualified\"),\n-        }\n+        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n // ── Biometric evidence ───────────────────────────────────────────────────────\n \n /// Type of biometric or identity evidence.\n ///\n /// Extensible: new variants can be added without breaking serialization\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "<impl std::fmt::Display for SignatureLevel>::fmt",
+      "return_type": "-> std::fmt::Result",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 92
+        },
+        "start": {
+          "column": 5,
+          "line": 86
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:87:9: replace <impl std::fmt::Display for SignatureLevel>::fmt -> std::fmt::Result with Ok(Default::default())",
+    "package": "rust-bc",
+    "replacement": "Ok(Default::default())",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 91
+      },
+      "start": {
+        "column": 9,
+        "line": 87
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace <impl std::fmt::Display for BiometricType>::fmt -> std::fmt::Result with Ok(Default::default())\n@@ -114,25 +114,17 @@\n     /// Government-issued ID document hash.\n     GovernmentId,\n     /// Extensible: any other identity factor.\n     Other(String),\n }\n \n impl std::fmt::Display for BiometricType {\n     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n-        match self {\n-            Self::Fingerprint => write!(f, \"fingerprint\"),\n-            Self::FacialRecognition => write!(f, \"facial_recognition\"),\n-            Self::Rut => write!(f, \"rut\"),\n-            Self::Iris => write!(f, \"iris\"),\n-            Self::Voice => write!(f, \"voice\"),\n-            Self::GovernmentId => write!(f, \"government_id\"),\n-            Self::Other(name) => write!(f, \"other:{name}\"),\n-        }\n+        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n /// A single piece of biometric or identity evidence.\n ///\n /// The `commitment` is a SHA-256 hash of the raw biometric data.\n /// Raw data never enters the system — only commitments are stored.\n #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "<impl std::fmt::Display for BiometricType>::fmt",
+      "return_type": "-> std::fmt::Result",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 131
+        },
+        "start": {
+          "column": 5,
+          "line": 121
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:122:9: replace <impl std::fmt::Display for BiometricType>::fmt -> std::fmt::Result with Ok(Default::default())",
+    "package": "rust-bc",
+    "replacement": "Ok(Default::default())",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 130
+      },
+      "start": {
+        "column": 9,
+        "line": 122
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace BiometricEvidence::validate -> Result<(), SignatureError> with Ok(())\n@@ -146,24 +146,17 @@\n     /// Optional device or method identifier (e.g., \"FingerprintReader-v2\").\n     #[serde(skip_serializing_if = \"Option::is_none\")]\n     pub capture_device: Option<String>,\n }\n \n impl BiometricEvidence {\n     /// Validate that the commitment is a well-formed SHA-256 hex string.\n     pub fn validate(&self) -> Result<(), SignatureError> {\n-        if self.commitment.len() != 64 {\n-            return Err(SignatureError::InvalidBiometric(\n-                \"commitment must be 64 hex characters (SHA-256)\".into(),\n-            ));\n-        }\n-        hex::decode(&self.commitment)\n-            .map_err(|_| SignatureError::InvalidBiometric(\"commitment is not valid hex\".into()))?;\n-        Ok(())\n+        Ok(()) /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n // ── Signed envelope ──────────────────────────────────────────────────────────\n \n /// A cryptographically signed envelope that wraps any signable payload.\n ///\n /// For Advanced (FEA) signatures, the biometric commitments are hashed\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "BiometricEvidence::validate",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 162
+        },
+        "start": {
+          "column": 5,
+          "line": 152
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:154:9: replace BiometricEvidence::validate -> Result<(), SignatureError> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 15,
+        "line": 161
+      },
+      "start": {
+        "column": 9,
+        "line": 154
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace != with == in BiometricEvidence::validate\n@@ -146,17 +146,17 @@\n     /// Optional device or method identifier (e.g., \"FingerprintReader-v2\").\n     #[serde(skip_serializing_if = \"Option::is_none\")]\n     pub capture_device: Option<String>,\n }\n \n impl BiometricEvidence {\n     /// Validate that the commitment is a well-formed SHA-256 hex string.\n     pub fn validate(&self) -> Result<(), SignatureError> {\n-        if self.commitment.len() != 64 {\n+        if self.commitment.len() == /* ~ changed by cargo-mutants ~ */ 64 {\n             return Err(SignatureError::InvalidBiometric(\n                 \"commitment must be 64 hex characters (SHA-256)\".into(),\n             ));\n         }\n         hex::decode(&self.commitment)\n             .map_err(|_| SignatureError::InvalidBiometric(\"commitment is not valid hex\".into()))?;\n         Ok(())\n     }\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "BiometricEvidence::validate",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 162
+        },
+        "start": {
+          "column": 5,
+          "line": 152
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:154:34: replace != with == in BiometricEvidence::validate",
+    "package": "rust-bc",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 36,
+        "line": 154
+      },
+      "start": {
+        "column": 34,
+        "line": 154
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignedEnvelope::signing_payload -> String with String::new()\n@@ -196,25 +196,17 @@\n     pub signed_at: u64,\n }\n \n impl SignedEnvelope {\n     /// Compute the canonical signing payload for this envelope.\n     ///\n     /// The payload is the byte string that was (or should have been) signed.\n     pub fn signing_payload(&self) -> String {\n-        match self.level {\n-            SignatureLevel::Simple => {\n-                format!(\"fes:{}:{}\", self.signer, self.content_hash)\n-            }\n-            SignatureLevel::Advanced | SignatureLevel::Qualified => {\n-                let bio_hash = compute_biometrics_hash(&self.biometric_evidence);\n-                format!(\"fea:{}:{}:{}\", self.signer, self.content_hash, bio_hash)\n-            }\n-        }\n+        String::new() /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Validate the envelope's structural integrity (not the cryptographic signature).\n     ///\n     /// Checks:\n     /// - Algorithm matches the claimed level\n     /// - Biometric evidence present when required\n     /// - All biometric commitments are valid hex\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::signing_payload",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 213
+        },
+        "start": {
+          "column": 5,
+          "line": 200
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:204:9: replace SignedEnvelope::signing_payload -> String with String::new()",
+    "package": "rust-bc",
+    "replacement": "String::new()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 212
+      },
+      "start": {
+        "column": 9,
+        "line": 204
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignedEnvelope::signing_payload -> String with \"xyzzy\".into()\n@@ -196,25 +196,17 @@\n     pub signed_at: u64,\n }\n \n impl SignedEnvelope {\n     /// Compute the canonical signing payload for this envelope.\n     ///\n     /// The payload is the byte string that was (or should have been) signed.\n     pub fn signing_payload(&self) -> String {\n-        match self.level {\n-            SignatureLevel::Simple => {\n-                format!(\"fes:{}:{}\", self.signer, self.content_hash)\n-            }\n-            SignatureLevel::Advanced | SignatureLevel::Qualified => {\n-                let bio_hash = compute_biometrics_hash(&self.biometric_evidence);\n-                format!(\"fea:{}:{}:{}\", self.signer, self.content_hash, bio_hash)\n-            }\n-        }\n+        \"xyzzy\".into() /* ~ changed by cargo-mutants ~ */\n     }\n \n     /// Validate the envelope's structural integrity (not the cryptographic signature).\n     ///\n     /// Checks:\n     /// - Algorithm matches the claimed level\n     /// - Biometric evidence present when required\n     /// - All biometric commitments are valid hex\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::signing_payload",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 213
+        },
+        "start": {
+          "column": 5,
+          "line": 200
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:204:9: replace SignedEnvelope::signing_payload -> String with \"xyzzy\".into()",
+    "package": "rust-bc",
+    "replacement": "\"xyzzy\".into()",
+    "span": {
+      "end": {
+        "column": 10,
+        "line": 212
+      },
+      "start": {
+        "column": 9,
+        "line": 204
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace SignedEnvelope::validate_structure -> Result<(), SignatureError> with Ok(())\n@@ -216,40 +216,17 @@\n     ///\n     /// Checks:\n     /// - Algorithm matches the claimed level\n     /// - Biometric evidence present when required\n     /// - All biometric commitments are valid hex\n     /// - Content hash is valid SHA-256 hex\n     pub fn validate_structure(&self) -> Result<(), SignatureError> {\n         // Algorithm must satisfy level requirements\n-        if !self.level.algorithm_satisfies(self.signature_algorithm) {\n-            return Err(SignatureError::AlgorithmMismatch {\n-                level: self.level,\n-                expected: self.level.required_algorithm(),\n-                got: self.signature_algorithm,\n-            });\n-        }\n-\n-        // Biometric evidence required for Advanced/Qualified\n-        if self.level.requires_biometric() && self.biometric_evidence.is_empty() {\n-            return Err(SignatureError::BiometricRequired(self.level));\n-        }\n-\n-        // Validate each biometric commitment\n-        for evidence in &self.biometric_evidence {\n-            evidence.validate()?;\n-        }\n-\n-        // Validate content_hash format\n-        if self.content_hash.len() != 64 || hex::decode(&self.content_hash).is_err() {\n-            return Err(SignatureError::InvalidContentHash);\n-        }\n-\n-        Ok(())\n+        Ok(()) /* ~ changed by cargo-mutants ~ */\n     }\n }\n \n /// Compute a deterministic hash over biometric commitments.\n ///\n /// Sorts commitments alphabetically, joins with ':', then SHA-256 hashes.\n /// This ensures the same set of evidence always produces the same hash\n /// regardless of submission order.\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:224:9: replace SignedEnvelope::validate_structure -> Result<(), SignatureError> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 15,
+        "line": 247
+      },
+      "start": {
+        "column": 9,
+        "line": 224
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ delete ! in SignedEnvelope::validate_structure\n@@ -216,17 +216,17 @@\n     ///\n     /// Checks:\n     /// - Algorithm matches the claimed level\n     /// - Biometric evidence present when required\n     /// - All biometric commitments are valid hex\n     /// - Content hash is valid SHA-256 hex\n     pub fn validate_structure(&self) -> Result<(), SignatureError> {\n         // Algorithm must satisfy level requirements\n-        if !self.level.algorithm_satisfies(self.signature_algorithm) {\n+        if  /* ~ changed by cargo-mutants ~ */self.level.algorithm_satisfies(self.signature_algorithm) {\n             return Err(SignatureError::AlgorithmMismatch {\n                 level: self.level,\n                 expected: self.level.required_algorithm(),\n                 got: self.signature_algorithm,\n             });\n         }\n \n         // Biometric evidence required for Advanced/Qualified\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "UnaryOperator",
+    "name": "src/signature/mod.rs:224:12: delete ! in SignedEnvelope::validate_structure",
+    "package": "rust-bc",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 13,
+        "line": 224
+      },
+      "start": {
+        "column": 12,
+        "line": 224
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace && with || in SignedEnvelope::validate_structure\n@@ -225,17 +225,17 @@\n             return Err(SignatureError::AlgorithmMismatch {\n                 level: self.level,\n                 expected: self.level.required_algorithm(),\n                 got: self.signature_algorithm,\n             });\n         }\n \n         // Biometric evidence required for Advanced/Qualified\n-        if self.level.requires_biometric() && self.biometric_evidence.is_empty() {\n+        if self.level.requires_biometric() || /* ~ changed by cargo-mutants ~ */ self.biometric_evidence.is_empty() {\n             return Err(SignatureError::BiometricRequired(self.level));\n         }\n \n         // Validate each biometric commitment\n         for evidence in &self.biometric_evidence {\n             evidence.validate()?;\n         }\n \n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:233:44: replace && with || in SignedEnvelope::validate_structure",
+    "package": "rust-bc",
+    "replacement": "||",
+    "span": {
+      "end": {
+        "column": 46,
+        "line": 233
+      },
+      "start": {
+        "column": 44,
+        "line": 233
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace || with && in SignedEnvelope::validate_structure\n@@ -235,17 +235,17 @@\n         }\n \n         // Validate each biometric commitment\n         for evidence in &self.biometric_evidence {\n             evidence.validate()?;\n         }\n \n         // Validate content_hash format\n-        if self.content_hash.len() != 64 || hex::decode(&self.content_hash).is_err() {\n+        if self.content_hash.len() != 64 && /* ~ changed by cargo-mutants ~ */ hex::decode(&self.content_hash).is_err() {\n             return Err(SignatureError::InvalidContentHash);\n         }\n \n         Ok(())\n     }\n }\n \n /// Compute a deterministic hash over biometric commitments.\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:243:42: replace || with && in SignedEnvelope::validate_structure",
+    "package": "rust-bc",
+    "replacement": "&&",
+    "span": {
+      "end": {
+        "column": 44,
+        "line": 243
+      },
+      "start": {
+        "column": 42,
+        "line": 243
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace != with == in SignedEnvelope::validate_structure\n@@ -235,17 +235,17 @@\n         }\n \n         // Validate each biometric commitment\n         for evidence in &self.biometric_evidence {\n             evidence.validate()?;\n         }\n \n         // Validate content_hash format\n-        if self.content_hash.len() != 64 || hex::decode(&self.content_hash).is_err() {\n+        if self.content_hash.len() == /* ~ changed by cargo-mutants ~ */ 64 || hex::decode(&self.content_hash).is_err() {\n             return Err(SignatureError::InvalidContentHash);\n         }\n \n         Ok(())\n     }\n }\n \n /// Compute a deterministic hash over biometric commitments.\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "SignedEnvelope::validate_structure",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 6,
+          "line": 248
+        },
+        "start": {
+          "column": 5,
+          "line": 215
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:243:36: replace != with == in SignedEnvelope::validate_structure",
+    "package": "rust-bc",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 38,
+        "line": 243
+      },
+      "start": {
+        "column": 36,
+        "line": 243
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace compute_biometrics_hash -> String with String::new()\n@@ -249,25 +249,17 @@\n }\n \n /// Compute a deterministic hash over biometric commitments.\n ///\n /// Sorts commitments alphabetically, joins with ':', then SHA-256 hashes.\n /// This ensures the same set of evidence always produces the same hash\n /// regardless of submission order.\n pub fn compute_biometrics_hash(evidence: &[BiometricEvidence]) -> String {\n-    if evidence.is_empty() {\n-        return \"0\".repeat(64); // null hash for no evidence\n-    }\n-    let mut commitments: Vec<&str> = evidence.iter().map(|e| e.commitment.as_str()).collect();\n-    commitments.sort();\n-    let joined = commitments.join(\":\");\n-    use pqc_crypto_module::legacy::sha256::Digest;\n-    let hash = pqc_crypto_module::legacy::sha256::Sha256::digest(joined.as_bytes());\n-    hex::encode(hash)\n+    String::new() /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,\n /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.\n pub fn validate_fes_fea(\n     level: SignatureLevel,\n     algorithm: SigningAlgorithm,\n     evidence: &[BiometricEvidence],\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "compute_biometrics_hash",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 266
+        },
+        "start": {
+          "column": 1,
+          "line": 251
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:257:5: replace compute_biometrics_hash -> String with String::new()",
+    "package": "rust-bc",
+    "replacement": "String::new()",
+    "span": {
+      "end": {
+        "column": 22,
+        "line": 265
+      },
+      "start": {
+        "column": 5,
+        "line": 257
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace compute_biometrics_hash -> String with \"xyzzy\".into()\n@@ -249,25 +249,17 @@\n }\n \n /// Compute a deterministic hash over biometric commitments.\n ///\n /// Sorts commitments alphabetically, joins with ':', then SHA-256 hashes.\n /// This ensures the same set of evidence always produces the same hash\n /// regardless of submission order.\n pub fn compute_biometrics_hash(evidence: &[BiometricEvidence]) -> String {\n-    if evidence.is_empty() {\n-        return \"0\".repeat(64); // null hash for no evidence\n-    }\n-    let mut commitments: Vec<&str> = evidence.iter().map(|e| e.commitment.as_str()).collect();\n-    commitments.sort();\n-    let joined = commitments.join(\":\");\n-    use pqc_crypto_module::legacy::sha256::Digest;\n-    let hash = pqc_crypto_module::legacy::sha256::Sha256::digest(joined.as_bytes());\n-    hex::encode(hash)\n+    \"xyzzy\".into() /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,\n /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.\n pub fn validate_fes_fea(\n     level: SignatureLevel,\n     algorithm: SigningAlgorithm,\n     evidence: &[BiometricEvidence],\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "compute_biometrics_hash",
+      "return_type": "-> String",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 266
+        },
+        "start": {
+          "column": 1,
+          "line": 251
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:257:5: replace compute_biometrics_hash -> String with \"xyzzy\".into()",
+    "package": "rust-bc",
+    "replacement": "\"xyzzy\".into()",
+    "span": {
+      "end": {
+        "column": 22,
+        "line": 265
+      },
+      "start": {
+        "column": 5,
+        "line": 257
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace validate_fes_fea -> Result<(), SignatureError> with Ok(())\n@@ -268,31 +268,17 @@\n /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,\n /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.\n pub fn validate_fes_fea(\n     level: SignatureLevel,\n     algorithm: SigningAlgorithm,\n     evidence: &[BiometricEvidence],\n     public_key_hex: &str,\n ) -> Result<(), SignatureError> {\n-    if !level.algorithm_satisfies(algorithm) {\n-        return Err(SignatureError::AlgorithmMismatch {\n-            level,\n-            expected: level.required_algorithm(),\n-            got: algorithm,\n-        });\n-    }\n-    if level.requires_biometric() && evidence.is_empty() {\n-        return Err(SignatureError::BiometricRequired(level));\n-    }\n-    for e in evidence {\n-        e.validate()?;\n-    }\n-    validate_public_key(algorithm, public_key_hex).map_err(SignatureError::InvalidBiometric)?;\n-    Ok(())\n+    Ok(()) /* ~ changed by cargo-mutants ~ */\n }\n \n // ── Errors ───────────────────────────────────────────────────────────────────\n \n /// Errors from signature-level validation.\n #[derive(Debug, thiserror::Error)]\n pub enum SignatureError {\n     #[error(\"signature level {level} requires {expected}, got {got}\")]\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "validate_fes_fea",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 291
+        },
+        "start": {
+          "column": 1,
+          "line": 268
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/mod.rs:276:5: replace validate_fes_fea -> Result<(), SignatureError> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 290
+      },
+      "start": {
+        "column": 5,
+        "line": 276
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ delete ! in validate_fes_fea\n@@ -268,17 +268,17 @@\n /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,\n /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.\n pub fn validate_fes_fea(\n     level: SignatureLevel,\n     algorithm: SigningAlgorithm,\n     evidence: &[BiometricEvidence],\n     public_key_hex: &str,\n ) -> Result<(), SignatureError> {\n-    if !level.algorithm_satisfies(algorithm) {\n+    if  /* ~ changed by cargo-mutants ~ */level.algorithm_satisfies(algorithm) {\n         return Err(SignatureError::AlgorithmMismatch {\n             level,\n             expected: level.required_algorithm(),\n             got: algorithm,\n         });\n     }\n     if level.requires_biometric() && evidence.is_empty() {\n         return Err(SignatureError::BiometricRequired(level));\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "validate_fes_fea",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 291
+        },
+        "start": {
+          "column": 1,
+          "line": 268
+        }
+      }
+    },
+    "genre": "UnaryOperator",
+    "name": "src/signature/mod.rs:276:8: delete ! in validate_fes_fea",
+    "package": "rust-bc",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 9,
+        "line": 276
+      },
+      "start": {
+        "column": 8,
+        "line": 276
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/mod.rs\n+++ replace && with || in validate_fes_fea\n@@ -275,17 +275,17 @@\n ) -> Result<(), SignatureError> {\n     if !level.algorithm_satisfies(algorithm) {\n         return Err(SignatureError::AlgorithmMismatch {\n             level,\n             expected: level.required_algorithm(),\n             got: algorithm,\n         });\n     }\n-    if level.requires_biometric() && evidence.is_empty() {\n+    if level.requires_biometric() || /* ~ changed by cargo-mutants ~ */ evidence.is_empty() {\n         return Err(SignatureError::BiometricRequired(level));\n     }\n     for e in evidence {\n         e.validate()?;\n     }\n     validate_public_key(algorithm, public_key_hex).map_err(SignatureError::InvalidBiometric)?;\n     Ok(())\n }\n",
+    "file": "src/signature/mod.rs",
+    "function": {
+      "function_name": "validate_fes_fea",
+      "return_type": "-> Result<(), SignatureError>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 291
+        },
+        "start": {
+          "column": 1,
+          "line": 268
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/mod.rs:283:35: replace && with || in validate_fes_fea",
+    "package": "rust-bc",
+    "replacement": "||",
+    "span": {
+      "end": {
+        "column": 37,
+        "line": 283
+      },
+      "start": {
+        "column": 35,
+        "line": 283
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_ed25519 -> bool with true\n@@ -3,36 +3,17 @@\n //! All handlers that verify cryptographic signatures should use these\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n-    match (\n-        pub_bytes\n-            .as_slice()\n-            .try_into()\n-            .ok()\n-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n-        Signature::from_slice(&sig_bytes).ok(),\n-    ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n-        _ => false,\n-    }\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 30
+      },
+      "start": {
+        "column": 5,
+        "line": 11
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_ed25519 -> bool with false\n@@ -3,36 +3,17 @@\n //! All handlers that verify cryptographic signatures should use these\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n-    match (\n-        pub_bytes\n-            .as_slice()\n-            .try_into()\n-            .ok()\n-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n-        Signature::from_slice(&sig_bytes).ok(),\n-    ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n-        _ => false,\n-    }\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 30
+      },
+      "start": {
+        "column": 5,
+        "line": 11
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 32 with true in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with true in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 12
+      },
+      "start": {
+        "column": 18,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 32 with false in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with false in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 12
+      },
+      "start": {
+        "column": 18,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:12:26: replace == with != in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 12
+      },
+      "start": {
+        "column": 26,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 64 with true in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with true in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 16
+      },
+      "start": {
+        "column": 18,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 64 with false in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with false in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 16
+      },
+      "start": {
+        "column": 18,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:16:26: replace == with != in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 16
+      },
+      "start": {
+        "column": 26,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ delete match arm (Some(vk), Some(sig)) in verify_ed25519\n@@ -20,17 +20,17 @@\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n             .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n         Signature::from_slice(&sig_bytes).ok(),\n     ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n+         /* ~ changed by cargo-mutants ~ */\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "src/signature/verify.rs:28:9: delete match arm (Some(vk), Some(sig)) in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 67,
+        "line": 28
+      },
+      "start": {
+        "column": 9,
+        "line": 28
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_mldsa65 -> bool with true\n@@ -27,38 +27,17 @@\n     ) {\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n-    {\n-        Ok(pk) => pk,\n-        Err(_) => return false,\n-    };\n-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(\n-        &sig_bytes,\n-    ) {\n-        Ok(sig) => sig,\n-        Err(_) => return false,\n-    };\n-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)\n-        .is_ok()\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Dispatch signature verification based on algorithm.\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 56
+      },
+      "start": {
+        "column": 5,
+        "line": 35
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_mldsa65 -> bool with false\n@@ -27,38 +27,17 @@\n     ) {\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n-    {\n-        Ok(pk) => pk,\n-        Err(_) => return false,\n-    };\n-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(\n-        &sig_bytes,\n-    ) {\n-        Ok(sig) => sig,\n-        Err(_) => return false,\n-    };\n-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)\n-        .is_ok()\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Dispatch signature verification based on algorithm.\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 56
+      },
+      "start": {
+        "column": 5,
+        "line": 35
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 1952 with true in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with true in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 36
+      },
+      "start": {
+        "column": 18,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 1952 with false in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with false in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 36
+      },
+      "start": {
+        "column": 18,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:36:26: replace == with != in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 36
+      },
+      "start": {
+        "column": 26,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 3309 with true in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with true in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 40
+      },
+      "start": {
+        "column": 18,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 3309 with false in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with false in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 40
+      },
+      "start": {
+        "column": 18,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:40:26: replace == with != in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 40
+      },
+      "start": {
+        "column": 26,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_signature -> bool with true\n@@ -60,20 +60,17 @@\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n     message: &[u8],\n     signature_hex: &str,\n ) -> bool {\n-    match algorithm {\n-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),\n-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),\n-    }\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_signature",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 72
+        },
+        "start": {
+          "column": 1,
+          "line": 59
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 71
+      },
+      "start": {
+        "column": 5,
+        "line": 68
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_signature -> bool with false\n@@ -60,20 +60,17 @@\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n     message: &[u8],\n     signature_hex: &str,\n ) -> bool {\n-    match algorithm {\n-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),\n-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),\n-    }\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_signature",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 72
+        },
+        "start": {
+          "column": 1,
+          "line": 59
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 71
+      },
+      "start": {
+        "column": 5,
+        "line": 68
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace validate_public_key -> Result<(), String> with Ok(())\n@@ -73,30 +73,17 @@\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n-    let expected_bytes = match algorithm {\n-        SigningAlgorithm::Ed25519 => 32,\n-        SigningAlgorithm::MlDsa65 => 1952,\n-    };\n-    let expected_hex = expected_bytes * 2;\n-    if public_key_hex.len() != expected_hex {\n-        return Err(format!(\n-            \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n-        ));\n-    }\n-    if hex::decode(public_key_hex).is_err() {\n-        return Err(\"public_key is not valid hex\".into());\n-    }\n-    Ok(())\n+    Ok(()) /* ~ changed by cargo-mutants ~ */\n }\n \n #[cfg(test)]\n mod tests {\n     use super::*;\n     use crate::identity::signing::{\n         MlDsaSigningProvider, SigningProvider, SoftwareSigningProvider,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:81:5: replace validate_public_key -> Result<(), String> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 94
+      },
+      "start": {
+        "column": 5,
+        "line": 81
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace * with + in validate_public_key\n@@ -77,17 +77,17 @@\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n-    let expected_hex = expected_bytes * 2;\n+    let expected_hex = expected_bytes + /* ~ changed by cargo-mutants ~ */ 2;\n     if public_key_hex.len() != expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:85:39: replace * with + in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "+",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 85
+      },
+      "start": {
+        "column": 39,
+        "line": 85
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace * with / in validate_public_key\n@@ -77,17 +77,17 @@\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n-    let expected_hex = expected_bytes * 2;\n+    let expected_hex = expected_bytes / /* ~ changed by cargo-mutants ~ */ 2;\n     if public_key_hex.len() != expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:85:39: replace * with / in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "/",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 85
+      },
+      "start": {
+        "column": 39,
+        "line": 85
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace != with == in validate_public_key\n@@ -78,17 +78,17 @@\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n     let expected_hex = expected_bytes * 2;\n-    if public_key_hex.len() != expected_hex {\n+    if public_key_hex.len() == /* ~ changed by cargo-mutants ~ */ expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n     Ok(())\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:86:29: replace != with == in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 86
+      },
+      "start": {
+        "column": 29,
+        "line": 86
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_ed25519 -> bool with true\n@@ -3,36 +3,17 @@\n //! All handlers that verify cryptographic signatures should use these\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n-    match (\n-        pub_bytes\n-            .as_slice()\n-            .try_into()\n-            .ok()\n-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n-        Signature::from_slice(&sig_bytes).ok(),\n-    ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n-        _ => false,\n-    }\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 30
+      },
+      "start": {
+        "column": 5,
+        "line": 11
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_ed25519 -> bool with false\n@@ -3,36 +3,17 @@\n //! All handlers that verify cryptographic signatures should use these\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n-    match (\n-        pub_bytes\n-            .as_slice()\n-            .try_into()\n-            .ok()\n-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n-        Signature::from_slice(&sig_bytes).ok(),\n-    ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n-        _ => false,\n-    }\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 30
+      },
+      "start": {
+        "column": 5,
+        "line": 11
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 32 with true in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with true in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 12
+      },
+      "start": {
+        "column": 18,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 32 with false in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with false in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 12
+      },
+      "start": {
+        "column": 18,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:12:26: replace == with != in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 12
+      },
+      "start": {
+        "column": 26,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 64 with true in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with true in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 16
+      },
+      "start": {
+        "column": 18,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 64 with false in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with false in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 16
+      },
+      "start": {
+        "column": 18,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:16:26: replace == with != in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 16
+      },
+      "start": {
+        "column": 26,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ delete match arm (Some(vk), Some(sig)) in verify_ed25519\n@@ -20,17 +20,17 @@\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n             .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n         Signature::from_slice(&sig_bytes).ok(),\n     ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n+         /* ~ changed by cargo-mutants ~ */\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "src/signature/verify.rs:28:9: delete match arm (Some(vk), Some(sig)) in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 67,
+        "line": 28
+      },
+      "start": {
+        "column": 9,
+        "line": 28
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_mldsa65 -> bool with true\n@@ -27,38 +27,17 @@\n     ) {\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n-    {\n-        Ok(pk) => pk,\n-        Err(_) => return false,\n-    };\n-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(\n-        &sig_bytes,\n-    ) {\n-        Ok(sig) => sig,\n-        Err(_) => return false,\n-    };\n-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)\n-        .is_ok()\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Dispatch signature verification based on algorithm.\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 56
+      },
+      "start": {
+        "column": 5,
+        "line": 35
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_mldsa65 -> bool with false\n@@ -27,38 +27,17 @@\n     ) {\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n-    {\n-        Ok(pk) => pk,\n-        Err(_) => return false,\n-    };\n-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(\n-        &sig_bytes,\n-    ) {\n-        Ok(sig) => sig,\n-        Err(_) => return false,\n-    };\n-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)\n-        .is_ok()\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Dispatch signature verification based on algorithm.\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 56
+      },
+      "start": {
+        "column": 5,
+        "line": 35
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 1952 with true in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with true in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 36
+      },
+      "start": {
+        "column": 18,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 1952 with false in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with false in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 36
+      },
+      "start": {
+        "column": 18,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:36:26: replace == with != in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 36
+      },
+      "start": {
+        "column": 26,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 3309 with true in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with true in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 40
+      },
+      "start": {
+        "column": 18,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 3309 with false in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with false in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 40
+      },
+      "start": {
+        "column": 18,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:40:26: replace == with != in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 40
+      },
+      "start": {
+        "column": 26,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_signature -> bool with true\n@@ -60,20 +60,17 @@\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n     message: &[u8],\n     signature_hex: &str,\n ) -> bool {\n-    match algorithm {\n-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),\n-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),\n-    }\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_signature",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 72
+        },
+        "start": {
+          "column": 1,
+          "line": 59
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 71
+      },
+      "start": {
+        "column": 5,
+        "line": 68
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_signature -> bool with false\n@@ -60,20 +60,17 @@\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n     message: &[u8],\n     signature_hex: &str,\n ) -> bool {\n-    match algorithm {\n-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),\n-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),\n-    }\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_signature",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 72
+        },
+        "start": {
+          "column": 1,
+          "line": 59
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 71
+      },
+      "start": {
+        "column": 5,
+        "line": 68
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace validate_public_key -> Result<(), String> with Ok(())\n@@ -73,30 +73,17 @@\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n-    let expected_bytes = match algorithm {\n-        SigningAlgorithm::Ed25519 => 32,\n-        SigningAlgorithm::MlDsa65 => 1952,\n-    };\n-    let expected_hex = expected_bytes * 2;\n-    if public_key_hex.len() != expected_hex {\n-        return Err(format!(\n-            \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n-        ));\n-    }\n-    if hex::decode(public_key_hex).is_err() {\n-        return Err(\"public_key is not valid hex\".into());\n-    }\n-    Ok(())\n+    Ok(()) /* ~ changed by cargo-mutants ~ */\n }\n \n #[cfg(test)]\n mod tests {\n     use super::*;\n     use crate::identity::signing::{\n         MlDsaSigningProvider, SigningProvider, SoftwareSigningProvider,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:81:5: replace validate_public_key -> Result<(), String> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 94
+      },
+      "start": {
+        "column": 5,
+        "line": 81
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace * with + in validate_public_key\n@@ -77,17 +77,17 @@\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n-    let expected_hex = expected_bytes * 2;\n+    let expected_hex = expected_bytes + /* ~ changed by cargo-mutants ~ */ 2;\n     if public_key_hex.len() != expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:85:39: replace * with + in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "+",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 85
+      },
+      "start": {
+        "column": 39,
+        "line": 85
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace * with / in validate_public_key\n@@ -77,17 +77,17 @@\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n-    let expected_hex = expected_bytes * 2;\n+    let expected_hex = expected_bytes / /* ~ changed by cargo-mutants ~ */ 2;\n     if public_key_hex.len() != expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:85:39: replace * with / in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "/",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 85
+      },
+      "start": {
+        "column": 39,
+        "line": 85
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace != with == in validate_public_key\n@@ -78,17 +78,17 @@\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n     let expected_hex = expected_bytes * 2;\n-    if public_key_hex.len() != expected_hex {\n+    if public_key_hex.len() == /* ~ changed by cargo-mutants ~ */ expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n     Ok(())\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:86:29: replace != with == in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 86
+      },
+      "start": {
+        "column": 29,
+        "line": 86
+      }
+    }
+  }
+]

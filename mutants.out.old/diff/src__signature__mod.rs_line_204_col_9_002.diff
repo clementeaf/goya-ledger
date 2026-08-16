@@ -1,0 +1,29 @@
+--- src/signature/mod.rs
++++ replace SignedEnvelope::signing_payload -> String with String::new()
+@@ -196,25 +196,17 @@
+     pub signed_at: u64,
+ }
+ 
+ impl SignedEnvelope {
+     /// Compute the canonical signing payload for this envelope.
+     ///
+     /// The payload is the byte string that was (or should have been) signed.
+     pub fn signing_payload(&self) -> String {
+-        match self.level {
+-            SignatureLevel::Simple => {
+-                format!("fes:{}:{}", self.signer, self.content_hash)
+-            }
+-            SignatureLevel::Advanced | SignatureLevel::Qualified => {
+-                let bio_hash = compute_biometrics_hash(&self.biometric_evidence);
+-                format!("fea:{}:{}:{}", self.signer, self.content_hash, bio_hash)
+-            }
+-        }
++        String::new() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Validate the envelope's structural integrity (not the cryptographic signature).
+     ///
+     /// Checks:
+     /// - Algorithm matches the claimed level
+     /// - Biometric evidence present when required
+     /// - All biometric commitments are valid hex

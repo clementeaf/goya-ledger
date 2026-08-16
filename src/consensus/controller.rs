@@ -94,7 +94,7 @@ pub async fn run_bft_loop(
                         }
                         reset_timeout(&mut timeout, &manager);
                         pending_block = Some(block);
-                        let action = manager.process_event(RoundEvent::Proposal { block_hash, leader_id });
+                        let action = manager.process_event(RoundEvent::Proposal { block_hash, leader_id, justify_qc: None });
                         let mut decided = handle_action(&action, &node, &signer, &node_id, &mut manager).await;
                         // Replay votes that arrived before this proposal.
                         if !decided {

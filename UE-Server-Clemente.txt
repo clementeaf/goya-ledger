@@ -1,0 +1,39 @@
+ENTREGA DE ACCESO AL SERVIDOR
+================================
+
+Servidor:          server1.useremotion.com
+Dirección IP:      162.254.32.12
+Sistema Operativo: Ubuntu 24.04 LTS (64-bit)
+Virtualización:    KVM
+
+--------------------------------
+
+USUARIO CREADO CON PERMISOS ADMINISTRATIVOS (sudo)
+
+1. Usuario:     ueclementedev
+   Contraseña:  Iero-9s59PM4e9rlfir0294
+   Directorio:  /home/ueclementedev
+   Permisos:    sudo (puede instalar software, crear directorios y administrar el sistema)
+
+
+--------------------------------
+
+FORMA DE ACCESO
+
+Desde terminal (macOS / Linux):
+ssh ueclementedev@162.254.32.12
+
+Desde Windows (PowerShell o Windows Terminal):
+ssh ueclementedev@162.254.32.12
+
+El usuario cuenta con privilegios de administrador mediante el comando "sudo".
+
+--------------------------------
+
+NOTAS IMPORTANTES
+
+- Se recomienda cambiar las contraseñas en el primer acceso.
+- Se recomienda configurar acceso por clave SSH en lugar de contraseña.
+- El usuario puede crear carpetas, instalar paquetes y configurar servicios (dominios, servidores web, etc.).
+
+Fecha de entrega: 6 de agosto de 2026

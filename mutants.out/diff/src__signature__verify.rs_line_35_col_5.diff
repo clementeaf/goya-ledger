@@ -1,0 +1,42 @@
+--- src/signature/verify.rs
++++ replace verify_mldsa65 -> bool with true
+@@ -27,38 +27,17 @@
+     ) {
+         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),
+         _ => false,
+     }
+ }
+ 
+ /// Verify an ML-DSA-65 (FIPS 204) signature over a message.
+ pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
+-    let pub_bytes = match hex::decode(public_key_hex) {
+-        Ok(b) if b.len() == 1952 => b,
+-        _ => return false,
+-    };
+-    let sig_bytes = match hex::decode(signature_hex) {
+-        Ok(b) if b.len() == 3309 => b,
+-        _ => return false,
+-    };
+-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};
+-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)
+-    {
+-        Ok(pk) => pk,
+-        Err(_) => return false,
+-    };
+-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(
+-        &sig_bytes,
+-    ) {
+-        Ok(sig) => sig,
+-        Err(_) => return false,
+-    };
+-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)
+-        .is_ok()
++    true /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Dispatch signature verification based on algorithm.
+ ///
+ /// Returns `true` if the signature is valid for the given message and public key.
+ pub fn verify_signature(
+     algorithm: SigningAlgorithm,
+     public_key_hex: &str,

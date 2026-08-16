@@ -1,0 +1,21 @@
+--- src/signature/verify.rs
++++ replace match guard b.len() == 32 with false in verify_ed25519
+@@ -4,17 +4,17 @@
+ //! functions instead of implementing their own. This ensures consistent
+ //! behavior and makes algorithm upgrades a single-point change.
+ 
+ use crate::identity::signing::SigningAlgorithm;
+ 
+ /// Verify an Ed25519 signature over a message.
+ pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
+     let pub_bytes = match hex::decode(public_key_hex) {
+-        Ok(b) if b.len() == 32 => b,
++        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,
+         _ => return false,
+     };
+     let sig_bytes = match hex::decode(signature_hex) {
+         Ok(b) if b.len() == 64 => b,
+         _ => return false,
+     };
+     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};
+     match (

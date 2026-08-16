@@ -1,0 +1,34 @@
+--- src/signature/verify.rs
++++ replace validate_public_key -> Result<(), String> with Ok(())
+@@ -73,30 +73,17 @@
+ 
+ /// Validate public key hex length for the given algorithm.
+ ///
+ /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).
+ pub fn validate_public_key(
+     algorithm: SigningAlgorithm,
+     public_key_hex: &str,
+ ) -> Result<(), String> {
+-    let expected_bytes = match algorithm {
+-        SigningAlgorithm::Ed25519 => 32,
+-        SigningAlgorithm::MlDsa65 => 1952,
+-    };
+-    let expected_hex = expected_bytes * 2;
+-    if public_key_hex.len() != expected_hex {
+-        return Err(format!(
+-            "public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})"
+-        ));
+-    }
+-    if hex::decode(public_key_hex).is_err() {
+-        return Err("public_key is not valid hex".into());
+-    }
+-    Ok(())
++    Ok(()) /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+     use crate::identity::signing::{
+         MlDsaSigningProvider, SigningProvider, SoftwareSigningProvider,
+     };

@@ -1,0 +1,24 @@
+--- src/signature/mod.rs
++++ replace SignatureLevel::required_algorithm -> SigningAlgorithm with Default::default()
+@@ -57,20 +57,17 @@
+     /// Requires a Qualified Trust Service Provider (QTSP).
+     /// Reserved for when a certified TSP issues the signing certificate.
+     Qualified,
+ }
+ 
+ impl SignatureLevel {
+     /// Minimum signing algorithm required for this level.
+     pub fn required_algorithm(&self) -> SigningAlgorithm {
+-        match self {
+-            Self::Simple => SigningAlgorithm::Ed25519,
+-            Self::Advanced | Self::Qualified => SigningAlgorithm::MlDsa65,
+-        }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Whether biometric evidence is mandatory at this level.
+     pub fn requires_biometric(&self) -> bool {
+         matches!(self, Self::Advanced | Self::Qualified)
+     }
+ 
+     /// Whether the given algorithm satisfies this level's requirements.

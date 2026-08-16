@@ -1,0 +1,38 @@
+src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with true
+src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with false
+src/signature/verify.rs:12:18: replace match guard b.len() == 32 with false in verify_ed25519
+src/signature/verify.rs:12:26: replace == with != in verify_ed25519
+src/signature/verify.rs:16:18: replace match guard b.len() == 64 with false in verify_ed25519
+src/signature/verify.rs:16:26: replace == with != in verify_ed25519
+src/signature/verify.rs:28:9: delete match arm (Some(vk), Some(sig)) in verify_ed25519
+src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with true
+src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with false
+src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with false in verify_mldsa65
+src/signature/verify.rs:36:26: replace == with != in verify_mldsa65
+src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with false in verify_mldsa65
+src/signature/verify.rs:40:26: replace == with != in verify_mldsa65
+src/signature/verify.rs:68:5: replace verify_signature -> bool with true
+src/signature/verify.rs:68:5: replace verify_signature -> bool with false
+src/signature/verify.rs:81:5: replace validate_public_key -> Result<(), String> with Ok(())
+src/signature/verify.rs:85:39: replace * with + in validate_public_key
+src/signature/verify.rs:85:39: replace * with / in validate_public_key
+src/signature/verify.rs:86:29: replace != with == in validate_public_key
+src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with true
+src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with false
+src/signature/verify.rs:12:18: replace match guard b.len() == 32 with false in verify_ed25519
+src/signature/verify.rs:12:26: replace == with != in verify_ed25519
+src/signature/verify.rs:16:18: replace match guard b.len() == 64 with false in verify_ed25519
+src/signature/verify.rs:16:26: replace == with != in verify_ed25519
+src/signature/verify.rs:28:9: delete match arm (Some(vk), Some(sig)) in verify_ed25519
+src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with true
+src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with false
+src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with false in verify_mldsa65
+src/signature/verify.rs:36:26: replace == with != in verify_mldsa65
+src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with false in verify_mldsa65
+src/signature/verify.rs:40:26: replace == with != in verify_mldsa65
+src/signature/verify.rs:68:5: replace verify_signature -> bool with true
+src/signature/verify.rs:68:5: replace verify_signature -> bool with false
+src/signature/verify.rs:81:5: replace validate_public_key -> Result<(), String> with Ok(())
+src/signature/verify.rs:85:39: replace * with + in validate_public_key
+src/signature/verify.rs:85:39: replace * with / in validate_public_key
+src/signature/verify.rs:86:29: replace != with == in validate_public_key

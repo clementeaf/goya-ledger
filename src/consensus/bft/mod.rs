@@ -6,5 +6,6 @@
 pub mod quorum;
 pub mod round;
 pub mod round_manager;
+pub mod safety;
 pub mod types;
 pub mod vote_collector;

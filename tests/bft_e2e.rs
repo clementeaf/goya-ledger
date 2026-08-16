@@ -173,6 +173,7 @@ impl BftTestNetwork {
             node.manager.process_event(RoundEvent::Proposal {
                 block_hash: bh,
                 leader_id: leader_id.clone(),
+                justify_qc: None,
             });
         }
 

@@ -1,0 +1,24 @@
+--- src/signature/mod.rs
++++ replace SignatureLevel::algorithm_satisfies -> bool with false
+@@ -70,20 +70,17 @@
+ 
+     /// Whether biometric evidence is mandatory at this level.
+     pub fn requires_biometric(&self) -> bool {
+         matches!(self, Self::Advanced | Self::Qualified)
+     }
+ 
+     /// Whether the given algorithm satisfies this level's requirements.
+     pub fn algorithm_satisfies(&self, alg: SigningAlgorithm) -> bool {
+-        match self {
+-            Self::Simple => true, // any algorithm accepted
+-            Self::Advanced | Self::Qualified => alg.is_post_quantum(),
+-        }
++        false /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl std::fmt::Display for SignatureLevel {
+     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+         match self {
+             Self::Simple => write!(f, "Simple (FES)"),
+             Self::Advanced => write!(f, "Advanced (FEA)"),

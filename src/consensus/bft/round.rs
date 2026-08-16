@@ -18,6 +18,9 @@ pub enum RoundEvent {
     Proposal {
         block_hash: [u8; 32],
         leader_id: String,
+        /// The QC the leader includes to justify the proposal (its `high_qc`).
+        /// Followers use this in `safe_to_vote` to decide whether to unlock.
+        justify_qc: Option<QuorumCertificate>,
     },
     /// Received a vote from a validator.
     Vote(VoteMessage),
@@ -171,6 +174,7 @@ impl<V: SignatureVerifier + Clone> BftRound<V> {
             RoundEvent::Proposal {
                 block_hash,
                 leader_id,
+                ..
             } => self.handle_proposal(block_hash, &leader_id),
             RoundEvent::Vote(vote) => self.handle_vote(vote),
             RoundEvent::Timeout => self.handle_timeout(),
@@ -397,6 +401,7 @@ mod tests {
         let action = r.process(RoundEvent::Proposal {
             block_hash: block_hash(1),
             leader_id: "v0".into(),
+            justify_qc: None,
         });
         match action {
             RoundAction::SendVote(vote) => {
@@ -415,6 +420,7 @@ mod tests {
         let action = r.process(RoundEvent::Proposal {
             block_hash: block_hash(1),
             leader_id: "v2".into(),
+            justify_qc: None,
         });
         assert_eq!(action, RoundAction::None);
     }

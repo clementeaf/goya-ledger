@@ -1,0 +1,3253 @@
+{
+  "outcomes": [
+    {
+      "scenario": "Baseline",
+      "summary": "Success",
+      "log_path": "log/baseline.log",
+      "diff_path": null,
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 210.780014709,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.00832325,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with true",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 11,
+              "column": 5
+            },
+            "end": {
+              "line": 30,
+              "column": 6
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_11_col_5.log",
+      "diff_path": "diff/src__signature__verify.rs_line_11_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 63.96774,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.475775084,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with false",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 11,
+              "column": 5
+            },
+            "end": {
+              "line": 30,
+              "column": 6
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_11_col_5_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_11_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 57.677304166,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.352530458,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with true in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 18
+            },
+            "end": {
+              "line": 12,
+              "column": 31
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/src__signature__verify.rs_line_12_col_18.log",
+      "diff_path": "diff/src__signature__verify.rs_line_12_col_18.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 63.74796625,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.897499042,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with false in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 18
+            },
+            "end": {
+              "line": 12,
+              "column": 31
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_12_col_18_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_12_col_18_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 69.354467125,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.603586333,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:12:26: replace == with != in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 26
+            },
+            "end": {
+              "line": 12,
+              "column": 28
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_12_col_26.log",
+      "diff_path": "diff/src__signature__verify.rs_line_12_col_26.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 81.00598975,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.40368925,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with true in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 16,
+              "column": 18
+            },
+            "end": {
+              "line": 16,
+              "column": 31
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/src__signature__verify.rs_line_16_col_18.log",
+      "diff_path": "diff/src__signature__verify.rs_line_16_col_18.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 63.005405416,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.796408541,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with false in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 16,
+              "column": 18
+            },
+            "end": {
+              "line": 16,
+              "column": 31
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_16_col_18_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_16_col_18_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 64.10781325,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.190278792,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:16:26: replace == with != in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 16,
+              "column": 26
+            },
+            "end": {
+              "line": 16,
+              "column": 28
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_16_col_26.log",
+      "diff_path": "diff/src__signature__verify.rs_line_16_col_26.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 62.118031166,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.195326083,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:28:9: delete match arm (Some(vk), Some(sig)) in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 28,
+              "column": 9
+            },
+            "end": {
+              "line": 28,
+              "column": 67
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_28_col_9.log",
+      "diff_path": "diff/src__signature__verify.rs_line_28_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 59.836821667,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.20193875,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with true",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 35,
+              "column": 5
+            },
+            "end": {
+              "line": 56,
+              "column": 17
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_35_col_5.log",
+      "diff_path": "diff/src__signature__verify.rs_line_35_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 61.587666458,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.746578375,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with false",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 35,
+              "column": 5
+            },
+            "end": {
+              "line": 56,
+              "column": 17
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_35_col_5_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_35_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 54.955068375,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.680317125,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with true in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 36,
+              "column": 18
+            },
+            "end": {
+              "line": 36,
+              "column": 33
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/src__signature__verify.rs_line_36_col_18.log",
+      "diff_path": "diff/src__signature__verify.rs_line_36_col_18.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 65.391629292,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.984416333,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with false in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 36,
+              "column": 18
+            },
+            "end": {
+              "line": 36,
+              "column": 33
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_36_col_18_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_36_col_18_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 67.980508584,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.742429,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:36:26: replace == with != in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 36,
+              "column": 26
+            },
+            "end": {
+              "line": 36,
+              "column": 28
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_36_col_26.log",
+      "diff_path": "diff/src__signature__verify.rs_line_36_col_26.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 69.528685875,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.725602833,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with true in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 40,
+              "column": 18
+            },
+            "end": {
+              "line": 40,
+              "column": 33
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/src__signature__verify.rs_line_40_col_18.log",
+      "diff_path": "diff/src__signature__verify.rs_line_40_col_18.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 58.788485792,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.752764083,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with false in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 40,
+              "column": 18
+            },
+            "end": {
+              "line": 40,
+              "column": 33
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_40_col_18_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_40_col_18_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 63.306792042,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.624405459,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:40:26: replace == with != in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 40,
+              "column": 26
+            },
+            "end": {
+              "line": 40,
+              "column": 28
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_40_col_26.log",
+      "diff_path": "diff/src__signature__verify.rs_line_40_col_26.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 61.646138083,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.722254167,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with true",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_signature",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 59,
+                "column": 1
+              },
+              "end": {
+                "line": 72,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 68,
+              "column": 5
+            },
+            "end": {
+              "line": 71,
+              "column": 6
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_68_col_5.log",
+      "diff_path": "diff/src__signature__verify.rs_line_68_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 58.282188166,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.148406917,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with false",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_signature",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 59,
+                "column": 1
+              },
+              "end": {
+                "line": 72,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 68,
+              "column": 5
+            },
+            "end": {
+              "line": 71,
+              "column": 6
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_68_col_5_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_68_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 54.190967583,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.149617167,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:81:5: replace validate_public_key -> Result<(), String> with Ok(())",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "validate_public_key",
+            "return_type": "-> Result<(), String>",
+            "span": {
+              "start": {
+                "line": 74,
+                "column": 1
+              },
+              "end": {
+                "line": 95,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 81,
+              "column": 5
+            },
+            "end": {
+              "line": 94,
+              "column": 11
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_81_col_5.log",
+      "diff_path": "diff/src__signature__verify.rs_line_81_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 61.132043041,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.829693834,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:85:39: replace * with + in validate_public_key",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "validate_public_key",
+            "return_type": "-> Result<(), String>",
+            "span": {
+              "start": {
+                "line": 74,
+                "column": 1
+              },
+              "end": {
+                "line": 95,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 85,
+              "column": 39
+            },
+            "end": {
+              "line": 85,
+              "column": 40
+            }
+          },
+          "replacement": "+",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_85_col_39.log",
+      "diff_path": "diff/src__signature__verify.rs_line_85_col_39.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 67.695342833,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.40392725,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:85:39: replace * with / in validate_public_key",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "validate_public_key",
+            "return_type": "-> Result<(), String>",
+            "span": {
+              "start": {
+                "line": 74,
+                "column": 1
+              },
+              "end": {
+                "line": 95,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 85,
+              "column": 39
+            },
+            "end": {
+              "line": 85,
+              "column": 40
+            }
+          },
+          "replacement": "/",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_85_col_39_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_85_col_39_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 61.145503041,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.243153833,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:86:29: replace != with == in validate_public_key",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "validate_public_key",
+            "return_type": "-> Result<(), String>",
+            "span": {
+              "start": {
+                "line": 74,
+                "column": 1
+              },
+              "end": {
+                "line": 95,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 86,
+              "column": 29
+            },
+            "end": {
+              "line": 86,
+              "column": 31
+            }
+          },
+          "replacement": "==",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_86_col_29.log",
+      "diff_path": "diff/src__signature__verify.rs_line_86_col_29.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 60.206057041,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.297375667,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with true",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 11,
+              "column": 5
+            },
+            "end": {
+              "line": 30,
+              "column": 6
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_11_col_5_002.log",
+      "diff_path": "diff/src__signature__verify.rs_line_11_col_5_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 70.77568725,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.302025709,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with false",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 11,
+              "column": 5
+            },
+            "end": {
+              "line": 30,
+              "column": 6
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_11_col_5_003.log",
+      "diff_path": "diff/src__signature__verify.rs_line_11_col_5_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 64.698306291,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.265714666,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with true in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 18
+            },
+            "end": {
+              "line": 12,
+              "column": 31
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/src__signature__verify.rs_line_12_col_18_002.log",
+      "diff_path": "diff/src__signature__verify.rs_line_12_col_18_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 70.498405916,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.836753459,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with false in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 18
+            },
+            "end": {
+              "line": 12,
+              "column": 31
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_12_col_18_003.log",
+      "diff_path": "diff/src__signature__verify.rs_line_12_col_18_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 74.154350542,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.462708708,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:12:26: replace == with != in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 12,
+              "column": 26
+            },
+            "end": {
+              "line": 12,
+              "column": 28
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_12_col_26_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_12_col_26_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 71.079589875,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.198455209,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with true in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 16,
+              "column": 18
+            },
+            "end": {
+              "line": 16,
+              "column": 31
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/src__signature__verify.rs_line_16_col_18_002.log",
+      "diff_path": "diff/src__signature__verify.rs_line_16_col_18_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 65.736119292,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.851991708,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with false in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 16,
+              "column": 18
+            },
+            "end": {
+              "line": 16,
+              "column": 31
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_16_col_18_003.log",
+      "diff_path": "diff/src__signature__verify.rs_line_16_col_18_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 70.737028209,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.234764292,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:16:26: replace == with != in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 16,
+              "column": 26
+            },
+            "end": {
+              "line": 16,
+              "column": 28
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_16_col_26_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_16_col_26_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 81.699849917,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.4613771660000001,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:28:9: delete match arm (Some(vk), Some(sig)) in verify_ed25519",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_ed25519",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 9,
+                "column": 1
+              },
+              "end": {
+                "line": 31,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 28,
+              "column": 9
+            },
+            "end": {
+              "line": 28,
+              "column": 67
+            }
+          },
+          "replacement": "",
+          "genre": "MatchArm"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_28_col_9_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_28_col_9_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 91.344223458,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.318885167,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with true",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 35,
+              "column": 5
+            },
+            "end": {
+              "line": 56,
+              "column": 17
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_35_col_5_002.log",
+      "diff_path": "diff/src__signature__verify.rs_line_35_col_5_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 79.417813125,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.9551954999999999,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with false",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 35,
+              "column": 5
+            },
+            "end": {
+              "line": 56,
+              "column": 17
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_35_col_5_003.log",
+      "diff_path": "diff/src__signature__verify.rs_line_35_col_5_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 78.625263959,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.7352075409999999,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with true in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 36,
+              "column": 18
+            },
+            "end": {
+              "line": 36,
+              "column": 33
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/src__signature__verify.rs_line_36_col_18_002.log",
+      "diff_path": "diff/src__signature__verify.rs_line_36_col_18_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 87.155706209,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.9904013329999999,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with false in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 36,
+              "column": 18
+            },
+            "end": {
+              "line": 36,
+              "column": 33
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_36_col_18_003.log",
+      "diff_path": "diff/src__signature__verify.rs_line_36_col_18_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 89.216883458,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.454310083,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:36:26: replace == with != in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 36,
+              "column": 26
+            },
+            "end": {
+              "line": 36,
+              "column": 28
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_36_col_26_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_36_col_26_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 91.619071042,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 2.3078032090000002,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with true in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 40,
+              "column": 18
+            },
+            "end": {
+              "line": 40,
+              "column": 33
+            }
+          },
+          "replacement": "true",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "MissedMutant",
+      "log_path": "log/src__signature__verify.rs_line_40_col_18_002.log",
+      "diff_path": "diff/src__signature__verify.rs_line_40_col_18_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 85.794672125,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.9538549170000001,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with false in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 40,
+              "column": 18
+            },
+            "end": {
+              "line": 40,
+              "column": 33
+            }
+          },
+          "replacement": "false",
+          "genre": "MatchArmGuard"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_40_col_18_003.log",
+      "diff_path": "diff/src__signature__verify.rs_line_40_col_18_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 83.597594042,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.972476625,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:40:26: replace == with != in verify_mldsa65",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_mldsa65",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 57,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 40,
+              "column": 26
+            },
+            "end": {
+              "line": 40,
+              "column": 28
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_40_col_26_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_40_col_26_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 88.542573167,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.9573881659999999,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with true",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_signature",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 59,
+                "column": 1
+              },
+              "end": {
+                "line": 72,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 68,
+              "column": 5
+            },
+            "end": {
+              "line": 71,
+              "column": 6
+            }
+          },
+          "replacement": "true",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_68_col_5_002.log",
+      "diff_path": "diff/src__signature__verify.rs_line_68_col_5_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 83.739480917,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.266870125,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with false",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "verify_signature",
+            "return_type": "-> bool",
+            "span": {
+              "start": {
+                "line": 59,
+                "column": 1
+              },
+              "end": {
+                "line": 72,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 68,
+              "column": 5
+            },
+            "end": {
+              "line": 71,
+              "column": 6
+            }
+          },
+          "replacement": "false",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_68_col_5_003.log",
+      "diff_path": "diff/src__signature__verify.rs_line_68_col_5_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 73.797087208,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.300559041,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:81:5: replace validate_public_key -> Result<(), String> with Ok(())",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "validate_public_key",
+            "return_type": "-> Result<(), String>",
+            "span": {
+              "start": {
+                "line": 74,
+                "column": 1
+              },
+              "end": {
+                "line": 95,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 81,
+              "column": 5
+            },
+            "end": {
+              "line": 94,
+              "column": 11
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_81_col_5_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_81_col_5_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 83.323819833,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.7910764160000001,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:85:39: replace * with + in validate_public_key",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "validate_public_key",
+            "return_type": "-> Result<(), String>",
+            "span": {
+              "start": {
+                "line": 74,
+                "column": 1
+              },
+              "end": {
+                "line": 95,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 85,
+              "column": 39
+            },
+            "end": {
+              "line": 85,
+              "column": 40
+            }
+          },
+          "replacement": "+",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_85_col_39_002.log",
+      "diff_path": "diff/src__signature__verify.rs_line_85_col_39_002.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 81.06357675,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.3050275,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:85:39: replace * with / in validate_public_key",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "validate_public_key",
+            "return_type": "-> Result<(), String>",
+            "span": {
+              "start": {
+                "line": 74,
+                "column": 1
+              },
+              "end": {
+                "line": 95,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 85,
+              "column": 39
+            },
+            "end": {
+              "line": 85,
+              "column": 40
+            }
+          },
+          "replacement": "/",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_85_col_39_003.log",
+      "diff_path": "diff/src__signature__verify.rs_line_85_col_39_003.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 76.898428125,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.309447917,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "name": "src/signature/verify.rs:86:29: replace != with == in validate_public_key",
+          "package": "rust-bc",
+          "file": "src/signature/verify.rs",
+          "function": {
+            "function_name": "validate_public_key",
+            "return_type": "-> Result<(), String>",
+            "span": {
+              "start": {
+                "line": 74,
+                "column": 1
+              },
+              "end": {
+                "line": 95,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 86,
+              "column": 29
+            },
+            "end": {
+              "line": 86,
+              "column": 31
+            }
+          },
+          "replacement": "==",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/src__signature__verify.rs_line_86_col_29_001.log",
+      "diff_path": "diff/src__signature__verify.rs_line_86_col_29_001.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 75.597273542,
+          "process_status": "Success",
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--no-run",
+            "--verbose",
+            "--package=rust-bc@0.3.0"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 1.247486708,
+          "process_status": {
+            "Failure": 100
+          },
+          "argv": [
+            "/Users/clementefalcone/.rustup/toolchains/nightly-2026-04-20-aarch64-apple-darwin/bin/cargo",
+            "nextest",
+            "run",
+            "--verbose",
+            "--package=rust-bc@0.3.0",
+            "--lib",
+            "-E",
+            "test(signature)"
+          ]
+        }
+      ]
+    }
+  ],
+  "total_mutants": 46,
+  "missed": 8,
+  "caught": 38,
+  "timeout": 0,
+  "unviable": 0,
+  "success": 0,
+  "start_time": "2026-07-30T09:58:52.173815Z",
+  "end_time": "2026-07-30T10:58:24.605931Z",
+  "cargo_mutants_version": "27.1.0"
+}

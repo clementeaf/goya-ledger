@@ -1,0 +1,29 @@
+--- src/signature/mod.rs
++++ replace compute_biometrics_hash -> String with "xyzzy".into()
+@@ -249,25 +249,17 @@
+ }
+ 
+ /// Compute a deterministic hash over biometric commitments.
+ ///
+ /// Sorts commitments alphabetically, joins with ':', then SHA-256 hashes.
+ /// This ensures the same set of evidence always produces the same hash
+ /// regardless of submission order.
+ pub fn compute_biometrics_hash(evidence: &[BiometricEvidence]) -> String {
+-    if evidence.is_empty() {
+-        return "0".repeat(64); // null hash for no evidence
+-    }
+-    let mut commitments: Vec<&str> = evidence.iter().map(|e| e.commitment.as_str()).collect();
+-    commitments.sort();
+-    let joined = commitments.join(":");
+-    use pqc_crypto_module::legacy::sha256::Digest;
+-    let hash = pqc_crypto_module::legacy::sha256::Sha256::digest(joined.as_bytes());
+-    hex::encode(hash)
++    "xyzzy".into() /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Validate FES/FEA constraints: algorithm↔level, biometric requirement,
+ /// commitment format, and public key size. Returns `Ok(())` or a `SignatureError`.
+ pub fn validate_fes_fea(
+     level: SignatureLevel,
+     algorithm: SigningAlgorithm,
+     evidence: &[BiometricEvidence],

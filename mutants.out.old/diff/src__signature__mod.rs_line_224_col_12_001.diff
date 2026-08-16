@@ -1,0 +1,21 @@
+--- src/signature/mod.rs
++++ delete ! in SignedEnvelope::validate_structure
+@@ -216,17 +216,17 @@
+     ///
+     /// Checks:
+     /// - Algorithm matches the claimed level
+     /// - Biometric evidence present when required
+     /// - All biometric commitments are valid hex
+     /// - Content hash is valid SHA-256 hex
+     pub fn validate_structure(&self) -> Result<(), SignatureError> {
+         // Algorithm must satisfy level requirements
+-        if !self.level.algorithm_satisfies(self.signature_algorithm) {
++        if  /* ~ changed by cargo-mutants ~ */self.level.algorithm_satisfies(self.signature_algorithm) {
+             return Err(SignatureError::AlgorithmMismatch {
+                 level: self.level,
+                 expected: self.level.required_algorithm(),
+                 got: self.signature_algorithm,
+             });
+         }
+ 
+         // Biometric evidence required for Advanced/Qualified

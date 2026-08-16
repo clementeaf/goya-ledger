@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 # Lightweight build for Fly.io seed node — no EVM, no Wasm, no Raft.
 
+ARG CACHE_BUST=1
 FROM debian:bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
@@ -26,9 +27,9 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
 
 COPY . .
 
+ARG CACHE_BUST=1
 RUN --mount=type=cache,target=/root/.cargo/registry \
     --mount=type=cache,target=/root/.cargo/git \
-    --mount=type=cache,target=/app/target \
     cargo build --release --no-default-features --features "rocksdb-storage,evm" && cp target/release/rust-bc /usr/local/bin/rust-bc
 
 # ── Runtime ──

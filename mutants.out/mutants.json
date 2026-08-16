@@ -1,0 +1,1474 @@
+[
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_ed25519 -> bool with true\n@@ -3,36 +3,17 @@\n //! All handlers that verify cryptographic signatures should use these\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n-    match (\n-        pub_bytes\n-            .as_slice()\n-            .try_into()\n-            .ok()\n-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n-        Signature::from_slice(&sig_bytes).ok(),\n-    ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n-        _ => false,\n-    }\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 30
+      },
+      "start": {
+        "column": 5,
+        "line": 11
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_ed25519 -> bool with false\n@@ -3,36 +3,17 @@\n //! All handlers that verify cryptographic signatures should use these\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n-    match (\n-        pub_bytes\n-            .as_slice()\n-            .try_into()\n-            .ok()\n-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n-        Signature::from_slice(&sig_bytes).ok(),\n-    ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n-        _ => false,\n-    }\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 30
+      },
+      "start": {
+        "column": 5,
+        "line": 11
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 32 with true in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with true in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 12
+      },
+      "start": {
+        "column": 18,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 32 with false in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with false in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 12
+      },
+      "start": {
+        "column": 18,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:12:26: replace == with != in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 12
+      },
+      "start": {
+        "column": 26,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 64 with true in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with true in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 16
+      },
+      "start": {
+        "column": 18,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 64 with false in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with false in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 16
+      },
+      "start": {
+        "column": 18,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:16:26: replace == with != in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 16
+      },
+      "start": {
+        "column": 26,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ delete match arm (Some(vk), Some(sig)) in verify_ed25519\n@@ -20,17 +20,17 @@\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n             .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n         Signature::from_slice(&sig_bytes).ok(),\n     ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n+         /* ~ changed by cargo-mutants ~ */\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "src/signature/verify.rs:28:9: delete match arm (Some(vk), Some(sig)) in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 67,
+        "line": 28
+      },
+      "start": {
+        "column": 9,
+        "line": 28
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_mldsa65 -> bool with true\n@@ -27,38 +27,17 @@\n     ) {\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n-    {\n-        Ok(pk) => pk,\n-        Err(_) => return false,\n-    };\n-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(\n-        &sig_bytes,\n-    ) {\n-        Ok(sig) => sig,\n-        Err(_) => return false,\n-    };\n-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)\n-        .is_ok()\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Dispatch signature verification based on algorithm.\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 56
+      },
+      "start": {
+        "column": 5,
+        "line": 35
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_mldsa65 -> bool with false\n@@ -27,38 +27,17 @@\n     ) {\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n-    {\n-        Ok(pk) => pk,\n-        Err(_) => return false,\n-    };\n-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(\n-        &sig_bytes,\n-    ) {\n-        Ok(sig) => sig,\n-        Err(_) => return false,\n-    };\n-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)\n-        .is_ok()\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Dispatch signature verification based on algorithm.\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 56
+      },
+      "start": {
+        "column": 5,
+        "line": 35
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 1952 with true in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with true in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 36
+      },
+      "start": {
+        "column": 18,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 1952 with false in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with false in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 36
+      },
+      "start": {
+        "column": 18,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:36:26: replace == with != in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 36
+      },
+      "start": {
+        "column": 26,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 3309 with true in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with true in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 40
+      },
+      "start": {
+        "column": 18,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 3309 with false in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with false in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 40
+      },
+      "start": {
+        "column": 18,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:40:26: replace == with != in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 40
+      },
+      "start": {
+        "column": 26,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_signature -> bool with true\n@@ -60,20 +60,17 @@\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n     message: &[u8],\n     signature_hex: &str,\n ) -> bool {\n-    match algorithm {\n-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),\n-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),\n-    }\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_signature",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 72
+        },
+        "start": {
+          "column": 1,
+          "line": 59
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 71
+      },
+      "start": {
+        "column": 5,
+        "line": 68
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_signature -> bool with false\n@@ -60,20 +60,17 @@\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n     message: &[u8],\n     signature_hex: &str,\n ) -> bool {\n-    match algorithm {\n-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),\n-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),\n-    }\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_signature",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 72
+        },
+        "start": {
+          "column": 1,
+          "line": 59
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 71
+      },
+      "start": {
+        "column": 5,
+        "line": 68
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace validate_public_key -> Result<(), String> with Ok(())\n@@ -73,30 +73,17 @@\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n-    let expected_bytes = match algorithm {\n-        SigningAlgorithm::Ed25519 => 32,\n-        SigningAlgorithm::MlDsa65 => 1952,\n-    };\n-    let expected_hex = expected_bytes * 2;\n-    if public_key_hex.len() != expected_hex {\n-        return Err(format!(\n-            \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n-        ));\n-    }\n-    if hex::decode(public_key_hex).is_err() {\n-        return Err(\"public_key is not valid hex\".into());\n-    }\n-    Ok(())\n+    Ok(()) /* ~ changed by cargo-mutants ~ */\n }\n \n #[cfg(test)]\n mod tests {\n     use super::*;\n     use crate::identity::signing::{\n         MlDsaSigningProvider, SigningProvider, SoftwareSigningProvider,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:81:5: replace validate_public_key -> Result<(), String> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 94
+      },
+      "start": {
+        "column": 5,
+        "line": 81
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace * with + in validate_public_key\n@@ -77,17 +77,17 @@\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n-    let expected_hex = expected_bytes * 2;\n+    let expected_hex = expected_bytes + /* ~ changed by cargo-mutants ~ */ 2;\n     if public_key_hex.len() != expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:85:39: replace * with + in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "+",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 85
+      },
+      "start": {
+        "column": 39,
+        "line": 85
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace * with / in validate_public_key\n@@ -77,17 +77,17 @@\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n-    let expected_hex = expected_bytes * 2;\n+    let expected_hex = expected_bytes / /* ~ changed by cargo-mutants ~ */ 2;\n     if public_key_hex.len() != expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:85:39: replace * with / in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "/",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 85
+      },
+      "start": {
+        "column": 39,
+        "line": 85
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace != with == in validate_public_key\n@@ -78,17 +78,17 @@\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n     let expected_hex = expected_bytes * 2;\n-    if public_key_hex.len() != expected_hex {\n+    if public_key_hex.len() == /* ~ changed by cargo-mutants ~ */ expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n     Ok(())\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:86:29: replace != with == in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 86
+      },
+      "start": {
+        "column": 29,
+        "line": 86
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_ed25519 -> bool with true\n@@ -3,36 +3,17 @@\n //! All handlers that verify cryptographic signatures should use these\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n-    match (\n-        pub_bytes\n-            .as_slice()\n-            .try_into()\n-            .ok()\n-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n-        Signature::from_slice(&sig_bytes).ok(),\n-    ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n-        _ => false,\n-    }\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 30
+      },
+      "start": {
+        "column": 5,
+        "line": 11
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_ed25519 -> bool with false\n@@ -3,36 +3,17 @@\n //! All handlers that verify cryptographic signatures should use these\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n-    match (\n-        pub_bytes\n-            .as_slice()\n-            .try_into()\n-            .ok()\n-            .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n-        Signature::from_slice(&sig_bytes).ok(),\n-    ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n-        _ => false,\n-    }\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:11:5: replace verify_ed25519 -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 30
+      },
+      "start": {
+        "column": 5,
+        "line": 11
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 32 with true in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with true in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 12
+      },
+      "start": {
+        "column": 18,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 32 with false in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:12:18: replace match guard b.len() == 32 with false in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 12
+      },
+      "start": {
+        "column": 18,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_ed25519\n@@ -4,17 +4,17 @@\n //! functions instead of implementing their own. This ensures consistent\n //! behavior and makes algorithm upgrades a single-point change.\n \n use crate::identity::signing::SigningAlgorithm;\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 32 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:12:26: replace == with != in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 12
+      },
+      "start": {
+        "column": 26,
+        "line": 12
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 64 with true in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with true in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 16
+      },
+      "start": {
+        "column": 18,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 64 with false in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:16:18: replace match guard b.len() == 64 with false in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 16
+      },
+      "start": {
+        "column": 18,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_ed25519\n@@ -8,17 +8,17 @@\n \n /// Verify an Ed25519 signature over a message.\n pub fn verify_ed25519(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 32 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 64 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 64 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::ed25519::{Signature, Verifier, VerifyingKey};\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:16:26: replace == with != in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 16
+      },
+      "start": {
+        "column": 26,
+        "line": 16
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ delete match arm (Some(vk), Some(sig)) in verify_ed25519\n@@ -20,17 +20,17 @@\n     match (\n         pub_bytes\n             .as_slice()\n             .try_into()\n             .ok()\n             .and_then(|b: &[u8; 32]| VerifyingKey::from_bytes(b).ok()),\n         Signature::from_slice(&sig_bytes).ok(),\n     ) {\n-        (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n+         /* ~ changed by cargo-mutants ~ */\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_ed25519",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 31
+        },
+        "start": {
+          "column": 1,
+          "line": 9
+        }
+      }
+    },
+    "genre": "MatchArm",
+    "name": "src/signature/verify.rs:28:9: delete match arm (Some(vk), Some(sig)) in verify_ed25519",
+    "package": "rust-bc",
+    "replacement": "",
+    "span": {
+      "end": {
+        "column": 67,
+        "line": 28
+      },
+      "start": {
+        "column": 9,
+        "line": 28
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_mldsa65 -> bool with true\n@@ -27,38 +27,17 @@\n     ) {\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n-    {\n-        Ok(pk) => pk,\n-        Err(_) => return false,\n-    };\n-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(\n-        &sig_bytes,\n-    ) {\n-        Ok(sig) => sig,\n-        Err(_) => return false,\n-    };\n-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)\n-        .is_ok()\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Dispatch signature verification based on algorithm.\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 56
+      },
+      "start": {
+        "column": 5,
+        "line": 35
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_mldsa65 -> bool with false\n@@ -27,38 +27,17 @@\n     ) {\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n-    let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n-        _ => return false,\n-    };\n-    let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n-        _ => return false,\n-    };\n-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n-    {\n-        Ok(pk) => pk,\n-        Err(_) => return false,\n-    };\n-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(\n-        &sig_bytes,\n-    ) {\n-        Ok(sig) => sig,\n-        Err(_) => return false,\n-    };\n-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)\n-        .is_ok()\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Dispatch signature verification based on algorithm.\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:35:5: replace verify_mldsa65 -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 17,
+        "line": 56
+      },
+      "start": {
+        "column": 5,
+        "line": 35
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 1952 with true in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with true in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 36
+      },
+      "start": {
+        "column": 18,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 1952 with false in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with false in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 36
+      },
+      "start": {
+        "column": 18,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_mldsa65\n@@ -28,17 +28,17 @@\n         (Some(vk), Some(sig)) => vk.verify(message, &sig).is_ok(),\n         _ => false,\n     }\n }\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n-        Ok(b) if b.len() == 1952 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n         Ok(b) if b.len() == 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:36:26: replace == with != in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 36
+      },
+      "start": {
+        "column": 26,
+        "line": 36
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 3309 with true in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if true /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with true in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 40
+      },
+      "start": {
+        "column": 18,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace match guard b.len() == 3309 with false in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if false /* ~ changed by cargo-mutants ~ */ => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "MatchArmGuard",
+    "name": "src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with false in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 33,
+        "line": 40
+      },
+      "start": {
+        "column": 18,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace == with != in verify_mldsa65\n@@ -32,17 +32,17 @@\n \n /// Verify an ML-DSA-65 (FIPS 204) signature over a message.\n pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {\n     let pub_bytes = match hex::decode(public_key_hex) {\n         Ok(b) if b.len() == 1952 => b,\n         _ => return false,\n     };\n     let sig_bytes = match hex::decode(signature_hex) {\n-        Ok(b) if b.len() == 3309 => b,\n+        Ok(b) if b.len() != /* ~ changed by cargo-mutants ~ */ 3309 => b,\n         _ => return false,\n     };\n     use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};\n     let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)\n     {\n         Ok(pk) => pk,\n         Err(_) => return false,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_mldsa65",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 57
+        },
+        "start": {
+          "column": 1,
+          "line": 33
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:40:26: replace == with != in verify_mldsa65",
+    "package": "rust-bc",
+    "replacement": "!=",
+    "span": {
+      "end": {
+        "column": 28,
+        "line": 40
+      },
+      "start": {
+        "column": 26,
+        "line": 40
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_signature -> bool with true\n@@ -60,20 +60,17 @@\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n     message: &[u8],\n     signature_hex: &str,\n ) -> bool {\n-    match algorithm {\n-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),\n-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),\n-    }\n+    true /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_signature",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 72
+        },
+        "start": {
+          "column": 1,
+          "line": 59
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with true",
+    "package": "rust-bc",
+    "replacement": "true",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 71
+      },
+      "start": {
+        "column": 5,
+        "line": 68
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace verify_signature -> bool with false\n@@ -60,20 +60,17 @@\n ///\n /// Returns `true` if the signature is valid for the given message and public key.\n pub fn verify_signature(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n     message: &[u8],\n     signature_hex: &str,\n ) -> bool {\n-    match algorithm {\n-        SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),\n-        SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),\n-    }\n+    false /* ~ changed by cargo-mutants ~ */\n }\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "verify_signature",
+      "return_type": "-> bool",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 72
+        },
+        "start": {
+          "column": 1,
+          "line": 59
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:68:5: replace verify_signature -> bool with false",
+    "package": "rust-bc",
+    "replacement": "false",
+    "span": {
+      "end": {
+        "column": 6,
+        "line": 71
+      },
+      "start": {
+        "column": 5,
+        "line": 68
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace validate_public_key -> Result<(), String> with Ok(())\n@@ -73,30 +73,17 @@\n \n /// Validate public key hex length for the given algorithm.\n ///\n /// Ed25519: 64 hex chars (32 bytes). ML-DSA-65: 3904 hex chars (1952 bytes).\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n-    let expected_bytes = match algorithm {\n-        SigningAlgorithm::Ed25519 => 32,\n-        SigningAlgorithm::MlDsa65 => 1952,\n-    };\n-    let expected_hex = expected_bytes * 2;\n-    if public_key_hex.len() != expected_hex {\n-        return Err(format!(\n-            \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n-        ));\n-    }\n-    if hex::decode(public_key_hex).is_err() {\n-        return Err(\"public_key is not valid hex\".into());\n-    }\n-    Ok(())\n+    Ok(()) /* ~ changed by cargo-mutants ~ */\n }\n \n #[cfg(test)]\n mod tests {\n     use super::*;\n     use crate::identity::signing::{\n         MlDsaSigningProvider, SigningProvider, SoftwareSigningProvider,\n     };\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "FnValue",
+    "name": "src/signature/verify.rs:81:5: replace validate_public_key -> Result<(), String> with Ok(())",
+    "package": "rust-bc",
+    "replacement": "Ok(())",
+    "span": {
+      "end": {
+        "column": 11,
+        "line": 94
+      },
+      "start": {
+        "column": 5,
+        "line": 81
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace * with + in validate_public_key\n@@ -77,17 +77,17 @@\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n-    let expected_hex = expected_bytes * 2;\n+    let expected_hex = expected_bytes + /* ~ changed by cargo-mutants ~ */ 2;\n     if public_key_hex.len() != expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:85:39: replace * with + in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "+",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 85
+      },
+      "start": {
+        "column": 39,
+        "line": 85
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace * with / in validate_public_key\n@@ -77,17 +77,17 @@\n pub fn validate_public_key(\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n-    let expected_hex = expected_bytes * 2;\n+    let expected_hex = expected_bytes / /* ~ changed by cargo-mutants ~ */ 2;\n     if public_key_hex.len() != expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:85:39: replace * with / in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "/",
+    "span": {
+      "end": {
+        "column": 40,
+        "line": 85
+      },
+      "start": {
+        "column": 39,
+        "line": 85
+      }
+    }
+  },
+  {
+    "diff": "--- src/signature/verify.rs\n+++ replace != with == in validate_public_key\n@@ -78,17 +78,17 @@\n     algorithm: SigningAlgorithm,\n     public_key_hex: &str,\n ) -> Result<(), String> {\n     let expected_bytes = match algorithm {\n         SigningAlgorithm::Ed25519 => 32,\n         SigningAlgorithm::MlDsa65 => 1952,\n     };\n     let expected_hex = expected_bytes * 2;\n-    if public_key_hex.len() != expected_hex {\n+    if public_key_hex.len() == /* ~ changed by cargo-mutants ~ */ expected_hex {\n         return Err(format!(\n             \"public_key must be {expected_hex} hex characters ({expected_bytes} bytes {algorithm})\"\n         ));\n     }\n     if hex::decode(public_key_hex).is_err() {\n         return Err(\"public_key is not valid hex\".into());\n     }\n     Ok(())\n",
+    "file": "src/signature/verify.rs",
+    "function": {
+      "function_name": "validate_public_key",
+      "return_type": "-> Result<(), String>",
+      "span": {
+        "end": {
+          "column": 2,
+          "line": 95
+        },
+        "start": {
+          "column": 1,
+          "line": 74
+        }
+      }
+    },
+    "genre": "BinaryOperator",
+    "name": "src/signature/verify.rs:86:29: replace != with == in validate_public_key",
+    "package": "rust-bc",
+    "replacement": "==",
+    "span": {
+      "end": {
+        "column": 31,
+        "line": 86
+      },
+      "start": {
+        "column": 29,
+        "line": 86
+      }
+    }
+  }
+]

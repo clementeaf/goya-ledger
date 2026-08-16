@@ -1,0 +1,8 @@
+src/signature/verify.rs:12:18: replace match guard b.len() == 32 with true in verify_ed25519
+src/signature/verify.rs:16:18: replace match guard b.len() == 64 with true in verify_ed25519
+src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with true in verify_mldsa65
+src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with true in verify_mldsa65
+src/signature/verify.rs:12:18: replace match guard b.len() == 32 with true in verify_ed25519
+src/signature/verify.rs:16:18: replace match guard b.len() == 64 with true in verify_ed25519
+src/signature/verify.rs:36:18: replace match guard b.len() == 1952 with true in verify_mldsa65
+src/signature/verify.rs:40:18: replace match guard b.len() == 3309 with true in verify_mldsa65

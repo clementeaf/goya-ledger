@@ -1,0 +1,29 @@
+--- src/signature/mod.rs
++++ replace <impl std::fmt::Display for BiometricType>::fmt -> std::fmt::Result with Ok(Default::default())
+@@ -114,25 +114,17 @@
+     /// Government-issued ID document hash.
+     GovernmentId,
+     /// Extensible: any other identity factor.
+     Other(String),
+ }
+ 
+ impl std::fmt::Display for BiometricType {
+     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+-        match self {
+-            Self::Fingerprint => write!(f, "fingerprint"),
+-            Self::FacialRecognition => write!(f, "facial_recognition"),
+-            Self::Rut => write!(f, "rut"),
+-            Self::Iris => write!(f, "iris"),
+-            Self::Voice => write!(f, "voice"),
+-            Self::GovernmentId => write!(f, "government_id"),
+-            Self::Other(name) => write!(f, "other:{name}"),
+-        }
++        Ok(Default::default()) /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ /// A single piece of biometric or identity evidence.
+ ///
+ /// The `commitment` is a SHA-256 hash of the raw biometric data.
+ /// Raw data never enters the system — only commitments are stored.
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

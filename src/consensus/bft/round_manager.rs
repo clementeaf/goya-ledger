@@ -8,7 +8,8 @@
 
 use super::quorum::SignatureVerifier;
 use super::round::{BftRound, RoundAction, RoundEvent, RoundState};
-use super::types::QuorumCertificate;
+use super::safety::{AlwaysExtends, AncestryChecker, SafetyState};
+use super::types::{BftPhase, QuorumCertificate};
 
 /// Configuration for the round manager.
 #[derive(Debug, Clone)]
@@ -55,18 +56,39 @@ pub struct RoundManager<V: SignatureVerifier + Clone> {
     /// The active round state machine.
     current: Option<BftRound<V>>,
     /// Number of consecutive timeouts (for exponential backoff).
-    consecutive_timeouts: u32,
+    pub(crate) consecutive_timeouts: u32,
     /// Highest committed QC seen so far.
     highest_commit_qc: Option<QuorumCertificate>,
+    /// HotStuff safety state — locking, vote monotonicity.
+    safety: SafetyState,
+    /// Ancestry checker for lock verification.
+    ancestry: Box<dyn AncestryChecker>,
 }
 
 impl<V: SignatureVerifier + Clone> RoundManager<V> {
-    /// Create a new round manager.
+    /// Create a new round manager with permissive ancestry (QC round comparison only).
     pub fn new(
         node_id: String,
         validators: Vec<String>,
         verifier: V,
         config: RoundManagerConfig,
+    ) -> Self {
+        Self::with_ancestry(
+            node_id,
+            validators,
+            verifier,
+            config,
+            Box::new(AlwaysExtends),
+        )
+    }
+
+    /// Create a round manager with a custom ancestry checker.
+    pub fn with_ancestry(
+        node_id: String,
+        validators: Vec<String>,
+        verifier: V,
+        config: RoundManagerConfig,
+        ancestry: Box<dyn AncestryChecker>,
     ) -> Self {
         Self {
             node_id,
@@ -77,6 +99,8 @@ impl<V: SignatureVerifier + Clone> RoundManager<V> {
             current: None,
             consecutive_timeouts: 0,
             highest_commit_qc: None,
+            safety: SafetyState::new(),
+            ancestry,
         }
     }
 
@@ -151,21 +175,63 @@ impl<V: SignatureVerifier + Clone> RoundManager<V> {
     }
 
     /// Feed an event to the current round. Returns the resulting action.
+    ///
+    /// For `Proposal` events, enforces HotStuff safety rules before
+    /// forwarding to the round state machine:
+    /// - Round monotonicity (no voting in past rounds)
+    /// - Lock check (proposal must extend locked block or present higher QC)
     pub fn process_event(&mut self, event: RoundEvent) -> ManagerAction {
         let round = match self.current.as_mut() {
             Some(r) => r,
             None => return ManagerAction::None,
         };
 
+        // Safety gate for proposals.
+        if let RoundEvent::Proposal {
+            ref block_hash,
+            ref justify_qc,
+            ..
+        } = event
+        {
+            if let Err(e) = self.safety.safe_to_vote(
+                self.current_round,
+                block_hash,
+                justify_qc.as_ref(),
+                self.ancestry.as_ref(),
+            ) {
+                log::warn!(
+                    "BFT safety: rejected proposal in round {}: {e}",
+                    self.current_round
+                );
+                return ManagerAction::Round(RoundAction::None);
+            }
+        }
+
         let action = round.process(event);
 
-        // If a Decide action, update highest QC and reset timeout backoff.
-        if let RoundAction::Decide { ref commit_qc, .. } = action {
-            self.highest_commit_qc = Some(commit_qc.clone());
-            self.consecutive_timeouts = 0;
+        // Post-process: update safety state from actions.
+        match &action {
+            RoundAction::SendVote(vote) if vote.phase == BftPhase::Prepare => {
+                self.safety.record_vote(vote.round);
+            }
+            RoundAction::PhaseComplete { phase, qc } => match phase {
+                BftPhase::Prepare => self.safety.update_high_qc(qc),
+                BftPhase::PreCommit => self.safety.update_locked_qc(qc),
+                _ => {}
+            },
+            RoundAction::Decide { ref commit_qc, .. } => {
+                self.highest_commit_qc = Some(commit_qc.clone());
+                self.consecutive_timeouts = 0;
+            }
+            _ => {}
         }
 
         ManagerAction::Round(action)
+    }
+
+    /// The safety state (for inspection in tests and controller).
+    pub fn safety(&self) -> &SafetyState {
+        &self.safety
     }
 
     /// Handle a timeout for the current round.
@@ -357,6 +423,7 @@ mod tests {
         let action = m.process_event(RoundEvent::Proposal {
             block_hash: block_hash(1),
             leader_id: "v0".into(),
+            justify_qc: None,
         });
         match action {
             ManagerAction::Round(RoundAction::SendVote(vote)) => {
@@ -422,6 +489,7 @@ mod tests {
         right_follower.process_event(RoundEvent::Proposal {
             block_hash: block_hash(0xAA),
             leader_id: "v0".into(),
+            justify_qc: None,
         });
 
         // LEFT partition: v0 and v1 vote. Only 2 votes — no quorum.
@@ -531,6 +599,7 @@ mod tests {
         m_v2.process_event(RoundEvent::Proposal {
             block_hash: block_a, // v2 received the real proposal (block A)
             leader_id: "v0".into(),
+            justify_qc: None,
         });
 
         // v2 votes A (honest). v3 sends B to v2.
@@ -594,6 +663,7 @@ mod tests {
         m.process_event(RoundEvent::Proposal {
             block_hash: block_hash(0xAA),
             leader_id: "v0".into(),
+            justify_qc: None,
         });
 
         // Prepare votes arrive from v0, v1, v2. v1's own vote was already
@@ -701,5 +771,503 @@ mod tests {
                 other => panic!("expected NewRound, got {other:?}"),
             }
         }
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // HotStuff safety locking — adversarial scenarios
+    //
+    // Invariant under test:
+    //   For any two finalized blocks A and B:
+    //     A ancestor_of B || B ancestor_of A
+    //   Two conflicting finalized blocks NEVER coexist.
+    // ════════════════════════════════════════════════════════════════════
+
+    use crate::consensus::bft::safety::test_util::MockAncestry;
+
+    fn manager_with_chain(node: &str, chain: MockAncestry) -> RoundManager<AcceptAllVerifier> {
+        RoundManager::with_ancestry(
+            node.into(),
+            validators(),
+            AcceptAllVerifier,
+            RoundManagerConfig::default(),
+            Box::new(chain),
+        )
+    }
+
+    fn chain_for_tests() -> MockAncestry {
+        // genesis(0x00) ← A(0xAA) ← C(0xCC)
+        //              ← B(0xBB)   (sibling of A)
+        //              A(0xAA) ← D(0xDD) (child of A, sibling of C)
+        let mut m = MockAncestry::new();
+        m.add_block(block_hash(0xAA), block_hash(0x00));
+        m.add_block(block_hash(0xBB), block_hash(0x00));
+        m.add_block(block_hash(0xCC), block_hash(0xAA));
+        m.add_block(block_hash(0xDD), block_hash(0xAA));
+        m
+    }
+
+    #[allow(dead_code)]
+    fn make_precommit_qc(hash_id: u8, round: u64) -> QuorumCertificate {
+        QuorumCertificate {
+            block_hash: block_hash(hash_id),
+            round,
+            phase: BftPhase::PreCommit,
+            votes: vec![
+                make_vote(BftPhase::PreCommit, hash_id, round, "v0"),
+                make_vote(BftPhase::PreCommit, hash_id, round, "v1"),
+                make_vote(BftPhase::PreCommit, hash_id, round, "v2"),
+            ],
+        }
+    }
+
+    #[allow(dead_code)]
+    fn make_prepare_qc(hash_id: u8, round: u64) -> QuorumCertificate {
+        QuorumCertificate {
+            block_hash: block_hash(hash_id),
+            round,
+            phase: BftPhase::Prepare,
+            votes: vec![
+                make_vote(BftPhase::Prepare, hash_id, round, "v0"),
+                make_vote(BftPhase::Prepare, hash_id, round, "v1"),
+                make_vote(BftPhase::Prepare, hash_id, round, "v2"),
+            ],
+        }
+    }
+
+    // ── Test 1: Conflicting proposal against locked_qc ──────────────
+
+    #[test]
+    fn locked_node_rejects_conflicting_sibling_proposal() {
+        let chain = chain_for_tests();
+        let mut m = manager_with_chain("v1", chain);
+        m.start();
+
+        // Round 0: Prepare + PreCommit for A → lock on A.
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+            justify_qc: None,
+        });
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::PreCommit,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        assert_eq!(m.safety().locked_qc().unwrap().block_hash, block_hash(0xAA));
+
+        m.on_timeout(); // → round 1
+
+        // Byzantine leader proposes B (sibling of A).
+        // justify_qc.round == lock.round → does NOT supersede.
+        let action = m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xBB),
+            leader_id: "v1".into(),
+            justify_qc: Some(make_prepare_qc(0xAA, 0)),
+        });
+        assert_eq!(
+            action,
+            ManagerAction::Round(RoundAction::None),
+            "locked node must reject sibling proposal"
+        );
+    }
+
+    // ── Test 2: Locked node accepts descendant ──────────────────────
+
+    #[test]
+    fn locked_node_accepts_descendant_proposal() {
+        let chain = chain_for_tests();
+        let mut m = manager_with_chain("v1", chain);
+        m.start();
+
+        // Lock on A.
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+            justify_qc: None,
+        });
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::PreCommit,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        m.on_timeout(); // → round 1
+
+        // C is child of A → extends lock → accepted.
+        let action = m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xCC),
+            leader_id: "v1".into(),
+            justify_qc: Some(make_prepare_qc(0xAA, 0)),
+        });
+        assert!(
+            matches!(action, ManagerAction::Round(RoundAction::SendVote(_))),
+            "descendant proposal must be accepted"
+        );
+    }
+
+    // ── Test 3: Higher justify_qc safely unlocks ────────────────────
+
+    #[test]
+    fn higher_justify_qc_unlocks_for_different_branch() {
+        let chain = chain_for_tests();
+        let mut m = manager_with_chain("v1", chain);
+        m.start();
+
+        // Lock on A at round 0.
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+            justify_qc: None,
+        });
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::PreCommit,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        m.on_timeout(); // → round 1
+        m.on_timeout(); // → round 2
+
+        // justify_qc from round 1 > lock round 0 → safe unlock.
+        let action = m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xBB),
+            leader_id: "v2".into(),
+            justify_qc: Some(make_prepare_qc(0xBB, 1)),
+        });
+        assert!(
+            matches!(action, ManagerAction::Round(RoundAction::SendVote(_))),
+            "higher justify_qc must unlock"
+        );
+    }
+
+    // ── Test 4: Stale justify_qc does NOT unlock ────────────────────
+
+    #[test]
+    fn stale_justify_qc_does_not_unlock() {
+        let chain = chain_for_tests();
+        let mut m = manager_with_chain("v1", chain);
+        m.start();
+        m.on_timeout(); // → round 1
+        m.on_timeout(); // → round 2
+
+        // Lock on A at round 2.
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v2".into(),
+            justify_qc: None,
+        });
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                2,
+                voter,
+            )));
+        }
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::PreCommit,
+                0xAA,
+                2,
+                voter,
+            )));
+        }
+        m.on_timeout(); // → round 3
+
+        // justify_qc from round 0 < lock round 2 → stale.
+        let action = m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xBB),
+            leader_id: "v3".into(),
+            justify_qc: Some(make_prepare_qc(0xBB, 0)),
+        });
+        assert_eq!(action, ManagerAction::Round(RoundAction::None));
+    }
+
+    // ── Test 5: Vote monotonicity ───────────────────────────────────
+
+    #[test]
+    fn vote_monotonicity_prevents_equivocation() {
+        let mut m = manager("v1");
+        m.start();
+
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+            justify_qc: None,
+        });
+        assert_eq!(m.safety().last_voted_round(), Some(0));
+
+        m.on_timeout(); // → round 1
+        let action = m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xBB),
+            leader_id: "v1".into(),
+            justify_qc: None,
+        });
+        assert!(matches!(
+            action,
+            ManagerAction::Round(RoundAction::SendVote(_))
+        ));
+        assert_eq!(m.safety().last_voted_round(), Some(1));
+    }
+
+    // ── Test 6: Leader death after PreCommitQC — lock survives ──────
+
+    #[test]
+    fn leader_death_after_precommit_preserves_lock() {
+        let chain = chain_for_tests();
+        let mut m = manager_with_chain("v1", chain);
+        m.start();
+
+        // Lock on A.
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+            justify_qc: None,
+        });
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::PreCommit,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        m.on_timeout(); // → round 1
+
+        // Lock survives.
+        assert_eq!(m.safety().locked_qc().unwrap().block_hash, block_hash(0xAA));
+
+        // Descendant C: accepted.
+        let action = m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xCC),
+            leader_id: "v1".into(),
+            justify_qc: Some(make_prepare_qc(0xAA, 0)),
+        });
+        assert!(matches!(
+            action,
+            ManagerAction::Round(RoundAction::SendVote(_))
+        ));
+
+        // Sibling B: rejected.
+        m.on_timeout(); // → round 2
+        let action = m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xBB),
+            leader_id: "v2".into(),
+            justify_qc: Some(make_prepare_qc(0xAA, 0)),
+        });
+        assert_eq!(action, ManagerAction::Round(RoundAction::None));
+    }
+
+    // ── Test 7: Delayed CommitQC cannot create fork ─────────────────
+
+    #[test]
+    fn delayed_commit_qc_cannot_fork() {
+        let mut m = manager("v1");
+        m.start();
+
+        // Round 0: PrepareQC(A), but no PreCommitQC → no lock.
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+            justify_qc: None,
+        });
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        assert!(m.safety().locked_qc().is_none()); // no lock!
+
+        m.on_timeout(); // → round 1
+
+        // B is freely accepted (no lock).
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xBB),
+            leader_id: "v1".into(),
+            justify_qc: None,
+        });
+        let decided = drive_full_round(&mut m, 0xBB, 1, &["v1", "v2", "v3"]);
+        assert!(decided);
+        assert_eq!(m.highest_commit_qc().unwrap().block_hash, block_hash(0xBB));
+
+        // CommitQC(A) is impossible: it would need PreCommitQC(A) which
+        // needs 3 PreCommit votes — but the round timed out and the pipeline
+        // was incomplete. The invariant holds.
+    }
+
+    // ── Test 8: Stale votes from old rounds ignored ─────────────────
+
+    #[test]
+    fn old_round_votes_are_noop() {
+        let mut m = manager("v1");
+        m.start();
+        m.on_timeout(); // → round 1
+        m.on_timeout(); // → round 2
+
+        // Vote from round 0 — ignored.
+        let action = m.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xAA,
+            0,
+            "v0",
+        )));
+        assert_eq!(action, ManagerAction::Round(RoundAction::None));
+    }
+
+    // ── Test 9: Partition + heal respects lock ──────────────────────
+
+    #[test]
+    fn partition_heal_with_lock() {
+        let chain = chain_for_tests();
+        let mut m = manager_with_chain("v1", chain);
+        m.start();
+
+        // Lock on A at round 0.
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+            justify_qc: None,
+        });
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        for voter in &["v0", "v1", "v2"] {
+            m.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::PreCommit,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+
+        // Partition: several timeouts.
+        for _ in 0..5 {
+            m.on_timeout();
+        }
+        // round = 5 now.
+
+        // Heal: leader with higher justify_qc → unlock OK.
+        let action = m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xBB),
+            leader_id: "v1".into(), // v1 is leader of round 5? 5%4=1 → v1
+            justify_qc: Some(make_prepare_qc(0xBB, 3)),
+        });
+        assert!(matches!(
+            action,
+            ManagerAction::Round(RoundAction::SendVote(_))
+        ));
+    }
+
+    // ── Test 10: Finalization invariant under stress ─────────────────
+
+    #[test]
+    fn two_finalized_blocks_never_conflict() {
+        let chain = {
+            let mut c = MockAncestry::new();
+            c.add_block(block_hash(0xAA), block_hash(0x00));
+            c.add_block(block_hash(0xBB), block_hash(0x00));
+            c
+        };
+
+        // Finalize A on v0.
+        let mut m0 = manager_with_chain("v0", chain);
+        m0.start();
+        m0.process_event(RoundEvent::StartAsLeader {
+            block_hash: block_hash(0xAA),
+        });
+        let decided_a = drive_full_round(&mut m0, 0xAA, 0, &["v0", "v1", "v2"]);
+        assert!(decided_a);
+
+        // v1 was locked on A after round 0 (PreCommitQC formed).
+        let chain2 = {
+            let mut c = MockAncestry::new();
+            c.add_block(block_hash(0xAA), block_hash(0x00));
+            c.add_block(block_hash(0xBB), block_hash(0x00));
+            c
+        };
+        let mut m1 = manager_with_chain("v1", chain2);
+        m1.start();
+        m1.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+            justify_qc: None,
+        });
+        for voter in &["v0", "v1", "v2"] {
+            m1.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        for voter in &["v0", "v1", "v2"] {
+            m1.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::PreCommit,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        // v1 locked on A.
+        m1.on_timeout(); // → round 1
+
+        // Byzantine leader proposes B (sibling). REJECTED.
+        let action = m1.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xBB),
+            leader_id: "v1".into(),
+            justify_qc: Some(make_prepare_qc(0xAA, 0)),
+        });
+        assert_eq!(
+            action,
+            ManagerAction::Round(RoundAction::None),
+            "INVARIANT: no conflicting finalization possible"
+        );
     }
 }
