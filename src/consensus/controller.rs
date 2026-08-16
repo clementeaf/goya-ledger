@@ -257,7 +257,23 @@ async fn handle_action(
                 "BFT: broadcasting proposal hash={}",
                 hex::encode(block_hash)
             );
-            false
+            // Leader also votes Prepare (counts toward quorum).
+            let mut vote = VoteMessage {
+                block_hash: *block_hash,
+                round: manager.current_round(),
+                phase: crate::consensus::bft::types::BftPhase::Prepare,
+                voter_id: node_id.to_string(),
+                signature: Vec::new(),
+            };
+            let payload = VoteMessage::signing_payload(vote.phase, block_hash, vote.round);
+            vote.signature = signer.sign(&payload).unwrap_or_default();
+            let self_action = manager.process_event(RoundEvent::Vote(vote.clone()));
+            let msg = crate::network::Message::BftVote(vote);
+            node.broadcast_message(&msg).await;
+            matches!(
+                self_action,
+                ManagerAction::Round(RoundAction::Decide { .. })
+            )
         }
         ManagerAction::Round(RoundAction::PhaseComplete { phase, qc }) => {
             log::info!(
