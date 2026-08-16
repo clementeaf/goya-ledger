@@ -320,9 +320,10 @@ fn cbor_encode_cose_sign1(
 ) -> Result<Vec<u8>, String> {
     // Simplified COSE_Sign1 as CBOR array: [alg_id, {}, payload_bytes, sig_bytes]
     let alg_id: i64 = match alg {
-        SigningAlgorithm::Ed25519 => -8,  // IANA COSE EdDSA
-        SigningAlgorithm::MlDsa65 => -48, // draft-ietf-cose-dilithium (pre-IANA)
-        SigningAlgorithm::Rsa => -37,     // IANA COSE PS256 (RSASSA-PSS + SHA-256)
+        SigningAlgorithm::Ed25519 => -8,   // IANA COSE EdDSA
+        SigningAlgorithm::MlDsa65 => -48,  // draft-ietf-cose-dilithium (pre-IANA)
+        SigningAlgorithm::Rsa => -37,      // IANA COSE PS256 (RSASSA-PSS + SHA-256)
+        SigningAlgorithm::EcdsaP256 => -7, // IANA COSE ES256
     };
     let structure = (
         alg_id,
@@ -564,5 +565,52 @@ mod tests {
         let h2 = compute_session_transcript_hash(&t);
         assert_eq!(h1, h2);
         assert_eq!(h1.len(), 32);
+    }
+
+    // ── ES256 (EUDI interop) mdoc tests ────────────────────────
+
+    #[test]
+    fn es256_mdoc_issue_and_verify() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let provider = EcdsaP256SigningProvider::generate();
+        let mdoc = issue_mdoc(&pid_params(), &provider).unwrap();
+        assert_eq!(mdoc.doc_type, "eu.europa.ec.eudi.pid.1");
+        assert_eq!(
+            mdoc.algorithm,
+            crate::identity::signing::SigningAlgorithm::EcdsaP256
+        );
+
+        let verified = verify_mdoc(&mdoc).unwrap();
+        assert_eq!(verified.doc_type, "eu.europa.ec.eudi.pid.1");
+        let pid_ns = &verified.disclosed_elements["eu.europa.ec.eudi.pid.1"];
+        assert_eq!(pid_ns.len(), 5);
+    }
+
+    #[test]
+    fn es256_mdoc_selective_disclosure() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let provider = EcdsaP256SigningProvider::generate();
+        let mdoc = issue_mdoc(&pid_params(), &provider).unwrap();
+
+        let mut disclosed = BTreeMap::new();
+        disclosed.insert(
+            "eu.europa.ec.eudi.pid.1".to_string(),
+            vec!["given_name".to_string(), "nationality".to_string()],
+        );
+        let presentation = present_mdoc(&mdoc, &disclosed);
+        let verified = verify_mdoc(&presentation).unwrap();
+        let pid_ns = &verified.disclosed_elements["eu.europa.ec.eudi.pid.1"];
+        assert_eq!(pid_ns.len(), 2);
+    }
+
+    #[test]
+    fn es256_mdoc_wrong_key_rejects() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let issuer = EcdsaP256SigningProvider::generate();
+        let wrong = EcdsaP256SigningProvider::generate();
+        let mut mdoc = issue_mdoc(&pid_params(), &issuer).unwrap();
+        mdoc.issuer_public_key = hex::encode(wrong.public_key());
+        let result = verify_mdoc(&mdoc);
+        assert!(result.is_err(), "wrong issuer key must reject");
     }
 }

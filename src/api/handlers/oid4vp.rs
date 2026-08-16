@@ -585,10 +585,10 @@ mod tests {
                 id: "identity".to_string(),
                 format: DescriptorFormat {
                     sd_jwt: Some(FormatAlgs {
-                        alg: vec!["EdDSA".to_string()],
+                        alg: vec!["EdDSA".to_string(), "ES256".to_string()],
                     }),
                     mso_mdoc: Some(FormatAlgs {
-                        alg: vec!["EdDSA".to_string()],
+                        alg: vec!["EdDSA".to_string(), "ES256".to_string()],
                     }),
                 },
                 constraints: Some(Constraints {

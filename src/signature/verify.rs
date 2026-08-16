@@ -81,6 +81,28 @@ pub fn verify_rsa(public_key_hex: &str, message: &[u8], signature_hex: &str) -> 
     vk.verify(message, &sig).is_ok()
 }
 
+/// Verify an ECDSA P-256 (ES256) signature over a message.
+pub fn verify_ecdsa_p256(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
+    let pub_bytes = match hex::decode(public_key_hex) {
+        Ok(b) if b.len() == 65 || b.len() == 33 => b,
+        _ => return false,
+    };
+    let sig_bytes = match hex::decode(signature_hex) {
+        Ok(b) if b.len() == 64 => b,
+        _ => return false,
+    };
+    use p256::ecdsa::{signature::Verifier, Signature, VerifyingKey};
+    let vk = match VerifyingKey::from_sec1_bytes(&pub_bytes) {
+        Ok(vk) => vk,
+        Err(_) => return false,
+    };
+    let sig = match Signature::from_bytes((&sig_bytes[..]).into()) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    vk.verify(message, &sig).is_ok()
+}
+
 /// Dispatch signature verification based on algorithm.
 ///
 /// Returns `true` if the signature is valid for the given message and public key.
@@ -94,6 +116,7 @@ pub fn verify_signature(
         SigningAlgorithm::Ed25519 => verify_ed25519(public_key_hex, message, signature_hex),
         SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),
         SigningAlgorithm::Rsa => verify_rsa(public_key_hex, message, signature_hex),
+        SigningAlgorithm::EcdsaP256 => verify_ecdsa_p256(public_key_hex, message, signature_hex),
     }
 }
 
@@ -101,6 +124,8 @@ pub fn verify_signature(
 pub fn infer_algorithm_from_key(public_key_hex: &str) -> Option<SigningAlgorithm> {
     match public_key_hex.len() {
         64 => Some(SigningAlgorithm::Ed25519),
+        130 => Some(SigningAlgorithm::EcdsaP256), // 65 bytes uncompressed (0x04 || x || y)
+        66 => Some(SigningAlgorithm::EcdsaP256),  // 33 bytes compressed
         3904 => Some(SigningAlgorithm::MlDsa65),
         n if n >= 256 => Some(SigningAlgorithm::Rsa),
         _ => None,
@@ -117,6 +142,16 @@ pub fn validate_public_key(
     let expected_bytes = match algorithm {
         SigningAlgorithm::Ed25519 => 32,
         SigningAlgorithm::MlDsa65 => 1952,
+        SigningAlgorithm::EcdsaP256 => {
+            // P-256 SEC1: 65 bytes uncompressed or 33 bytes compressed.
+            let len = public_key_hex.len();
+            if (len == 130 || len == 66) && hex::decode(public_key_hex).is_ok() {
+                return Ok(());
+            }
+            return Err(format!(
+                "P-256 public_key must be 130 (uncompressed) or 66 (compressed) hex chars, got {len}"
+            ));
+        }
         SigningAlgorithm::Rsa => {
             // RSA public keys are DER-encoded, variable length.
             // Accept any length >= 128 bytes (RSA-1024 minimum).
@@ -331,6 +366,101 @@ mod tests {
             msg,
             &sig_hex
         ));
+    }
+
+    // ── ECDSA P-256 (ES256) verification ─────────────────────────
+
+    #[test]
+    fn es256_sign_and_verify_via_dispatcher() {
+        use crate::identity::signing::{EcdsaP256SigningProvider, SigningProvider};
+        let provider = EcdsaP256SigningProvider::generate();
+        let msg = b"es256 dispatch test";
+        let sig = provider.sign(msg).unwrap();
+        let pk_hex = hex::encode(provider.public_key());
+        let sig_hex = hex::encode(&sig);
+        assert!(verify_ecdsa_p256(&pk_hex, msg, &sig_hex));
+        assert!(verify_signature(
+            SigningAlgorithm::EcdsaP256,
+            &pk_hex,
+            msg,
+            &sig_hex
+        ));
+    }
+
+    #[test]
+    fn es256_wrong_message_fails() {
+        use crate::identity::signing::{EcdsaP256SigningProvider, SigningProvider};
+        let provider = EcdsaP256SigningProvider::generate();
+        let sig = provider.sign(b"correct").unwrap();
+        let pk_hex = hex::encode(provider.public_key());
+        let sig_hex = hex::encode(&sig);
+        assert!(!verify_ecdsa_p256(&pk_hex, b"wrong", &sig_hex));
+    }
+
+    #[test]
+    fn es256_bad_pk_hex_fails() {
+        assert!(!verify_ecdsa_p256("not_hex", b"msg", &"aa".repeat(32)));
+    }
+
+    #[test]
+    fn es256_wrong_pk_length_fails() {
+        assert!(!verify_ecdsa_p256(
+            &"aa".repeat(16),
+            b"msg",
+            &"bb".repeat(32)
+        ));
+    }
+
+    #[test]
+    fn es256_wrong_sig_length_fails() {
+        let pk = "04".to_string() + &"aa".repeat(64); // 65-byte uncompressed prefix
+        assert!(!verify_ecdsa_p256(&pk, b"msg", &"bb".repeat(16)));
+    }
+
+    #[test]
+    fn es256_cross_algorithm_dispatch_fails() {
+        use crate::identity::signing::{EcdsaP256SigningProvider, SigningProvider};
+        let provider = EcdsaP256SigningProvider::generate();
+        let msg = b"cross algo";
+        let sig = provider.sign(msg).unwrap();
+        let pk_hex = hex::encode(provider.public_key());
+        let sig_hex = hex::encode(&sig);
+        assert!(!verify_signature(
+            SigningAlgorithm::Ed25519,
+            &pk_hex,
+            msg,
+            &sig_hex
+        ));
+    }
+
+    #[test]
+    fn infer_algorithm_p256_uncompressed() {
+        let pk_hex = "04".to_string() + &"ab".repeat(64); // 130 hex = 65 bytes
+        assert_eq!(
+            infer_algorithm_from_key(&pk_hex),
+            Some(SigningAlgorithm::EcdsaP256)
+        );
+    }
+
+    #[test]
+    fn infer_algorithm_p256_compressed() {
+        let pk_hex = "02".to_string() + &"ab".repeat(32); // 66 hex = 33 bytes
+        assert_eq!(
+            infer_algorithm_from_key(&pk_hex),
+            Some(SigningAlgorithm::EcdsaP256)
+        );
+    }
+
+    #[test]
+    fn validate_pk_ecdsa_p256_correct() {
+        let pk = "04".to_string() + &"aa".repeat(64);
+        assert!(validate_public_key(SigningAlgorithm::EcdsaP256, &pk).is_ok());
+    }
+
+    #[test]
+    fn validate_pk_ecdsa_p256_wrong_length() {
+        let err = validate_public_key(SigningAlgorithm::EcdsaP256, &"aa".repeat(32)).unwrap_err();
+        assert!(err.contains("P-256"));
     }
 
     #[test]

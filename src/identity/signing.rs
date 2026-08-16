@@ -30,6 +30,7 @@ pub enum SigningAlgorithm {
     Ed25519,
     MlDsa65,
     Rsa,
+    EcdsaP256,
 }
 
 impl SigningAlgorithm {
@@ -39,7 +40,7 @@ impl SigningAlgorithm {
     }
 
     pub fn is_classical(&self) -> bool {
-        matches!(self, Self::Ed25519 | Self::Rsa)
+        matches!(self, Self::Ed25519 | Self::Rsa | Self::EcdsaP256)
     }
 }
 
@@ -49,6 +50,7 @@ impl std::fmt::Display for SigningAlgorithm {
             Self::Ed25519 => write!(f, "Ed25519"),
             Self::MlDsa65 => write!(f, "ML-DSA-65"),
             Self::Rsa => write!(f, "RSA"),
+            Self::EcdsaP256 => write!(f, "ES256"),
         }
     }
 }
@@ -275,6 +277,71 @@ impl SigningProvider for RsaSigningProvider {
     }
 }
 
+// ── ECDSA P-256 (ES256) Signing Provider ───────────────────────────────────
+
+/// ECDSA P-256 signing provider for EUDI interoperability (ES256).
+///
+/// Key and signature sizes:
+/// - Public key (SEC1 uncompressed): 65 bytes (0x04 || x || y)
+/// - Public key (SEC1 compressed): 33 bytes
+/// - Signature (DER): variable (~70-72 bytes)
+/// - Signature (raw r||s): 64 bytes
+///
+/// Uses SHA-256 as the hash function (NIST FIPS 186-5).
+pub struct EcdsaP256SigningProvider {
+    signing_key: p256::ecdsa::SigningKey,
+}
+
+impl EcdsaP256SigningProvider {
+    /// Generate a new random P-256 keypair.
+    pub fn generate() -> Self {
+        use pqc_crypto_module::legacy::rng::OsRng;
+        Self {
+            signing_key: p256::ecdsa::SigningKey::random(&mut OsRng),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_bytes(secret_key_bytes: &[u8]) -> Result<Self, SigningError> {
+        let sk = p256::ecdsa::SigningKey::from_bytes(secret_key_bytes.into())
+            .map_err(|e| SigningError::KeyNotAvailable(format!("invalid P-256 secret key: {e}")))?;
+        Ok(Self { signing_key: sk })
+    }
+}
+
+impl SigningProvider for EcdsaP256SigningProvider {
+    fn algorithm(&self) -> SigningAlgorithm {
+        SigningAlgorithm::EcdsaP256
+    }
+
+    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, SigningError> {
+        use p256::ecdsa::{signature::Signer, Signature};
+        let sig: Signature = self.signing_key.sign(data);
+        Ok(sig.to_bytes().to_vec())
+    }
+
+    fn public_key(&self) -> Vec<u8> {
+        let vk = self.signing_key.verifying_key();
+        vk.to_sec1_bytes().to_vec()
+    }
+
+    fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, SigningError> {
+        use p256::ecdsa::{signature::Verifier, Signature};
+        if sig.len() != 64 {
+            return Err(SigningError::VerifyFailed(
+                "ES256 signature must be 64 bytes".into(),
+            ));
+        }
+        let signature = Signature::from_bytes(sig.into())
+            .map_err(|e| SigningError::VerifyFailed(format!("invalid P-256 signature: {e}")))?;
+        Ok(self
+            .signing_key
+            .verifying_key()
+            .verify(data, &signature)
+            .is_ok())
+    }
+}
+
 // ── FIPS 140-3 Power-Up Self-Tests (Known Answer Tests) ─────────────────────
 
 /// Run cryptographic self-tests for all supported algorithms.
@@ -344,6 +411,25 @@ pub fn run_crypto_self_tests() -> Result<(), SigningError> {
         if provider.verify(test_data, &bad_sig).unwrap_or(true) {
             return Err(SigningError::VerifyFailed(
                 "RSA KAT: corrupted signature was accepted".into(),
+            ));
+        }
+    }
+
+    // ECDSA P-256 (ES256) KAT
+    {
+        let provider = EcdsaP256SigningProvider::generate();
+        let test_data = b"FIPS-140-3-KAT-ES256";
+        let sig = provider.sign(test_data)?;
+        if !provider.verify(test_data, &sig)? {
+            return Err(SigningError::SignFailed(
+                "ES256 KAT: sign-then-verify failed".into(),
+            ));
+        }
+        let mut bad_sig = sig.clone();
+        bad_sig[0] ^= 0xff;
+        if provider.verify(test_data, &bad_sig).unwrap_or(true) {
+            return Err(SigningError::VerifyFailed(
+                "ES256 KAT: corrupted signature was accepted".into(),
             ));
         }
     }
@@ -552,6 +638,107 @@ mod tests {
         assert!(pqc_result.is_err() || matches!(pqc_result, Ok(false)));
         // ML-DSA sig on Ed25519 provider: wrong size (must be exactly 64 bytes)
         assert!(ed.verify(b"data", &pqc_sig).is_err());
+    }
+
+    // --- ECDSA P-256 (ES256) tests ---
+
+    #[test]
+    fn es256_sign_and_verify_roundtrip() {
+        let provider = EcdsaP256SigningProvider::generate();
+        let data = b"eudi interop test";
+        let sig = provider.sign(data).unwrap();
+        assert!(provider.verify(data, &sig).unwrap());
+    }
+
+    #[test]
+    fn es256_verify_wrong_data_fails() {
+        let provider = EcdsaP256SigningProvider::generate();
+        let sig = provider.sign(b"correct").unwrap();
+        assert!(!provider.verify(b"wrong", &sig).unwrap());
+    }
+
+    #[test]
+    fn es256_algorithm_identifier() {
+        let provider = EcdsaP256SigningProvider::generate();
+        assert_eq!(provider.algorithm(), SigningAlgorithm::EcdsaP256);
+    }
+
+    #[test]
+    fn es256_signature_is_64_bytes() {
+        let provider = EcdsaP256SigningProvider::generate();
+        let sig = provider.sign(b"test").unwrap();
+        assert_eq!(sig.len(), 64);
+    }
+
+    #[test]
+    fn es256_public_key_is_65_bytes_uncompressed() {
+        let provider = EcdsaP256SigningProvider::generate();
+        let pk = provider.public_key();
+        assert_eq!(pk.len(), 65);
+        assert_eq!(pk[0], 0x04, "SEC1 uncompressed prefix");
+    }
+
+    #[test]
+    fn es256_trait_object_usage() {
+        let provider: Box<dyn SigningProvider> = Box::new(EcdsaP256SigningProvider::generate());
+        let sig = provider.sign(b"es256 data").unwrap();
+        assert!(provider.verify(b"es256 data", &sig).unwrap());
+    }
+
+    #[test]
+    fn es256_from_bytes_roundtrip() {
+        let provider = EcdsaP256SigningProvider::generate();
+        let sk_bytes = provider.signing_key.to_bytes();
+        let restored = EcdsaP256SigningProvider::from_bytes(&sk_bytes).unwrap();
+        let sig = restored.sign(b"roundtrip").unwrap();
+        assert!(restored.verify(b"roundtrip", &sig).unwrap());
+        assert_eq!(provider.public_key(), restored.public_key());
+    }
+
+    #[test]
+    fn es256_verify_rejects_wrong_length_sig() {
+        let provider = EcdsaP256SigningProvider::generate();
+        let bad_sig = vec![0u8; 32];
+        assert!(provider.verify(b"data", &bad_sig).is_err());
+    }
+
+    #[test]
+    fn es256_tampered_signature_rejected() {
+        let provider = EcdsaP256SigningProvider::generate();
+        let mut sig = provider.sign(b"important data").unwrap();
+        sig[0] ^= 0xff;
+        assert!(!provider.verify(b"important data", &sig).unwrap_or(true));
+    }
+
+    #[test]
+    fn es256_wrong_key_rejects() {
+        let signer = EcdsaP256SigningProvider::generate();
+        let verifier = EcdsaP256SigningProvider::generate();
+        let sig = signer.sign(b"data").unwrap();
+        assert!(!verifier.verify(b"data", &sig).unwrap());
+    }
+
+    #[test]
+    fn es256_ed25519_cross_incompatible() {
+        let es = EcdsaP256SigningProvider::generate();
+        let ed = SoftwareSigningProvider::generate();
+        let es_sig = es.sign(b"data").unwrap();
+        let ed_sig = ed.sign(b"data").unwrap();
+        // Both are 64 bytes but different curves — must not verify
+        assert!(!ed.verify(b"data", &es_sig).unwrap());
+        let es_result = es.verify(b"data", &ed_sig);
+        assert!(es_result.is_err() || matches!(es_result, Ok(false)));
+    }
+
+    #[test]
+    fn es256_is_classical_not_pqc() {
+        assert!(SigningAlgorithm::EcdsaP256.is_classical());
+        assert!(!SigningAlgorithm::EcdsaP256.is_post_quantum());
+    }
+
+    #[test]
+    fn es256_display() {
+        assert_eq!(format!("{}", SigningAlgorithm::EcdsaP256), "ES256");
     }
 
     // --- Property-based tests ---

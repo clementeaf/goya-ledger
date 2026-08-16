@@ -60,9 +60,10 @@ pub fn to_pades_bes(envelope: &SignedEnvelope, options: &PadesOptions) -> PadesS
     let signing_time = crate::signature::xades::timestamp_to_iso8601(envelope.signed_at);
 
     let sub_filter = match envelope.signature_algorithm {
-        SigningAlgorithm::Ed25519 | SigningAlgorithm::MlDsa65 | SigningAlgorithm::Rsa => {
-            "adbe.pkcs7.detached"
-        }
+        SigningAlgorithm::Ed25519
+        | SigningAlgorithm::MlDsa65
+        | SigningAlgorithm::Rsa
+        | SigningAlgorithm::EcdsaP256 => "adbe.pkcs7.detached",
     };
 
     PadesSignature {

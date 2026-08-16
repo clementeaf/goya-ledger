@@ -322,12 +322,14 @@ fn build_signed_info(
 const ED25519_URI: &str = "http://www.w3.org/2021/04/xmldsig-more#eddsa-ed25519";
 const MLDSA65_URI: &str = "http://www.w3.org/2024/xmldsig-pqc#ml-dsa-65";
 const RSA_SHA256_URI: &str = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
+const ECDSA_P256_URI: &str = "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256";
 
 fn algorithm_uri(algo: SigningAlgorithm) -> &'static str {
     match algo {
         SigningAlgorithm::Ed25519 => ED25519_URI,
         SigningAlgorithm::MlDsa65 => MLDSA65_URI,
         SigningAlgorithm::Rsa => RSA_SHA256_URI,
+        SigningAlgorithm::EcdsaP256 => ECDSA_P256_URI,
     }
 }
 
@@ -338,6 +340,8 @@ fn uri_to_algorithm(uri: &str) -> Option<SigningAlgorithm> {
         Some(SigningAlgorithm::MlDsa65)
     } else if uri == RSA_SHA256_URI {
         Some(SigningAlgorithm::Rsa)
+    } else if uri == ECDSA_P256_URI {
+        Some(SigningAlgorithm::EcdsaP256)
     } else {
         None
     }

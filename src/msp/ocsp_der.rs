@@ -43,6 +43,8 @@ const OID_MLDSA65: &[u8] = &[
 const OID_RSA_SHA256: &[u8] = &[
     0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x0B,
 ];
+/// ecdsa-with-SHA256 1.2.840.10045.4.3.2
+const OID_ECDSA_P256: &[u8] = &[0x06, 0x08, 0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03, 0x02];
 
 // ── DER helpers ───────────────────────────────────────────────────────────
 
@@ -111,6 +113,7 @@ fn signing_oid(alg: SigningAlgorithm) -> &'static [u8] {
         SigningAlgorithm::Ed25519 => OID_ED25519,
         SigningAlgorithm::MlDsa65 => OID_MLDSA65,
         SigningAlgorithm::Rsa => OID_RSA_SHA256,
+        SigningAlgorithm::EcdsaP256 => OID_ECDSA_P256,
     }
 }
 

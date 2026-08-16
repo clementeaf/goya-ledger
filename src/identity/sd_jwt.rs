@@ -100,6 +100,7 @@ fn alg_to_jwt(alg: SigningAlgorithm) -> &'static str {
         SigningAlgorithm::Ed25519 => "EdDSA",
         SigningAlgorithm::MlDsa65 => "ML-DSA-65",
         SigningAlgorithm::Rsa => "RS256",
+        SigningAlgorithm::EcdsaP256 => "ES256",
     }
 }
 
@@ -108,6 +109,7 @@ fn jwt_to_alg(s: &str) -> Option<SigningAlgorithm> {
         "EdDSA" => Some(SigningAlgorithm::Ed25519),
         "ML-DSA-65" => Some(SigningAlgorithm::MlDsa65),
         "RS256" => Some(SigningAlgorithm::Rsa),
+        "ES256" => Some(SigningAlgorithm::EcdsaP256),
         _ => None,
     }
 }
@@ -196,6 +198,24 @@ pub fn jwk_thumbprint(pubkey_hex: &str, alg: SigningAlgorithm) -> String {
             "kty": "RSA",
             "n": base64url_encode(&hex::decode(pubkey_hex).unwrap_or_default()),
         }),
+        SigningAlgorithm::EcdsaP256 => {
+            let pk_bytes = hex::decode(pubkey_hex).unwrap_or_default();
+            // SEC1 uncompressed: 0x04 || x (32 bytes) || y (32 bytes)
+            if pk_bytes.len() == 65 && pk_bytes[0] == 0x04 {
+                serde_json::json!({
+                    "crv": "P-256",
+                    "kty": "EC",
+                    "x": base64url_encode(&pk_bytes[1..33]),
+                    "y": base64url_encode(&pk_bytes[33..65]),
+                })
+            } else {
+                serde_json::json!({
+                    "crv": "P-256",
+                    "kty": "EC",
+                    "x": base64url_encode(&pk_bytes),
+                })
+            }
+        }
     };
     let canonical = serde_json::to_vec(&jwk).unwrap_or_default();
     base64url_encode(&hash_with(HashAlgorithm::Sha256, &canonical))
@@ -817,5 +837,125 @@ mod tests {
         let payload: serde_json::Value = serde_json::from_slice(&payload_bytes).unwrap();
         assert!(payload.get("cnf").is_some());
         assert!(payload["cnf"]["jkt"].as_str().is_some());
+    }
+
+    // ── ES256 (EUDI interop) SD-JWT VC tests ───────────────────
+
+    #[test]
+    fn es256_sd_jwt_vc_issue_and_verify() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let issuer = EcdsaP256SigningProvider::generate();
+        let sd_jwt = issue_sd_jwt_vc(&test_claims(), &issuer).unwrap();
+        let pk_hex = hex::encode(issuer.public_key());
+
+        let jwt_parts: Vec<&str> = sd_jwt.jwt.split('.').collect();
+        let header_bytes = base64url_decode(jwt_parts[0]).unwrap();
+        let header: serde_json::Value = serde_json::from_slice(&header_bytes).unwrap();
+        assert_eq!(header["alg"], "ES256");
+        assert_eq!(header["typ"], "vc+sd-jwt");
+
+        let verified = verify_sd_jwt_vc(&sd_jwt.compact, &pk_hex).unwrap();
+        assert_eq!(verified.iss, "did:goya:issuer");
+    }
+
+    #[test]
+    fn es256_sd_jwt_selective_disclosure() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let issuer = EcdsaP256SigningProvider::generate();
+        let sd_jwt = issue_sd_jwt_vc(&test_claims(), &issuer).unwrap();
+        let pk_hex = hex::encode(issuer.public_key());
+
+        let presentation = present_sd_jwt(&sd_jwt, &[0]);
+        let verified = verify_sd_jwt_vc(&presentation, &pk_hex).unwrap();
+        assert_eq!(verified.disclosed_claims.len(), 1);
+        assert_eq!(verified.disclosed_claims[0].0, "given_name");
+    }
+
+    #[test]
+    fn es256_sd_jwt_with_holder_key_binding() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let issuer = EcdsaP256SigningProvider::generate();
+        let holder = EcdsaP256SigningProvider::generate();
+        let holder_pk_hex = hex::encode(holder.public_key());
+
+        let sd_jwt = issue_sd_jwt_vc_with_kb(
+            &test_claims(),
+            &issuer,
+            &holder_pk_hex,
+            SigningAlgorithm::EcdsaP256,
+        )
+        .unwrap();
+
+        let presentation = present_sd_jwt_with_kb(
+            &sd_jwt,
+            &[0, 1],
+            &holder,
+            "https://verifier.example.com",
+            "nonce-123",
+            1_700_000_000,
+        )
+        .unwrap();
+
+        let issuer_pk_hex = hex::encode(issuer.public_key());
+        let verified =
+            verify_sd_jwt_vc_with_holder(&presentation, &issuer_pk_hex, &holder_pk_hex).unwrap();
+        assert!(verified.kb_verified);
+        assert_eq!(verified.disclosed_claims.len(), 2);
+    }
+
+    #[test]
+    fn es256_sd_jwt_wrong_key_rejects() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let issuer = EcdsaP256SigningProvider::generate();
+        let wrong = EcdsaP256SigningProvider::generate();
+        let sd_jwt = issue_sd_jwt_vc(&test_claims(), &issuer).unwrap();
+        let wrong_pk = hex::encode(wrong.public_key());
+        let result = verify_sd_jwt_vc(&sd_jwt.compact, &wrong_pk);
+        assert!(result.is_err(), "wrong key must reject");
+    }
+
+    #[test]
+    fn es256_sd_jwt_tampered_signature_rejects() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let issuer = EcdsaP256SigningProvider::generate();
+        let sd_jwt = issue_sd_jwt_vc(&test_claims(), &issuer).unwrap();
+        let pk_hex = hex::encode(issuer.public_key());
+
+        // Tamper the signature (last component of JWT before ~)
+        let mut parts: Vec<&str> = sd_jwt.compact.split('~').collect();
+        let jwt = parts[0];
+        let jwt_parts: Vec<&str> = jwt.split('.').collect();
+        let mut sig_bytes = base64url_decode(jwt_parts[2]).unwrap();
+        sig_bytes[0] ^= 0xff;
+        let tampered_sig = base64url_encode(&sig_bytes);
+        let tampered_jwt = format!("{}.{}.{}", jwt_parts[0], jwt_parts[1], tampered_sig);
+        parts[0] = &tampered_jwt;
+        let tampered_compact = parts.join("~");
+
+        let result = verify_sd_jwt_vc(&tampered_compact, &pk_hex);
+        assert!(result.is_err(), "tampered signature must reject");
+    }
+
+    #[test]
+    fn es256_ed25519_cross_algorithm_sd_jwt_rejects() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let issuer = EcdsaP256SigningProvider::generate();
+        let ed_key = SoftwareSigningProvider::generate();
+        let sd_jwt = issue_sd_jwt_vc(&test_claims(), &issuer).unwrap();
+        let ed_pk = hex::encode(ed_key.public_key());
+        let result = verify_sd_jwt_vc(&sd_jwt.compact, &ed_pk);
+        assert!(result.is_err(), "Ed25519 key must not verify ES256 JWT");
+    }
+
+    #[test]
+    fn es256_jwk_thumbprint_p256_format() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        let provider = EcdsaP256SigningProvider::generate();
+        let pk_hex = hex::encode(provider.public_key());
+        let jkt = jwk_thumbprint(&pk_hex, SigningAlgorithm::EcdsaP256);
+        assert!(!jkt.is_empty());
+        // JWK thumbprint should be deterministic
+        let jkt2 = jwk_thumbprint(&pk_hex, SigningAlgorithm::EcdsaP256);
+        assert_eq!(jkt, jkt2);
     }
 }

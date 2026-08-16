@@ -48,6 +48,18 @@ fn extract_pubkey_from_jwk(jwk: &serde_json::Value, alg: &str) -> Option<String>
             let bytes = base64url_decode(n).ok()?;
             Some(hex::encode(bytes))
         }
+        "ES256" => {
+            let x = jwk.get("x")?.as_str()?;
+            let y = jwk.get("y")?.as_str()?;
+            let x_bytes = base64url_decode(x).ok()?;
+            let y_bytes = base64url_decode(y).ok()?;
+            // SEC1 uncompressed: 0x04 || x || y
+            let mut pk = Vec::with_capacity(65);
+            pk.push(0x04);
+            pk.extend_from_slice(&x_bytes);
+            pk.extend_from_slice(&y_bytes);
+            Some(hex::encode(pk))
+        }
         _ => None,
     }
 }
@@ -129,6 +141,7 @@ fn verify_dpop_proof(dpop_jwt: &str, htm: &str, htu: &str) -> Result<DpopClaims,
         let algorithm = match alg_str {
             "EdDSA" => crate::identity::signing::SigningAlgorithm::Ed25519,
             "RS256" => crate::identity::signing::SigningAlgorithm::Rsa,
+            "ES256" => crate::identity::signing::SigningAlgorithm::EcdsaP256,
             _ => return Err(format!("unsupported DPoP alg for verification: {alg_str}")),
         };
         if !crate::signature::verify_signature(
@@ -232,6 +245,7 @@ fn verify_wia(
             let algorithm = match alg_str {
                 "EdDSA" => crate::identity::signing::SigningAlgorithm::Ed25519,
                 "RS256" => crate::identity::signing::SigningAlgorithm::Rsa,
+                "ES256" => crate::identity::signing::SigningAlgorithm::EcdsaP256,
                 other => return Err(format!("unsupported WIA alg: {other}")),
             };
             let sig_bytes = base64url_decode(parts[2])?;
