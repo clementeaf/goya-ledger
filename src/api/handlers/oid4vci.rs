@@ -265,6 +265,72 @@ fn verify_wia(
     Ok(payload)
 }
 
+// ── Nonce Store (OID4VCI 1.0 Final — dedicated nonce endpoint) ────────────
+
+/// Server-side nonce store with TTL and single-use enforcement.
+pub struct NonceStore {
+    nonces: std::sync::Mutex<std::collections::HashMap<String, NonceEntry>>,
+}
+
+struct NonceEntry {
+    created_at: u64,
+    ttl_secs: u64,
+    used: bool,
+}
+
+impl NonceStore {
+    pub fn new() -> Self {
+        Self {
+            nonces: std::sync::Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+
+    pub fn generate(&self, ttl_secs: u64) -> String {
+        use pqc_crypto_module::legacy::rng::OsRng;
+        use rand_core::RngCore;
+        let mut buf = [0u8; 32];
+        OsRng.fill_bytes(&mut buf);
+        let nonce = hex::encode(buf);
+
+        let mut store = self.nonces.lock().unwrap();
+        // Evict expired nonces on each generation to bound memory.
+        let now = now_secs();
+        store.retain(|_, e| now < e.created_at + e.ttl_secs);
+        store.insert(
+            nonce.clone(),
+            NonceEntry {
+                created_at: now,
+                ttl_secs,
+                used: false,
+            },
+        );
+        nonce
+    }
+
+    /// Consume a nonce. Returns Ok(()) if valid and unused.
+    /// Fails on: unknown, expired, already used.
+    pub fn consume(&self, nonce: &str) -> Result<(), &'static str> {
+        let mut store = self.nonces.lock().unwrap();
+        let entry = store.get_mut(nonce).ok_or("unknown nonce")?;
+        let now = now_secs();
+        if now >= entry.created_at + entry.ttl_secs {
+            store.remove(nonce);
+            return Err("nonce expired");
+        }
+        if entry.used {
+            return Err("nonce already used");
+        }
+        entry.used = true;
+        Ok(())
+    }
+}
+
+impl Default for NonceStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ── Key proof (c_nonce binding) ───────────────────────────────────────────
 
 /// Validate the proof JWT in a credential request (OpenID4VCI §7.2.1).
@@ -314,9 +380,26 @@ fn verify_proof_jwt(
     Ok(())
 }
 
+// ── Nonce Endpoint (OID4VCI 1.0 Final) ───────────────────────────────────
+
+const NONCE_TTL_SECS: u64 = 300;
+
+/// Dedicated nonce endpoint — OID4VCI 1.0 Final moved c_nonce issuance
+/// here (no longer embedded in token/credential responses).
+#[post("/nonce")]
+pub async fn nonce_endpoint(nonce_store: web::Data<NonceStore>) -> ApiResult<HttpResponse> {
+    let c_nonce = nonce_store.generate(NONCE_TTL_SECS);
+    Ok(HttpResponse::Ok()
+        .insert_header(("Cache-Control", "no-store"))
+        .json(serde_json::json!({
+            "c_nonce": c_nonce,
+            "c_nonce_expires_in": NONCE_TTL_SECS,
+        })))
+}
+
 // ── Issuer Metadata ───────────────────────────────────────────────────────
 
-/// OpenID4VCI Issuer Metadata (RFC draft-ietf-oauth-sd-jwt-vc §7).
+/// OpenID4VCI Issuer Metadata (OID4VCI 1.0 Final).
 #[get("/.well-known/openid-credential-issuer")]
 pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
     let host = req
@@ -329,6 +412,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
     let metadata = serde_json::json!({
         "credential_issuer": base,
         "credential_endpoint": format!("{base}/credential"),
+        "nonce_endpoint": format!("{base}/nonce"),
         "token_endpoint": format!("{base}/token"),
         "credential_offer_endpoint": format!("{base}/credential_offer"),
         "grant_types_supported": [
@@ -340,7 +424,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                 "format": "vc+sd-jwt",
                 "vct": "IdentityCredential",
                 "cryptographic_binding_methods_supported": ["jwk"],
-                "credential_signing_alg_values_supported": ["EdDSA", "ML-DSA-65", "RS256"],
+                "credential_signing_alg_values_supported": ["EdDSA", "ES256", "ML-DSA-65", "RS256"],
                 "claims": {
                     "given_name": { "mandatory": false },
                     "family_name": { "mandatory": false },
@@ -355,7 +439,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                 "format": "mso_mdoc",
                 "doctype": "eu.europa.ec.eudi.pid.1",
                 "cryptographic_binding_methods_supported": ["cose_key"],
-                "credential_signing_alg_values_supported": ["EdDSA", "ML-DSA-65"],
+                "credential_signing_alg_values_supported": ["EdDSA", "ES256", "ML-DSA-65"],
             }
         },
         "display": [{
@@ -408,8 +492,6 @@ struct TokenResponse {
     access_token: String,
     token_type: String,
     expires_in: u64,
-    c_nonce: String,
-    c_nonce_expires_in: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     dpop_jkt: Option<String>,
 }
@@ -511,7 +593,6 @@ pub async fn token_endpoint(
         "goya_at_{}",
         hex::encode(hash_with(HashAlgorithm::Sha256, code.as_bytes()))
     );
-    let c_nonce = hex::encode(hash_with(HashAlgorithm::Sha256, access_token.as_bytes()));
 
     let token_type = if dpop_jkt.is_some() { "DPoP" } else { "Bearer" };
 
@@ -519,8 +600,6 @@ pub async fn token_endpoint(
         access_token,
         token_type: token_type.to_string(),
         expires_in: 3600,
-        c_nonce,
-        c_nonce_expires_in: 300,
         dpop_jkt,
     }))
 }
@@ -548,12 +627,13 @@ pub struct ProofObject {
 }
 
 /// Credential endpoint — issue a credential to the wallet.
-/// When proof.jwt is present, validates c_nonce binding (OpenID4VCI §7.2.1).
+/// Validates c_nonce from the dedicated nonce endpoint (OID4VCI 1.0 Final).
 #[post("/credential")]
 pub async fn credential_endpoint(
     state: web::Data<AppState>,
     body: web::Json<CredentialRequest>,
     req: HttpRequest,
+    nonce_store: web::Data<NonceStore>,
 ) -> ApiResult<HttpResponse> {
     // Accept both "Bearer" and "DPoP" token types
     let auth = req
@@ -578,20 +658,39 @@ pub async fn credential_endpoint(
         )));
     }
 
-    // Validate proof JWT with c_nonce binding if present
+    // Validate proof JWT with c_nonce binding (nonce from dedicated endpoint)
     if let Some(proof) = &body.proof {
         if proof.proof_type == "jwt" {
             if let Some(proof_jwt) = &proof.jwt {
-                // Derive expected c_nonce from access token (same as token endpoint)
-                let expected_nonce =
-                    hex::encode(hash_with(HashAlgorithm::Sha256, token.as_bytes()));
                 let host = req
                     .headers()
                     .get("host")
                     .and_then(|v| v.to_str().ok())
                     .unwrap_or("localhost:8080");
                 let issuer = format!("https://{host}");
-                if let Err(e) = verify_proof_jwt(proof_jwt, &expected_nonce, &issuer) {
+
+                // Extract nonce from the proof JWT payload
+                let proof_parts: Vec<&str> = proof_jwt.split('.').collect();
+                let proof_nonce = if proof_parts.len() >= 2 {
+                    base64url_decode(proof_parts[1])
+                        .ok()
+                        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+                        .and_then(|p| p.get("nonce").and_then(|v| v.as_str()).map(String::from))
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
+
+                // Consume the nonce (single-use + expiry check)
+                if let Err(e) = nonce_store.consume(&proof_nonce) {
+                    return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                        err_dto("invalid_proof", &format!("c_nonce rejected: {e}")),
+                        400,
+                    )));
+                }
+
+                // Validate proof JWT structure (typ, aud, iat)
+                if let Err(e) = verify_proof_jwt(proof_jwt, &proof_nonce, &issuer) {
                     return Ok(HttpResponse::BadRequest()
                         .json(ApiResponse::<()>::error(err_dto("invalid_proof", &e), 400)));
                 }
@@ -790,15 +889,24 @@ mod tests {
         web::Data::new(state)
     }
 
+    fn make_nonce_store() -> web::Data<NonceStore> {
+        web::Data::new(NonceStore::new())
+    }
+
     macro_rules! oid4vci_app {
         ($state:expr) => {
+            oid4vci_app!($state, make_nonce_store())
+        };
+        ($state:expr, $nonce:expr) => {
             test::init_service(
                 App::new()
                     .app_data($state)
+                    .app_data($nonce)
                     .service(issuer_metadata)
                     .service(token_endpoint)
                     .service(credential_endpoint)
-                    .service(credential_offer_endpoint),
+                    .service(credential_offer_endpoint)
+                    .service(nonce_endpoint),
             )
             .await
         };
@@ -895,9 +1003,11 @@ mod tests {
             .as_str()
             .unwrap()
             .starts_with("goya_at_"));
-        assert!(body["c_nonce"].as_str().is_some());
+        assert!(
+            body.get("c_nonce").is_none(),
+            "c_nonce must NOT be in token response (OID4VCI 1.0 Final)"
+        );
         assert_eq!(body["token_type"], "Bearer");
-        assert!(body["dpop_jkt"].is_null());
     }
 
     #[actix_web::test]
@@ -998,16 +1108,37 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn e2e_credential_with_cnonce_proof() {
+    async fn e2e_nonce_endpoint_returns_cnonce() {
         let state = make_state();
         let app = oid4vci_app!(state);
-        let token = "goya_at_test";
-        let c_nonce = hex::encode(hash_with(HashAlgorithm::Sha256, token.as_bytes()));
-        let proof_jwt = make_proof_jwt(&c_nonce, "https://localhost:8080", now_secs());
+        let req = test::TestRequest::post().uri("/nonce").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let nonce = body["c_nonce"].as_str().unwrap();
+        assert_eq!(nonce.len(), 64); // 32 bytes hex
+        assert_eq!(body["c_nonce_expires_in"].as_u64().unwrap(), 300);
+    }
+
+    #[actix_web::test]
+    async fn e2e_credential_with_nonce_endpoint_flow() {
+        let state = make_state();
+        let nonce_store = make_nonce_store();
+        let app = oid4vci_app!(state, nonce_store.clone());
+
+        // Step 1: Get nonce from dedicated endpoint
+        let req = test::TestRequest::post().uri("/nonce").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let c_nonce = body["c_nonce"].as_str().unwrap();
+
+        // Step 2: Use nonce in credential proof
+        let proof_jwt = make_proof_jwt(c_nonce, "https://localhost:8080", now_secs());
         let req = test::TestRequest::post()
             .uri("/credential")
             .insert_header(("host", "localhost:8080"))
-            .insert_header(("authorization", format!("Bearer {token}")))
+            .insert_header(("authorization", "Bearer goya_at_test_1234"))
             .set_json(serde_json::json!({
                 "format": "vc+sd-jwt",
                 "vct": "IdentityCredential",
@@ -1020,12 +1151,13 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn e2e_credential_rejects_bad_cnonce() {
+    async fn e2e_credential_rejects_unknown_nonce() {
         let state = make_state();
         let app = oid4vci_app!(state);
-        let proof_jwt = make_proof_jwt("wrong-nonce", "https://localhost:8080", now_secs());
+        let proof_jwt = make_proof_jwt("unknown-nonce-value", "https://localhost:8080", now_secs());
         let req = test::TestRequest::post()
             .uri("/credential")
+            .insert_header(("host", "localhost:8080"))
             .insert_header(("authorization", "Bearer goya_at_test"))
             .set_json(serde_json::json!({
                 "format": "vc+sd-jwt",
@@ -1034,6 +1166,92 @@ mod tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let msg = body["error"]["message"].as_str().unwrap_or("");
+        assert!(msg.contains("unknown nonce"), "got: {msg}");
+    }
+
+    #[actix_web::test]
+    async fn e2e_credential_rejects_reused_nonce() {
+        let state = make_state();
+        let nonce_store = make_nonce_store();
+        let app = oid4vci_app!(state, nonce_store.clone());
+
+        // Get a nonce
+        let req = test::TestRequest::post().uri("/nonce").to_request();
+        let resp = test::call_service(&app, req).await;
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let c_nonce = body["c_nonce"].as_str().unwrap().to_string();
+
+        // First use — succeeds
+        let proof_jwt = make_proof_jwt(&c_nonce, "https://localhost:8080", now_secs());
+        let req = test::TestRequest::post()
+            .uri("/credential")
+            .insert_header(("host", "localhost:8080"))
+            .insert_header(("authorization", "Bearer goya_at_replay_test"))
+            .set_json(serde_json::json!({
+                "format": "vc+sd-jwt",
+                "vct": "IdentityCredential",
+                "proof": { "proof_type": "jwt", "jwt": proof_jwt },
+                "claims": { "given_name": "Test" }
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+
+        // Second use — rejected (nonce already consumed)
+        let proof_jwt2 = make_proof_jwt(&c_nonce, "https://localhost:8080", now_secs());
+        let req = test::TestRequest::post()
+            .uri("/credential")
+            .insert_header(("host", "localhost:8080"))
+            .insert_header(("authorization", "Bearer goya_at_replay_test2"))
+            .set_json(serde_json::json!({
+                "format": "vc+sd-jwt",
+                "vct": "IdentityCredential",
+                "proof": { "proof_type": "jwt", "jwt": proof_jwt2 },
+                "claims": { "given_name": "Replay" }
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let msg = body["error"]["message"].as_str().unwrap_or("");
+        assert!(msg.contains("already used"), "got: {msg}");
+    }
+
+    #[actix_web::test]
+    async fn nonce_store_expired_nonce_rejected() {
+        let store = NonceStore::new();
+        let nonce = store.generate(0); // 0 TTL = instantly expired
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        assert_eq!(store.consume(&nonce), Err("nonce expired"));
+    }
+
+    #[actix_web::test]
+    async fn nonce_store_single_use() {
+        let store = NonceStore::new();
+        let nonce = store.generate(300);
+        assert!(store.consume(&nonce).is_ok());
+        assert_eq!(store.consume(&nonce), Err("nonce already used"));
+    }
+
+    #[actix_web::test]
+    async fn nonce_store_unknown() {
+        let store = NonceStore::new();
+        assert_eq!(store.consume("nonexistent"), Err("unknown nonce"));
+    }
+
+    #[actix_web::test]
+    async fn nonce_tampered_rejected() {
+        let store = NonceStore::new();
+        let nonce = store.generate(300);
+        // Flip a character
+        let mut tampered = nonce.clone();
+        let bytes = unsafe { tampered.as_bytes_mut() };
+        bytes[0] ^= 0x01;
+        assert_eq!(store.consume(&tampered), Err("unknown nonce"));
+        // Original still valid
+        assert!(store.consume(&nonce).is_ok());
     }
 
     #[actix_web::test]
@@ -1291,6 +1509,10 @@ mod tests {
             .as_str()
             .unwrap()
             .starts_with("goya_at_"));
+        assert!(
+            body.get("c_nonce").is_none(),
+            "c_nonce must NOT be in token response"
+        );
     }
 
     #[actix_web::test]
