@@ -55,6 +55,8 @@ pub async fn run_bft_loop(
     let config = RoundManagerConfig::default();
     let mut manager = RoundManager::new(node_id.clone(), validators, NodeVerifier, config);
     let mut pending_block: Option<Block> = None;
+    // Buffer votes that arrive before the proposal for the current round.
+    let mut early_votes: Vec<VoteMessage> = Vec::new();
 
     let action = manager.start();
     handle_action(&action, &node, &signer, &node_id, &mut manager).await;
@@ -84,18 +86,28 @@ pub async fn run_bft_loop(
             Some(event) = rx.recv() => {
                 match event {
                     BftEvent::Proposal { round, block_hash, leader_id, block } => {
-                        // Sync rounds: if the proposal is from a future round,
-                        // catch up (leader is ahead of us due to timing).
                         while manager.current_round() < round {
                             let _ = manager.on_timeout();
                         }
                         if round != manager.current_round() {
-                            continue; // stale proposal
+                            continue;
                         }
                         reset_timeout(&mut timeout, &manager);
                         pending_block = Some(block);
                         let action = manager.process_event(RoundEvent::Proposal { block_hash, leader_id });
-                        if handle_action(&action, &node, &signer, &node_id, &mut manager).await {
+                        let mut decided = handle_action(&action, &node, &signer, &node_id, &mut manager).await;
+                        // Replay votes that arrived before this proposal.
+                        if !decided {
+                            for buffered in early_votes.drain(..) {
+                                let a = manager.process_event(RoundEvent::Vote(buffered));
+                                if handle_action(&a, &node, &signer, &node_id, &mut manager).await {
+                                    decided = true;
+                                    break;
+                                }
+                            }
+                        }
+                        early_votes.clear();
+                        if decided {
                             if let Some(blk) = pending_block.take() {
                                 commit_block(blk, &manager, &store, &node).await;
                             }
@@ -105,6 +117,12 @@ pub async fn run_bft_loop(
                         }
                     }
                     BftEvent::Vote(vote) => {
+                        // Buffer votes that arrive before the proposal for this round.
+                        if vote.round == manager.current_round() && pending_block.is_none() {
+                            log::debug!("BFT: buffering early vote from {} phase={:?} round={}", vote.voter_id, vote.phase, vote.round);
+                            early_votes.push(vote);
+                            continue;
+                        }
                         let action = manager.process_event(RoundEvent::Vote(vote));
                         if handle_action(&action, &node, &signer, &node_id, &mut manager).await {
                             if let Some(blk) = pending_block.take() {
@@ -118,6 +136,7 @@ pub async fn run_bft_loop(
                 }
             }
             _ = &mut timeout => {
+                early_votes.clear();
                 let action = manager.on_timeout();
                 handle_action(&action, &node, &signer, &node_id, &mut manager).await;
                 pending_block = None;
