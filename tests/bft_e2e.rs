@@ -7,9 +7,10 @@
 use std::collections::HashMap;
 
 use rust_bc::consensus::bft::quorum::SignatureVerifier;
-use rust_bc::consensus::bft::round::RoundEvent;
-use rust_bc::consensus::bft::round_manager::{RoundManager, RoundManagerConfig};
-use rust_bc::consensus::bft::types::{BftPhase, VoteMessage};
+use rust_bc::consensus::bft::round::RoundAction;
+use rust_bc::consensus::bft::round::{RoundEvent, RoundState};
+use rust_bc::consensus::bft::round_manager::{ManagerAction, RoundManager, RoundManagerConfig};
+use rust_bc::consensus::bft::types::{BftPhase, QuorumCertificate, VoteMessage};
 
 /// Local signature verifier for integration tests — accepts any non-empty signature.
 #[derive(Clone)]
@@ -664,4 +665,322 @@ fn e2e_alternating_partitions_stress() {
     }
 
     net.assert_safety();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Adversarial safety validation — QC validation + finalization invariant
+// ════════════════════════════════════════════════════════════════════════════
+
+struct FinalizationTracker {
+    finalized: Vec<(u64, [u8; 32])>,
+}
+
+impl FinalizationTracker {
+    fn new() -> Self {
+        Self { finalized: vec![] }
+    }
+
+    fn record(&mut self, round: u64, hash: [u8; 32]) {
+        if !self
+            .finalized
+            .iter()
+            .any(|(r, h)| *r == round && *h == hash)
+        {
+            self.finalized.push((round, hash));
+        }
+    }
+
+    fn record_from_network(&mut self, net: &BftTestNetwork) {
+        for node in net.nodes.values() {
+            if node.behavior == NodeBehavior::Silent {
+                continue;
+            }
+            if let Some(qc) = node.manager.highest_commit_qc() {
+                self.record(qc.round, qc.block_hash);
+            }
+        }
+    }
+
+    fn assert_invariant(&self) {
+        let mut by_round: HashMap<u64, [u8; 32]> = HashMap::new();
+        for &(round, hash) in &self.finalized {
+            if let Some(&existing) = by_round.get(&round) {
+                assert_eq!(
+                    existing, hash,
+                    "SAFETY VIOLATION: round {round} finalized two different blocks!\nall={:?}",
+                    self.finalized
+                );
+            } else {
+                by_round.insert(round, hash);
+            }
+        }
+    }
+}
+
+#[test]
+fn e2e_lock_viewchange_delayed_messages_no_fork() {
+    let behaviors = [NodeBehavior::Honest; 4];
+    let mut net = BftTestNetwork::new(4, &behaviors);
+    let mut tracker = FinalizationTracker::new();
+    net.start_all();
+
+    let bh_a = block_hash(0);
+    {
+        let ids: Vec<String> = net.nodes.keys().cloned().collect();
+        for id in &ids {
+            net.nodes.get_mut(id).unwrap().manager.start_round(0);
+        }
+        net.nodes
+            .get_mut("v0")
+            .unwrap()
+            .manager
+            .process_event(RoundEvent::StartAsLeader { block_hash: bh_a });
+        for id in &["v1", "v2", "v3"] {
+            net.nodes
+                .get_mut(*id)
+                .unwrap()
+                .manager
+                .process_event(RoundEvent::Proposal {
+                    block_hash: bh_a,
+                    leader_id: "v0".into(),
+                    justify_qc: None,
+                });
+        }
+        net.broadcast_votes(0, bh_a, BftPhase::Prepare);
+        net.broadcast_votes(0, bh_a, BftPhase::PreCommit);
+    }
+
+    for node in net.nodes.values() {
+        assert!(
+            node.manager.safety().locked_qc().is_some(),
+            "node {} should be locked",
+            node.id
+        );
+    }
+    for node in net.nodes.values() {
+        assert_ne!(node.manager.round_state(), Some(RoundState::Decided));
+    }
+
+    net.timeout_all();
+    let bh_b = block_hash(1);
+    let decided_r1 = net.run_round(1);
+    assert!(decided_r1 >= 3, "round 1 should decide, got {decided_r1}");
+    tracker.record_from_network(&net);
+
+    for voter in &["v0", "v1", "v2"] {
+        let vote = make_vote(BftPhase::Commit, bh_a, 0, voter);
+        for id in &["v0", "v1", "v2", "v3"] {
+            net.nodes
+                .get_mut(*id)
+                .unwrap()
+                .manager
+                .process_event(RoundEvent::Vote(vote.clone()));
+        }
+    }
+
+    tracker.record_from_network(&net);
+    tracker.assert_invariant();
+    net.assert_safety();
+
+    for node in net.nodes.values() {
+        if let Some(qc) = node.manager.highest_commit_qc() {
+            assert_eq!(qc.round, 1);
+            assert_eq!(qc.block_hash, bh_b);
+        }
+    }
+}
+
+#[test]
+fn e2e_byzantine_forged_justify_qc_rejected() {
+    let behaviors = [NodeBehavior::Honest; 4];
+    let mut net = BftTestNetwork::new(4, &behaviors);
+    net.start_all();
+
+    let forged_qc = QuorumCertificate {
+        block_hash: block_hash(999),
+        round: 999,
+        phase: BftPhase::Prepare,
+        votes: vec![
+            make_vote(BftPhase::Prepare, block_hash(999), 999, "v0"),
+            make_vote(BftPhase::Prepare, block_hash(999), 999, "intruder"),
+            make_vote(BftPhase::Prepare, block_hash(999), 999, "v2"),
+        ],
+    };
+
+    for id in &["v0", "v1", "v2", "v3"] {
+        net.nodes.get_mut(*id).unwrap().manager.start_round(0);
+    }
+
+    let action = net
+        .nodes
+        .get_mut("v1")
+        .unwrap()
+        .manager
+        .process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0),
+            leader_id: "v0".into(),
+            justify_qc: Some(forged_qc),
+        });
+    assert_eq!(
+        action,
+        ManagerAction::Round(RoundAction::None),
+        "forged QC must be rejected"
+    );
+}
+
+#[test]
+fn e2e_forged_qc_insufficient_votes_rejected() {
+    let behaviors = [NodeBehavior::Honest; 4];
+    let mut net = BftTestNetwork::new(4, &behaviors);
+    net.start_all();
+
+    let weak_qc = QuorumCertificate {
+        block_hash: block_hash(999),
+        round: 999,
+        phase: BftPhase::Prepare,
+        votes: vec![
+            make_vote(BftPhase::Prepare, block_hash(999), 999, "v0"),
+            make_vote(BftPhase::Prepare, block_hash(999), 999, "v1"),
+        ],
+    };
+
+    for id in &["v0", "v1", "v2", "v3"] {
+        net.nodes.get_mut(*id).unwrap().manager.start_round(0);
+    }
+    let action = net
+        .nodes
+        .get_mut("v2")
+        .unwrap()
+        .manager
+        .process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0),
+            leader_id: "v0".into(),
+            justify_qc: Some(weak_qc),
+        });
+    assert_eq!(
+        action,
+        ManagerAction::Round(RoundAction::None),
+        "weak QC must be rejected"
+    );
+}
+
+#[test]
+fn e2e_forged_qc_duplicate_voter_rejected() {
+    let behaviors = [NodeBehavior::Honest; 4];
+    let mut net = BftTestNetwork::new(4, &behaviors);
+    net.start_all();
+
+    let dup_qc = QuorumCertificate {
+        block_hash: block_hash(0),
+        round: 0,
+        phase: BftPhase::Prepare,
+        votes: vec![
+            make_vote(BftPhase::Prepare, block_hash(0), 0, "v0"),
+            make_vote(BftPhase::Prepare, block_hash(0), 0, "v0"),
+            make_vote(BftPhase::Prepare, block_hash(0), 0, "v2"),
+        ],
+    };
+
+    for id in &["v0", "v1", "v2", "v3"] {
+        net.nodes.get_mut(*id).unwrap().manager.start_round(0);
+    }
+    let action = net
+        .nodes
+        .get_mut("v1")
+        .unwrap()
+        .manager
+        .process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0),
+            leader_id: "v0".into(),
+            justify_qc: Some(dup_qc),
+        });
+    assert_eq!(
+        action,
+        ManagerAction::Round(RoundAction::None),
+        "dup voter QC must be rejected"
+    );
+}
+
+#[test]
+fn e2e_randomized_adversarial_safety() {
+    struct Rng(u64);
+    impl Rng {
+        fn new(seed: u64) -> Self {
+            Self(seed.wrapping_add(1))
+        }
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+        fn range(&mut self, max: u64) -> u64 {
+            self.next() % max
+        }
+        fn bool_p(&mut self, pct: u64) -> bool {
+            self.range(100) < pct
+        }
+    }
+
+    for seed in 0..50u64 {
+        let mut rng = Rng::new(seed * 12345 + 67890);
+        let mut tracker = FinalizationTracker::new();
+        let behaviors = [NodeBehavior::Honest; 4];
+        let mut net = BftTestNetwork::new(4, &behaviors);
+        net.start_all();
+
+        for round in 0..20u64 {
+            net.drop_from.clear();
+            if rng.bool_p(20) {
+                net.drop_from.push(format!("v{}", rng.range(4)));
+            }
+            if rng.bool_p(10) {
+                net.drop_from.clear();
+                let a = rng.range(4);
+                let mut b = rng.range(3);
+                if b >= a {
+                    b += 1;
+                }
+                net.drop_from.push(format!("v{a}"));
+                net.drop_from.push(format!("v{b}"));
+            }
+            if rng.bool_p(15) {
+                net.timeout_all();
+                continue;
+            }
+
+            net.run_round(round);
+            tracker.record_from_network(&net);
+
+            if rng.bool_p(10) {
+                let bh = block_hash(round);
+                for voter in &["v0", "v1"] {
+                    let vote = make_vote(BftPhase::Prepare, bh, round, voter);
+                    for id in &["v0", "v1", "v2", "v3"] {
+                        net.nodes
+                            .get_mut(*id)
+                            .unwrap()
+                            .manager
+                            .process_event(RoundEvent::Vote(vote.clone()));
+                    }
+                }
+            }
+            if round >= 3 && rng.bool_p(5) {
+                let old = round - 3;
+                for voter in &["v0", "v1", "v2"] {
+                    let vote = make_vote(BftPhase::Commit, block_hash(old), old, voter);
+                    for id in &["v0", "v1", "v2", "v3"] {
+                        net.nodes
+                            .get_mut(*id)
+                            .unwrap()
+                            .manager
+                            .process_event(RoundEvent::Vote(vote.clone()));
+                    }
+                }
+            }
+            tracker.assert_invariant();
+        }
+        net.assert_safety();
+        tracker.assert_invariant();
+    }
 }
