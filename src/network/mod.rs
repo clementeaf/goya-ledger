@@ -935,7 +935,12 @@ impl Node {
             Message::Peers(peer_list) => {
                 let mut peers = peers.lock().unwrap_or_else(|e| e.into_inner());
                 for peer in peer_list {
-                    peers.insert(peer);
+                    if !peer.is_empty()
+                        && !peer.starts_with("0.0.0.0")
+                        && my_p2p_address.as_deref() != Some(peer.as_str())
+                    {
+                        peers.insert(peer);
+                    }
                 }
                 Ok(None)
             }
@@ -958,9 +963,12 @@ impl Node {
                 }
 
                 // Si el peer envió su dirección P2P, agregarlo a nuestra lista
-                if let Some(their_p2p_addr) = p2p_address {
-                    let mut peers_guard = peers.lock().unwrap_or_else(|e| e.into_inner());
-                    peers_guard.insert(their_p2p_addr);
+                // (skip 0.0.0.0 / empty — same filter as handle_connection)
+                if let Some(ref addr) = p2p_address {
+                    if !addr.is_empty() && !addr.starts_with("0.0.0.0") {
+                        let mut peers_guard = peers.lock().unwrap_or_else(|e| e.into_inner());
+                        peers_guard.insert(addr.clone());
+                    }
                 }
 
                 let (my_count, my_hash) = if let Some(s) = &store {
@@ -2238,18 +2246,20 @@ impl Node {
     /// keeping the ledger in sync without pull-based state sync.
     /// Broadcast any serializable Message to all connected peers.
     pub async fn broadcast_message(&self, msg: &Message) {
+        let my_addr = self.p2p_address();
         let peers: Vec<String> = {
             let guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
-            guard.iter().cloned().collect()
+            guard.iter().filter(|p| **p != my_addr).cloned().collect()
         };
         let msg_json = match serde_json::to_string(msg) {
             Ok(j) => j,
             Err(_) => return,
         };
         log::info!(
-            "P2P broadcast {} bytes to {} peer(s)",
+            "P2P broadcast {} bytes to {} peer(s): {:?}",
             msg_json.len(),
-            peers.len()
+            peers.len(),
+            peers
         );
         for peer_addr in &peers {
             let addr = peer_addr.clone();
@@ -2267,9 +2277,10 @@ impl Node {
     }
 
     pub async fn broadcast_ordered_block(&self, block: &crate::storage::traits::Block) {
+        let my_addr = self.p2p_address();
         let peers: Vec<String> = {
             let guard = self.peers.lock().unwrap_or_else(|e| e.into_inner());
-            guard.iter().cloned().collect()
+            guard.iter().filter(|p| **p != my_addr).cloned().collect()
         };
         log::info!(
             "Broadcasting block {} to {} peer(s): {:?}",

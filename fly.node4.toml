@@ -18,6 +18,8 @@ primary_region = "sin"
   RATE_LIMIT_RPM = "500"
   RATE_LIMIT_RPH = "10000"
   AUTO_DISCOVERY_INTERVAL = "60"
+  P2P_EXTERNAL_ADDRESS = "goya-node-4.flycast:8081"
+  BOOTSTRAP_NODES = "goya-node.flycast:8081,goya-node-2.flycast:8081,goya-node-3.flycast:8081"
 
 [mounts]
   source = "goya_data"
