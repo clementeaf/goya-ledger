@@ -154,6 +154,9 @@ pub enum Message {
         leader_id: String,
         /// Serialized block data (the full proposed block).
         block_data: Vec<u8>,
+        /// Serialized justify_qc (leader's high_qc). Empty if none.
+        #[serde(default)]
+        justify_qc: Vec<u8>,
     },
     /// Validator vote for a BFT phase (Prepare / PreCommit / Commit).
     BftVote(crate::consensus::bft::types::VoteMessage),
@@ -1581,18 +1584,26 @@ impl Node {
                 block_hash,
                 leader_id,
                 block_data,
+                justify_qc,
             } => {
                 log::info!(
-                    "BFT: received proposal round={round} leader={leader_id} data_len={}",
-                    block_data.len()
+                    "BFT: received proposal round={round} leader={leader_id} data_len={} jqc_len={}",
+                    block_data.len(),
+                    justify_qc.len()
                 );
                 if let Some(tx) = bft_tx {
                     if let Ok(block) = serde_json::from_slice(&block_data) {
+                        let jqc = if justify_qc.is_empty() {
+                            None
+                        } else {
+                            serde_json::from_slice(&justify_qc).ok()
+                        };
                         let _ = tx.send(crate::consensus::controller::BftEvent::Proposal {
                             round,
                             block_hash,
                             leader_id,
                             block,
+                            justify_qc: jqc,
                         });
                     } else {
                         log::warn!("BFT: failed to deserialize block_data");

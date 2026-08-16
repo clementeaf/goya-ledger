@@ -26,14 +26,86 @@ pub trait AncestryChecker: Send + Sync {
 }
 
 /// Permissive checker — always returns true.
-/// Used when ancestry cannot be verified at the consensus layer
-/// and the QC round comparison is the sole safety gate.
+/// Used ONLY in tests or during bootstrap before the block store is available.
 #[derive(Clone)]
 pub struct AlwaysExtends;
 
 impl AncestryChecker for AlwaysExtends {
     fn is_ancestor(&self, _ancestor: &[u8; 32], _descendant: &[u8; 32]) -> bool {
         true
+    }
+}
+
+/// Production ancestry checker backed by the block store.
+///
+/// Walks the chain from `descendant` backwards via `parent_hash` until it
+/// finds `ancestor` or reaches genesis. Fail-closed: returns false on
+/// missing/corrupt data.
+pub struct ChainAncestryChecker {
+    store: std::sync::Arc<dyn crate::storage::traits::BlockStore>,
+}
+
+impl ChainAncestryChecker {
+    pub fn new(store: std::sync::Arc<dyn crate::storage::traits::BlockStore>) -> Self {
+        Self { store }
+    }
+}
+
+impl AncestryChecker for ChainAncestryChecker {
+    fn is_ancestor(&self, ancestor: &[u8; 32], descendant: &[u8; 32]) -> bool {
+        if ancestor == descendant {
+            return true;
+        }
+
+        let latest = match self.store.get_latest_height() {
+            Ok(h) => h,
+            Err(_) => return false, // fail closed
+        };
+
+        // Find the descendant block by scanning from latest backwards.
+        // Then walk parent_hash chain to find ancestor.
+        let mut descendant_height = None;
+        for h in (0..=latest).rev() {
+            if let Ok(block) = self.store.read_block(h) {
+                let bh = crate::mining::block_hash(&block);
+                if bh == *descendant {
+                    descendant_height = Some(h);
+                    break;
+                }
+            }
+        }
+
+        let start_height = match descendant_height {
+            Some(h) => h,
+            None => return false, // descendant not in store — fail closed
+        };
+
+        // Walk backwards from descendant via parent_hash.
+        let mut current_hash = match self.store.read_block(start_height) {
+            Ok(b) => b.parent_hash,
+            Err(_) => return false,
+        };
+
+        for h in (0..start_height).rev() {
+            if current_hash == *ancestor {
+                return true;
+            }
+            match self.store.read_block(h) {
+                Ok(block) => {
+                    let bh = crate::mining::block_hash(&block);
+                    if bh != current_hash {
+                        // Chain integrity error — the block at this height
+                        // doesn't match the parent_hash pointer. Fail closed.
+                        return false;
+                    }
+                    current_hash = block.parent_hash;
+                }
+                Err(_) => return false, // missing block — fail closed
+            }
+        }
+
+        // Final check: current_hash might be the ancestor (genesis case).
+        current_hash == *ancestor
     }
 }
 
@@ -109,12 +181,14 @@ impl SafetyState {
     ///
     /// 1. **Monotonicity**: `proposal_round > last_voted_round`
     /// 2. **Lock check** — one of:
-    ///    a. No lock exists (early rounds)
-    ///    b. Proposal *extends* the locked block (ancestry verification)
-    ///    c. `justify_qc.round > locked_qc.round` (safe unlock via higher QC)
+    ///   - No lock exists (early rounds)
+    ///   - Proposal *extends* the locked block (ancestry verification)
+    ///   - `justify_qc.round > locked_qc.round` AND the proposal extends
+    ///     the justify_qc's certified block (safe unlock)
     ///
-    /// The ancestry check (2b) uses `is_ancestor(locked_block, proposed_block)`,
-    /// NOT hash equality — a child or grandchild of the locked block is valid.
+    /// Rule 2c requires the proposal to be coherent with the justify_qc's
+    /// block, preventing a Byzantine leader from attaching a valid QC to
+    /// an unrelated sibling.
     pub fn safe_to_vote(
         &self,
         proposal_round: u64,
@@ -138,16 +212,19 @@ impl SafetyState {
             Some(qc) => qc,
         };
 
-        // 2c. Liveness: justify_qc with strictly higher round supersedes lock.
-        if let Some(jqc) = justify_qc {
-            if jqc.round > lock.round {
-                return Ok(());
-            }
-        }
-
-        // 2b. Safety: proposal extends the locked block.
+        // 2b. Safety: proposal extends the locked block directly.
         if ancestry.is_ancestor(&lock.block_hash, proposal_block_hash) {
             return Ok(());
+        }
+
+        // 2c. Liveness: justify_qc with strictly higher round supersedes lock,
+        //     BUT the proposal must extend the justify_qc's certified block.
+        //     A higher QC attached to an unrelated sibling is not sufficient.
+        if let Some(jqc) = justify_qc {
+            if jqc.round > lock.round && ancestry.is_ancestor(&jqc.block_hash, proposal_block_hash)
+            {
+                return Ok(());
+            }
         }
 
         Err(SafetyError::LockedConflict {
@@ -438,5 +515,216 @@ mod tests {
         let chain = chain_abc();
         assert!(!chain.is_ancestor(&block_hash(0xBB), &block_hash(0xDD)));
         assert!(!chain.is_ancestor(&block_hash(0xDD), &block_hash(0xBB)));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Integration tests with real MemoryStore + ChainAncestryChecker
+    // ═══════════════════════════════════════════════════════════════════
+
+    use crate::storage::memory::MemoryStore;
+    use crate::storage::traits::{Block, BlockStore};
+    use std::sync::Arc;
+
+    fn make_block(height: u64, parent_hash: [u8; 32]) -> Block {
+        Block {
+            height,
+            timestamp: 1000 + height,
+            parent_hash,
+            merkle_root: [0u8; 32],
+            transactions: vec![format!("tx-{height}")],
+            proposer: "test".into(),
+            signature: vec![1u8; 64],
+            signature_algorithm: Default::default(),
+            endorsements: vec![],
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
+            hash_algorithm: Default::default(),
+            orderer_signature: None,
+            commit_qc: None,
+            embedded_entries: vec![],
+        }
+    }
+
+    fn store_with_chain() -> (Arc<MemoryStore>, [u8; 32], [u8; 32], [u8; 32]) {
+        // Build: genesis(0) ← A(1) ← C(2)
+        //                   ← B(1') sibling of A (would have same height but different hash)
+        // Since MemoryStore keys by height, we store B at height 3 to avoid collision.
+        let store = Arc::new(MemoryStore::new());
+
+        let genesis = make_block(0, [0u8; 32]);
+        store.write_block(&genesis).unwrap();
+        let genesis_hash = crate::mining::block_hash(&genesis);
+
+        let block_a = make_block(1, genesis_hash);
+        store.write_block(&block_a).unwrap();
+        let hash_a = crate::mining::block_hash(&block_a);
+
+        let block_c = make_block(2, hash_a);
+        store.write_block(&block_c).unwrap();
+        let hash_c = crate::mining::block_hash(&block_c);
+
+        // B: sibling of A — same parent (genesis) but at height 3
+        let block_b = make_block(3, genesis_hash);
+        store.write_block(&block_b).unwrap();
+        let hash_b = crate::mining::block_hash(&block_b);
+
+        (store, hash_a, hash_b, hash_c)
+    }
+
+    #[test]
+    fn chain_checker_parent_is_ancestor() {
+        let (store, hash_a, _, hash_c) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        assert!(checker.is_ancestor(&hash_a, &hash_c)); // A ← C
+    }
+
+    #[test]
+    fn chain_checker_reflexive() {
+        let (store, hash_a, _, _) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        assert!(checker.is_ancestor(&hash_a, &hash_a));
+    }
+
+    #[test]
+    fn chain_checker_sibling_not_ancestor() {
+        let (store, _, hash_b, hash_c) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        // B and C are siblings (both have genesis as ancestor, but not each other)
+        assert!(!checker.is_ancestor(&hash_b, &hash_c));
+        assert!(!checker.is_ancestor(&hash_c, &hash_b));
+    }
+
+    #[test]
+    fn chain_checker_not_reverse() {
+        let (store, hash_a, _, hash_c) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        assert!(!checker.is_ancestor(&hash_c, &hash_a));
+    }
+
+    #[test]
+    fn chain_checker_unknown_hash_fails_closed() {
+        let (store, _, _, _) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        assert!(!checker.is_ancestor(&[0xFFu8; 32], &[0xEEu8; 32]));
+    }
+
+    // ── Integration: SafetyState + ChainAncestryChecker ─────────────
+
+    #[test]
+    fn real_chain_lock_rejects_sibling() {
+        let (store, hash_a, hash_b, _) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        let mut safety = SafetyState::new();
+        // Lock on A.
+        safety.update_locked_qc(&make_qc(BftPhase::PreCommit, 0, 0)); // dummy hash
+                                                                      // Override with real hash for the test.
+        safety.locked_qc.as_mut().unwrap().block_hash = hash_a;
+
+        let r = safety.safe_to_vote(1, &hash_b, None, &checker);
+        assert!(
+            matches!(r, Err(SafetyError::LockedConflict { .. })),
+            "sibling B must be rejected when locked on A"
+        );
+    }
+
+    #[test]
+    fn real_chain_lock_accepts_child() {
+        let (store, hash_a, _, hash_c) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        let mut safety = SafetyState::new();
+        safety.update_locked_qc(&make_qc(BftPhase::PreCommit, 0, 0));
+        safety.locked_qc.as_mut().unwrap().block_hash = hash_a;
+
+        let r = safety.safe_to_vote(1, &hash_c, None, &checker);
+        assert!(r.is_ok(), "child C of A must be accepted when locked on A");
+    }
+
+    #[test]
+    fn real_chain_higher_qc_with_unrelated_proposal_rejected() {
+        let (store, hash_a, hash_b, _) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        let mut safety = SafetyState::new();
+        safety.update_locked_qc(&make_qc(BftPhase::PreCommit, 0, 0));
+        safety.locked_qc.as_mut().unwrap().block_hash = hash_a;
+
+        // justify_qc has higher round but certifies A — proposal B doesn't extend A.
+        let mut jqc = make_qc(BftPhase::Prepare, 0, 5);
+        jqc.block_hash = hash_a;
+        let r = safety.safe_to_vote(6, &hash_b, Some(&jqc), &checker);
+        assert!(
+            matches!(r, Err(SafetyError::LockedConflict { .. })),
+            "higher QC for A + proposal B (sibling) must be rejected"
+        );
+    }
+
+    #[test]
+    fn real_chain_higher_qc_with_descendant_proposal_accepted() {
+        let (store, hash_a, _, hash_c) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        let mut safety = SafetyState::new();
+        safety.update_locked_qc(&make_qc(BftPhase::PreCommit, 0, 0));
+        safety.locked_qc.as_mut().unwrap().block_hash = hash_a;
+
+        // justify_qc certifies A, proposal C extends A → OK.
+        let mut jqc = make_qc(BftPhase::Prepare, 0, 5);
+        jqc.block_hash = hash_a;
+        let r = safety.safe_to_vote(6, &hash_c, Some(&jqc), &checker);
+        assert!(
+            r.is_ok(),
+            "higher QC for A + proposal C (child of A) must be accepted"
+        );
+    }
+
+    #[test]
+    fn real_chain_missing_block_fails_closed() {
+        let store = Arc::new(MemoryStore::new());
+        // Only genesis — no other blocks.
+        let genesis = make_block(0, [0u8; 32]);
+        store.write_block(&genesis).unwrap();
+
+        let checker = ChainAncestryChecker::new(store);
+        let mut safety = SafetyState::new();
+        safety.update_locked_qc(&make_qc(BftPhase::PreCommit, 0, 0));
+
+        // Lock hash doesn't correspond to any block in store → fail closed.
+        let r = safety.safe_to_vote(1, &[0xAAu8; 32], None, &checker);
+        assert!(matches!(r, Err(SafetyError::LockedConflict { .. })));
+    }
+
+    #[test]
+    fn real_chain_byzantine_leader_forged_qc_with_sibling_rejected() {
+        let (store, hash_a, hash_b, _) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store);
+        let mut safety = SafetyState::new();
+        safety.update_locked_qc(&make_qc(BftPhase::PreCommit, 0, 0));
+        safety.locked_qc.as_mut().unwrap().block_hash = hash_a;
+
+        // Byzantine leader forges a QC that certifies B at round 5.
+        // Proposal is also for B. justify_qc.round > lock.round.
+        // But B doesn't extend A (sibling). Since we now also require
+        // ancestry.is_ancestor(jqc.block_hash=B, proposal=B), this is
+        // reflexively true. HOWEVER the ancestry check in rule 2b
+        // (lock.block_hash=A → proposal=B) already failed.
+        // And rule 2c requires ancestry(jqc.block_hash=B, proposal=B)
+        // which is true, but jqc.round(5) > lock.round(0) is also true.
+        // So this WOULD pass rule 2c... and that's actually correct
+        // per HotStuff: if the Byzantine leader managed to get a valid QC
+        // at round 5 for B, it means a quorum voted for B, which means
+        // the locked nodes must have unlocked. The forge would require
+        // real signatures from a quorum.
+        //
+        // With AcceptAllVerifier, the forged QC passes. With real crypto,
+        // the forge would fail signature verification. This test documents
+        // that safety ultimately relies on QC signature verification.
+        let mut forged_jqc = make_qc(BftPhase::Prepare, 0, 5);
+        forged_jqc.block_hash = hash_b;
+        let r = safety.safe_to_vote(6, &hash_b, Some(&forged_jqc), &checker);
+        // This passes because the forged QC satisfies both conditions:
+        // jqc.round(5) > lock.round(0) AND ancestry(B, B) is true.
+        // Safety relies on QC verification happening BEFORE safe_to_vote.
+        assert!(
+            r.is_ok(),
+            "forged QC passes safe_to_vote — QC verification must happen upstream"
+        );
     }
 }

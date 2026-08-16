@@ -25,6 +25,8 @@ pub enum BftEvent {
         block_hash: [u8; 32],
         leader_id: String,
         block: Block,
+        /// QC justifying this proposal (leader's high_qc).
+        justify_qc: Option<crate::consensus::bft::types::QuorumCertificate>,
     },
     /// A BFT vote arrived from a peer.
     Vote(VoteMessage),
@@ -53,7 +55,11 @@ pub async fn run_bft_loop(
     tx_pool: Arc<std::sync::Mutex<TransactionPool>>,
 ) {
     let config = RoundManagerConfig::default();
-    let mut manager = RoundManager::new(node_id.clone(), validators, NodeVerifier, config);
+    let ancestry = Box::new(crate::consensus::bft::safety::ChainAncestryChecker::new(
+        store.clone(),
+    ));
+    let mut manager =
+        RoundManager::with_ancestry(node_id.clone(), validators, NodeVerifier, config, ancestry);
     let mut pending_block: Option<Block> = None;
     // Buffer votes that arrive before the proposal for the current round.
     let mut early_votes: Vec<VoteMessage> = Vec::new();
@@ -85,7 +91,7 @@ pub async fn run_bft_loop(
         tokio::select! {
             Some(event) = rx.recv() => {
                 match event {
-                    BftEvent::Proposal { round, block_hash, leader_id, block } => {
+                    BftEvent::Proposal { round, block_hash, leader_id, block, justify_qc } => {
                         while manager.current_round() < round {
                             let _ = manager.on_timeout();
                         }
@@ -94,7 +100,7 @@ pub async fn run_bft_loop(
                         }
                         reset_timeout(&mut timeout, &manager);
                         pending_block = Some(block);
-                        let action = manager.process_event(RoundEvent::Proposal { block_hash, leader_id, justify_qc: None });
+                        let action = manager.process_event(RoundEvent::Proposal { block_hash, leader_id, justify_qc });
                         let mut decided = handle_action(&action, &node, &signer, &node_id, &mut manager).await;
                         // Replay votes that arrived before this proposal.
                         if !decided {
@@ -189,11 +195,17 @@ async fn try_mine_and_propose(
                 *pending_block = Some(block.clone());
 
                 let block_data = serde_json::to_vec(&block).unwrap_or_default();
+                let justify_qc_data = manager
+                    .safety()
+                    .high_qc()
+                    .and_then(|qc| serde_json::to_vec(qc).ok())
+                    .unwrap_or_default();
                 let msg = crate::network::Message::BftProposal {
                     round: manager.current_round(),
                     block_hash,
                     leader_id: node_id.to_string(),
                     block_data,
+                    justify_qc: justify_qc_data,
                 };
                 node.broadcast_message(&msg).await;
 
