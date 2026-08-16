@@ -376,6 +376,314 @@ mod tests {
 
     // --- multiple rounds ---
 
+    // ── Adversarial scenarios ─────────────────────────────────────────
+
+    /// Helper: drive a full Prepare→PreCommit→Commit cycle on a single
+    /// manager, feeding votes from the given voters. Returns true if Decide.
+    fn drive_full_round(
+        m: &mut RoundManager<AcceptAllVerifier>,
+        hash_id: u8,
+        round: u64,
+        voters: &[&str],
+    ) -> bool {
+        for phase in [BftPhase::Prepare, BftPhase::PreCommit, BftPhase::Commit] {
+            for voter in voters {
+                let action =
+                    m.process_event(RoundEvent::Vote(make_vote(phase, hash_id, round, voter)));
+                if matches!(action, ManagerAction::Round(RoundAction::Decide { .. })) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    // ── Scenario 1: Network partition 2+2 ───────────────────────────
+    //
+    // Partition: {v0, v1} vs {v2, v3}. Neither side has 3 votes.
+    // Chain must halt (no Decide on either side), never fork.
+    // On reunion: the combined votes must allow progress.
+
+    #[test]
+    fn partition_2_2_halts_no_fork() {
+        // Two independent managers simulating the two partitions.
+        let mut left_leader = manager("v0"); // v0 is leader of round 0
+        let mut right_follower = manager("v2");
+
+        left_leader.start();
+        right_follower.start();
+
+        // Leader v0 proposes block A.
+        left_leader.process_event(RoundEvent::StartAsLeader {
+            block_hash: block_hash(0xAA),
+        });
+
+        // Right side receives the proposal (before partition).
+        right_follower.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+        });
+
+        // LEFT partition: v0 and v1 vote. Only 2 votes — no quorum.
+        for voter in &["v0", "v1"] {
+            left_leader.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        // Left side stuck in Preparing — no PhaseComplete.
+        assert_eq!(left_leader.round_state(), Some(RoundState::Preparing));
+
+        // RIGHT partition: v2 and v3 vote. Only 2 votes — no quorum.
+        for voter in &["v2", "v3"] {
+            right_follower.process_event(RoundEvent::Vote(make_vote(
+                BftPhase::Prepare,
+                0xAA,
+                0,
+                voter,
+            )));
+        }
+        assert_eq!(right_follower.round_state(), Some(RoundState::Preparing));
+
+        // Neither side decided — chain halted, no fork.
+        assert_ne!(left_leader.round_state(), Some(RoundState::Decided));
+        assert_ne!(right_follower.round_state(), Some(RoundState::Decided));
+
+        // REUNION: left side receives votes from right.
+        let action = left_leader.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xAA,
+            0,
+            "v2",
+        )));
+        // 3 votes now (v0, v1, v2) → Prepare quorum reached!
+        assert!(
+            matches!(
+                action,
+                ManagerAction::Round(RoundAction::PhaseComplete {
+                    phase: BftPhase::Prepare,
+                    ..
+                })
+            ),
+            "reunion should reach Prepare quorum, got {action:?}"
+        );
+
+        // Drive through PreCommit and Commit with 3 voters.
+        let decided = drive_full_round(&mut left_leader, 0xAA, 0, &["v0", "v1", "v2"]);
+        assert!(decided, "should reach Decide after reunion");
+        assert_eq!(left_leader.round_state(), Some(RoundState::Decided));
+
+        // Verify: only ONE block was decided (no fork).
+        let qc = left_leader.highest_commit_qc().unwrap();
+        assert_eq!(qc.block_hash, block_hash(0xAA));
+    }
+
+    // ── Scenario 2: Byzantine equivocation ──────────────────────────
+    //
+    // v3 (Byzantine) votes block A to {v0, v1} and block B to {v2}.
+    // Honest nodes each see one hash. Two QCs must not coexist.
+
+    #[test]
+    fn byzantine_equivocation_cannot_produce_two_qcs() {
+        let block_a = block_hash(0xAA);
+        let block_b = block_hash(0xBB);
+
+        // --- Node v0's view: leader proposes A ---
+        let mut m_v0 = manager("v0");
+        m_v0.start();
+        m_v0.process_event(RoundEvent::StartAsLeader {
+            block_hash: block_a,
+        });
+
+        // v0 sees: v0(A), v1(A), v3(A) — Byzantine v3 sends A to this partition.
+        m_v0.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xAA,
+            0,
+            "v0",
+        )));
+        m_v0.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xAA,
+            0,
+            "v1",
+        )));
+        let action = m_v0.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xAA,
+            0,
+            "v3",
+        )));
+        // 3 votes for A → Prepare quorum.
+        assert!(matches!(
+            action,
+            ManagerAction::Round(RoundAction::PhaseComplete {
+                phase: BftPhase::Prepare,
+                ..
+            })
+        ));
+
+        // --- Node v2's view: Byzantine v3 sent vote for B ---
+        let mut m_v2 = manager("v2");
+        m_v2.start();
+        m_v2.process_event(RoundEvent::Proposal {
+            block_hash: block_a, // v2 received the real proposal (block A)
+            leader_id: "v0".into(),
+        });
+
+        // v2 votes A (honest). v3 sends B to v2.
+        m_v2.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xAA,
+            0,
+            "v2",
+        )));
+        // v3's vote for B is rejected by v2's collector (hash mismatch with A).
+        let action = m_v2.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xBB,
+            0,
+            "v3",
+        )));
+        assert!(
+            matches!(action, ManagerAction::Round(RoundAction::None)),
+            "vote for wrong block hash must be rejected"
+        );
+
+        // v2 only has 1 valid vote (itself). Cannot form QC for B.
+        // v2 also cannot form QC for A without 2 more votes.
+        assert_eq!(m_v2.round_state(), Some(RoundState::Preparing));
+
+        // Key invariant: QC(A) exists (on v0's side), QC(B) does NOT exist.
+        // The Byzantine node cannot cause a fork — at most it can delay v2.
+
+        // Now: can v3 somehow help form QC(B) on a separate collector?
+        // Even with a dedicated B-collector, v3 only has 1 vote (itself).
+        // Needs 2 more from {v0, v1, v2} — all voted A. Impossible.
+        use crate::consensus::bft::quorum::QuorumValidator;
+        use crate::consensus::bft::vote_collector::VoteCollector;
+
+        let mut col_b = VoteCollector::new(
+            BftPhase::Prepare,
+            0,
+            block_b,
+            QuorumValidator::new(validators(), AcceptAllVerifier),
+        );
+        col_b.add_vote(make_vote(BftPhase::Prepare, 0xBB, 0, "v3"));
+        assert_eq!(col_b.vote_count(), 1);
+        assert!(!col_b.is_complete());
+        // QC(B) impossible: 1/3 quorum. Byzantine equivocation blocked.
+    }
+
+    // ── Scenario 3: Leader death during consensus ───────────────────
+    //
+    // v0 (leader round 0) proposes A. Gets Prepare votes from v1, v2.
+    // v0 dies after Prepare (before PreCommit/Commit).
+    // Timeout → round 1, new leader v1. v1 proposes and gets Decide
+    // without double-committing A from round 0.
+
+    #[test]
+    fn leader_death_after_prepare_recovers_without_double_commit() {
+        // Simulate from v1's perspective (v1 survives the leader death).
+        let mut m = manager("v1");
+        m.start(); // round 0, leader = v0
+
+        // v1 receives proposal from v0.
+        m.process_event(RoundEvent::Proposal {
+            block_hash: block_hash(0xAA),
+            leader_id: "v0".into(),
+        });
+
+        // Prepare votes arrive from v0, v1, v2. v1's own vote was already
+        // returned as SendVote; here we simulate all votes arriving.
+        m.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xAA,
+            0,
+            "v0",
+        )));
+        m.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xAA,
+            0,
+            "v1",
+        )));
+        let action = m.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::Prepare,
+            0xAA,
+            0,
+            "v2",
+        )));
+        assert!(matches!(
+            action,
+            ManagerAction::Round(RoundAction::PhaseComplete {
+                phase: BftPhase::Prepare,
+                ..
+            })
+        ));
+        assert_eq!(m.round_state(), Some(RoundState::PreCommitting));
+
+        // v0 DIES here. No more votes from v0 for PreCommit/Commit.
+        // Only v1 and v2 can vote PreCommit → 2 votes < quorum=3.
+        m.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::PreCommit,
+            0xAA,
+            0,
+            "v1",
+        )));
+        m.process_event(RoundEvent::Vote(make_vote(
+            BftPhase::PreCommit,
+            0xAA,
+            0,
+            "v2",
+        )));
+        // Still PreCommitting — no quorum.
+        assert_eq!(m.round_state(), Some(RoundState::PreCommitting));
+
+        // TIMEOUT: round 0 failed. Advance to round 1.
+        let action = m.on_timeout();
+        match &action {
+            ManagerAction::NewRound {
+                round, leader_id, ..
+            } => {
+                assert_eq!(*round, 1);
+                assert_eq!(leader_id, "v1"); // v1 is new leader!
+            }
+            other => panic!("expected NewRound, got {other:?}"),
+        }
+
+        // Round 0 block A was NOT decided (no CommitQC).
+        assert!(
+            m.highest_commit_qc().is_none(),
+            "block A must NOT be committed"
+        );
+
+        // v1 (new leader) proposes block B in round 1.
+        m.process_event(RoundEvent::StartAsLeader {
+            block_hash: block_hash(0xBB),
+        });
+
+        // Drive full round with v1, v2, v3 (v0 is dead).
+        let decided = drive_full_round(&mut m, 0xBB, 1, &["v1", "v2", "v3"]);
+        assert!(decided, "round 1 should reach Decide with 3 live nodes");
+        assert_eq!(m.round_state(), Some(RoundState::Decided));
+
+        // Verify: only block B was committed (no double-commit of A).
+        let qc = m.highest_commit_qc().unwrap();
+        assert_eq!(
+            qc.block_hash,
+            block_hash(0xBB),
+            "only block B should be committed"
+        );
+        assert_eq!(qc.round, 1);
+        assert_eq!(qc.phase, BftPhase::Commit);
+
+        // Block A from round 0 has PrepareQC but no CommitQC → not finalized.
+        // This is correct: Prepare lock without Commit = abandoned.
+    }
+
     #[test]
     fn three_consecutive_rounds_rotate_leaders() {
         let mut m = manager("v0");
