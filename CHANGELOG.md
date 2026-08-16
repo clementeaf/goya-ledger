@@ -4,6 +4,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.10.1] — 2026-08-16
+
+### Fixed — BFT 4-node quorum + Fly networking
+
+- **Self-vote in BFT quorum** — nodes emitted votes via broadcast but never counted themselves in the local vote collector. With quorum=3 (4 validators), each node only saw 2 remote votes and never reached quorum. Now `handle_action` feeds signed votes back into the `RoundManager` after broadcasting. Full 3-phase HotStuff (Prepare→PreCommit→Commit→Decide) proven with 4 nodes across 4 continents (IAD/CDG/NRT/SIN), identical block hash on all nodes.
+- **Peer address dedup** — 6 insertion points in `network/mod.rs` now filter `0.0.0.0`, empty, and self addresses. Eliminates duplicate/unreachable peers from the broadcast list.
+- **`broadcast_message` / `broadcast_ordered_block` skip self** — no longer sends BFT votes or blocks to the broadcasting node's own address.
+- **TCP chunk accumulation in `send_and_wait`** — state sync responses larger than one TCP segment were truncated (`EOF while parsing`). Now accumulates chunks with deadline-based timeout until valid JSON parses.
+- **Flycast DNS for Fly.io P2P** — `P2P_EXTERNAL_ADDRESS` and `BOOTSTRAP_NODES` moved from secrets to `fly.toml` env using `.flycast` DNS (direct container routing, bypasses Fly's TCP proxy that broke peer identity).
+
+### Changed
+
+- `handle_action` in BFT controller now takes `&mut RoundManager` to feed self-votes back into the state machine.
+- `Peers` message handler filters invalid addresses before insertion.
+- `process_message` Version handler applies same `0.0.0.0` filter as `handle_connection`.
+
+---
+
 ## [0.10.0] — 2026-08-15
 
 ### Changed — Post-quantum default + server-side PDF notarization
