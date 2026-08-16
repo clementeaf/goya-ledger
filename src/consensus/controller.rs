@@ -57,7 +57,7 @@ pub async fn run_bft_loop(
     let mut pending_block: Option<Block> = None;
 
     let action = manager.start();
-    handle_action(&action, &node, &signer, &node_id).await;
+    handle_action(&action, &node, &signer, &node_id, &mut manager).await;
 
     // If we're leader of round 0, try to mine immediately.
     if manager.is_current_leader() {
@@ -95,7 +95,7 @@ pub async fn run_bft_loop(
                         reset_timeout(&mut timeout, &manager);
                         pending_block = Some(block);
                         let action = manager.process_event(RoundEvent::Proposal { block_hash, leader_id });
-                        if handle_action(&action, &node, &signer, &node_id).await {
+                        if handle_action(&action, &node, &signer, &node_id, &mut manager).await {
                             if let Some(blk) = pending_block.take() {
                                 commit_block(blk, &manager, &store, &node).await;
                             }
@@ -106,7 +106,7 @@ pub async fn run_bft_loop(
                     }
                     BftEvent::Vote(vote) => {
                         let action = manager.process_event(RoundEvent::Vote(vote));
-                        if handle_action(&action, &node, &signer, &node_id).await {
+                        if handle_action(&action, &node, &signer, &node_id, &mut manager).await {
                             if let Some(blk) = pending_block.take() {
                                 commit_block(blk, &manager, &store, &node).await;
                             }
@@ -119,7 +119,7 @@ pub async fn run_bft_loop(
             }
             _ = &mut timeout => {
                 let action = manager.on_timeout();
-                handle_action(&action, &node, &signer, &node_id).await;
+                handle_action(&action, &node, &signer, &node_id, &mut manager).await;
                 pending_block = None;
                 reset_timeout(&mut timeout, &manager);
                 let am_leader = manager.is_current_leader();
@@ -179,7 +179,7 @@ async fn try_mine_and_propose(
                 node.broadcast_message(&msg).await;
 
                 let action = manager.process_event(RoundEvent::StartAsLeader { block_hash });
-                handle_action(&action, node, signer, node_id).await;
+                handle_action(&action, node, signer, node_id, manager).await;
                 log::info!(
                     "BFT: proposed block {} at round {}",
                     height,
@@ -204,7 +204,7 @@ async fn advance_round(
     store: &Arc<dyn crate::storage::BlockStore>,
 ) {
     let adv = manager.advance_after_decide();
-    handle_action(&adv, node, signer, node_id).await;
+    handle_action(&adv, node, signer, node_id, manager).await;
     reset_timeout(timeout, manager);
     if manager.is_current_leader() {
         try_mine_and_propose(
@@ -236,15 +236,21 @@ async fn handle_action(
     node: &Arc<Node>,
     signer: &Arc<dyn SigningProvider>,
     node_id: &str,
+    manager: &mut RoundManager<NodeVerifier>,
 ) -> bool {
     match action {
         ManagerAction::Round(RoundAction::SendVote(vote)) => {
             let mut signed_vote = vote.clone();
             let payload = VoteMessage::signing_payload(vote.phase, &vote.block_hash, vote.round);
             signed_vote.signature = signer.sign(&payload).unwrap_or_default();
+            // Count our own vote locally so we contribute to quorum.
+            let self_action = manager.process_event(RoundEvent::Vote(signed_vote.clone()));
             let msg = crate::network::Message::BftVote(signed_vote);
             node.broadcast_message(&msg).await;
-            false
+            matches!(
+                self_action,
+                ManagerAction::Round(RoundAction::Decide { .. })
+            )
         }
         ManagerAction::Round(RoundAction::BroadcastProposal { block_hash }) => {
             log::info!(
@@ -279,8 +285,15 @@ async fn handle_action(
                 };
                 let payload = VoteMessage::signing_payload(next, &bh, qc.round);
                 vote.signature = signer.sign(&payload).unwrap_or_default();
+                let self_action = manager.process_event(RoundEvent::Vote(vote.clone()));
                 let msg = crate::network::Message::BftVote(vote);
                 node.broadcast_message(&msg).await;
+                if matches!(
+                    self_action,
+                    ManagerAction::Round(RoundAction::Decide { .. })
+                ) {
+                    return true;
+                }
             }
             false
         }
