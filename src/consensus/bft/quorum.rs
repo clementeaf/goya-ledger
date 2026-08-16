@@ -85,7 +85,7 @@ impl<V: SignatureVerifier> QuorumValidator<V> {
             return Err(QcError::UnknownVoter(vote.voter_id.clone()));
         }
 
-        let payload = vote.payload();
+        let payload = vote.full_payload();
         if !self
             .verifier
             .verify(&vote.voter_id, &payload, &vote.signature)

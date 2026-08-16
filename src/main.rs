@@ -1022,6 +1022,26 @@ async fn async_main_inner() -> std::io::Result<()> {
             .filter(|s| !s.is_empty())
             .collect();
         let node_id = std::env::var("BFT_NODE_ID").unwrap_or_else(|_| format!("node-{p2p_port}"));
+
+        // Parse validator public keys for real ML-DSA-65 signature verification.
+        let bft_verifier = match std::env::var("BFT_VALIDATOR_KEYS") {
+            Ok(keys_csv) => {
+                let registry =
+                    crate::consensus::bft::validator_registry::ValidatorRegistry::from_env_str(
+                        &keys_csv,
+                    )
+                    .unwrap_or_else(|e| panic!("BFT_VALIDATOR_KEYS invalid: {e}"));
+                log::info!("BFT: loaded {} validator public keys", registry.len());
+                crate::consensus::bft::validator_registry::RegistryVerifier::new(
+                    std::sync::Arc::new(registry),
+                )
+            }
+            Err(_) => {
+                panic!("BFT_VALIDATOR_KEYS must be set when BFT_VALIDATORS is configured. \
+                        Format: id1:<hex_pk>,id2:<hex_pk>,... (ML-DSA-65 public keys, 1952 bytes each)");
+            }
+        };
+
         log::info!(
             "BFT consensus enabled: {} validators, node_id={node_id}",
             validators.len()
@@ -1036,7 +1056,15 @@ async fn async_main_inner() -> std::io::Result<()> {
         let bft_pool = app_state.tx_pool.clone();
         tokio::spawn(async move {
             crate::consensus::controller::run_bft_loop(
-                node_id, validators, bft_rx, bft_node, bft_store, bft_signer, bft_mining, bft_pool,
+                node_id,
+                validators,
+                bft_rx,
+                bft_node,
+                bft_store,
+                bft_signer,
+                bft_mining,
+                bft_pool,
+                bft_verifier,
             )
             .await;
         });

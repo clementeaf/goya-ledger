@@ -46,13 +46,41 @@ pub struct VoteMessage {
     pub signature: Vec<u8>,
 }
 
+/// Domain separator prefix for BFT vote signing payloads.
+/// Prevents cross-protocol replay of signatures.
+const VOTE_DOMAIN: &[u8] = b"GOYA-BFT-VOTE-V1";
+
 impl VoteMessage {
     /// Construct the canonical bytes that must be signed:
-    /// `phase_byte || block_hash || round_le`.
+    /// `domain || phase_byte || block_hash || round_le || voter_id_len_le || voter_id`.
     ///
-    /// The phase byte provides domain separation so a Prepare vote
-    /// cannot be replayed as a Commit vote.
+    /// Covers all vote fields to prevent:
+    /// - Cross-phase replay (phase byte)
+    /// - Cross-round replay (round)
+    /// - Cross-voter replay (voter_id)
+    /// - Cross-protocol replay (domain separator)
+    pub fn signing_payload_v2(
+        phase: BftPhase,
+        block_hash: &[u8; 32],
+        round: u64,
+        voter_id: &str,
+    ) -> Vec<u8> {
+        let voter_bytes = voter_id.as_bytes();
+        let mut payload =
+            Vec::with_capacity(VOTE_DOMAIN.len() + 1 + 32 + 8 + 4 + voter_bytes.len());
+        payload.extend_from_slice(VOTE_DOMAIN);
+        payload.push(phase.as_byte());
+        payload.extend_from_slice(block_hash);
+        payload.extend_from_slice(&round.to_le_bytes());
+        payload.extend_from_slice(&(voter_bytes.len() as u32).to_le_bytes());
+        payload.extend_from_slice(voter_bytes);
+        payload
+    }
+
+    /// Legacy payload without voter_id/domain (kept for test compatibility).
     pub fn signing_payload(phase: BftPhase, block_hash: &[u8; 32], round: u64) -> Vec<u8> {
+        // Delegate to v2 with empty voter_id for backward compat in tests
+        // that use AcceptAllVerifier (signature content doesn't matter).
         let mut payload = Vec::with_capacity(41);
         payload.push(phase.as_byte());
         payload.extend_from_slice(block_hash);
@@ -60,7 +88,12 @@ impl VoteMessage {
         payload
     }
 
-    /// Return the signing payload for this vote.
+    /// Return the v2 signing payload for this vote (includes voter_id + domain).
+    pub fn full_payload(&self) -> Vec<u8> {
+        Self::signing_payload_v2(self.phase, &self.block_hash, self.round, &self.voter_id)
+    }
+
+    /// Return the legacy signing payload for this vote.
     pub fn payload(&self) -> Vec<u8> {
         Self::signing_payload(self.phase, &self.block_hash, self.round)
     }

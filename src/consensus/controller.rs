@@ -5,10 +5,10 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc;
 
-use crate::consensus::bft::quorum::SignatureVerifier;
 use crate::consensus::bft::round::{RoundAction, RoundEvent};
 use crate::consensus::bft::round_manager::{ManagerAction, RoundManager, RoundManagerConfig};
 use crate::consensus::bft::types::VoteMessage;
+use crate::consensus::bft::validator_registry::RegistryVerifier;
 use crate::identity::signing::SigningProvider;
 use crate::mining::MiningService;
 use crate::network::Node;
@@ -32,16 +32,6 @@ pub enum BftEvent {
     Vote(VoteMessage),
 }
 
-#[derive(Clone)]
-struct NodeVerifier;
-
-impl SignatureVerifier for NodeVerifier {
-    fn verify(&self, _voter_id: &str, _payload: &[u8], signature: &[u8]) -> bool {
-        // ponytail: accept non-empty signatures in testnet
-        !signature.is_empty()
-    }
-}
-
 /// Run the BFT consensus loop. Mines when leader, votes when follower.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_bft_loop(
@@ -53,13 +43,14 @@ pub async fn run_bft_loop(
     signer: Arc<dyn SigningProvider>,
     mining_service: Arc<MiningService>,
     tx_pool: Arc<std::sync::Mutex<TransactionPool>>,
+    verifier: RegistryVerifier,
 ) {
     let config = RoundManagerConfig::default();
     let ancestry = Box::new(crate::consensus::bft::safety::ChainAncestryChecker::new(
         store.clone(),
     ));
     let mut manager =
-        RoundManager::with_ancestry(node_id.clone(), validators, NodeVerifier, config, ancestry);
+        RoundManager::with_ancestry(node_id.clone(), validators, verifier, config, ancestry);
     let mut pending_block: Option<Block> = None;
     // Buffer votes that arrive before the proposal for the current round.
     let mut early_votes: Vec<VoteMessage> = Vec::new();
@@ -160,7 +151,7 @@ pub async fn run_bft_loop(
 /// If mempool has transactions, mine a block and broadcast the BFT proposal.
 #[allow(clippy::too_many_arguments)]
 async fn try_mine_and_propose(
-    manager: &mut RoundManager<NodeVerifier>,
+    manager: &mut RoundManager<RegistryVerifier>,
     pending_block: &mut Option<Block>,
     node_id: &str,
     node: &Arc<Node>,
@@ -224,7 +215,7 @@ async fn try_mine_and_propose(
 
 #[allow(clippy::too_many_arguments)]
 async fn advance_round(
-    manager: &mut RoundManager<NodeVerifier>,
+    manager: &mut RoundManager<RegistryVerifier>,
     pending_block: &mut Option<Block>,
     timeout: &mut std::pin::Pin<&mut tokio::time::Sleep>,
     node_id: &str,
@@ -254,7 +245,7 @@ async fn advance_round(
 
 fn reset_timeout(
     timeout: &mut std::pin::Pin<&mut tokio::time::Sleep>,
-    manager: &RoundManager<NodeVerifier>,
+    manager: &RoundManager<RegistryVerifier>,
 ) {
     let ms = manager.current_timeout_ms();
     timeout
@@ -267,12 +258,17 @@ async fn handle_action(
     node: &Arc<Node>,
     signer: &Arc<dyn SigningProvider>,
     node_id: &str,
-    manager: &mut RoundManager<NodeVerifier>,
+    manager: &mut RoundManager<RegistryVerifier>,
 ) -> bool {
     match action {
         ManagerAction::Round(RoundAction::SendVote(vote)) => {
             let mut signed_vote = vote.clone();
-            let payload = VoteMessage::signing_payload(vote.phase, &vote.block_hash, vote.round);
+            let payload = VoteMessage::signing_payload_v2(
+                vote.phase,
+                &vote.block_hash,
+                vote.round,
+                &vote.voter_id,
+            );
             signed_vote.signature = signer.sign(&payload).unwrap_or_default();
             // Count our own vote locally so we contribute to quorum.
             let self_action = manager.process_event(RoundEvent::Vote(signed_vote.clone()));
@@ -296,7 +292,8 @@ async fn handle_action(
                 voter_id: node_id.to_string(),
                 signature: Vec::new(),
             };
-            let payload = VoteMessage::signing_payload(vote.phase, block_hash, vote.round);
+            let payload =
+                VoteMessage::signing_payload_v2(vote.phase, block_hash, vote.round, node_id);
             vote.signature = signer.sign(&payload).unwrap_or_default();
             let self_action = manager.process_event(RoundEvent::Vote(vote.clone()));
             let msg = crate::network::Message::BftVote(vote);
@@ -330,7 +327,7 @@ async fn handle_action(
                     voter_id: node_id.to_string(),
                     signature: Vec::new(),
                 };
-                let payload = VoteMessage::signing_payload(next, &bh, qc.round);
+                let payload = VoteMessage::signing_payload_v2(next, &bh, qc.round, node_id);
                 vote.signature = signer.sign(&payload).unwrap_or_default();
                 let self_action = manager.process_event(RoundEvent::Vote(vote.clone()));
                 let msg = crate::network::Message::BftVote(vote);
@@ -369,7 +366,7 @@ async fn handle_action(
 
 async fn commit_block(
     mut block: Block,
-    manager: &RoundManager<NodeVerifier>,
+    manager: &RoundManager<RegistryVerifier>,
     store: &Arc<dyn crate::storage::BlockStore>,
     node: &Arc<Node>,
 ) {
