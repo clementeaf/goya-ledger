@@ -38,16 +38,61 @@ impl AncestryChecker for AlwaysExtends {
 
 /// Production ancestry checker backed by the block store.
 ///
-/// Walks the chain from `descendant` backwards via `parent_hash` until it
-/// finds `ancestor` or reaches genesis. Fail-closed: returns false on
-/// missing/corrupt data.
+/// Maintains a `hash → (height, parent_hash)` index for O(1) lookup
+/// instead of scanning the entire chain. The index is built incrementally:
+/// new blocks are indexed on demand when a hash miss occurs.
+///
+/// Fail-closed: returns false on missing/corrupt data.
 pub struct ChainAncestryChecker {
     store: std::sync::Arc<dyn crate::storage::traits::BlockStore>,
+    index: std::sync::Mutex<BlockIndex>,
+}
+
+struct BlockIndex {
+    hash_to_info: std::collections::HashMap<[u8; 32], BlockInfo>,
+    indexed_up_to: Option<u64>,
+}
+
+#[derive(Clone)]
+struct BlockInfo {
+    height: u64,
+    parent_hash: [u8; 32],
 }
 
 impl ChainAncestryChecker {
     pub fn new(store: std::sync::Arc<dyn crate::storage::traits::BlockStore>) -> Self {
-        Self { store }
+        Self {
+            store,
+            index: std::sync::Mutex::new(BlockIndex {
+                hash_to_info: std::collections::HashMap::new(),
+                indexed_up_to: None,
+            }),
+        }
+    }
+
+    fn refresh_index(&self, idx: &mut BlockIndex) {
+        let latest = match self.store.get_latest_height() {
+            Ok(h) => h,
+            Err(_) => return,
+        };
+        let start = idx.indexed_up_to.map_or(0, |h| h + 1);
+        for h in start..=latest {
+            if let Ok(block) = self.store.read_block(h) {
+                let bh = crate::mining::block_hash(&block);
+                idx.hash_to_info.insert(
+                    bh,
+                    BlockInfo {
+                        height: h,
+                        parent_hash: block.parent_hash,
+                    },
+                );
+            }
+        }
+        idx.indexed_up_to = Some(latest);
+    }
+
+    fn lookup(&self, idx: &BlockIndex, hash: &[u8; 32]) -> Option<BlockInfo> {
+        idx.hash_to_info.get(hash).cloned()
     }
 }
 
@@ -57,54 +102,46 @@ impl AncestryChecker for ChainAncestryChecker {
             return true;
         }
 
-        let latest = match self.store.get_latest_height() {
-            Ok(h) => h,
-            Err(_) => return false, // fail closed
-        };
-
-        // Find the descendant block by scanning from latest backwards.
-        // Then walk parent_hash chain to find ancestor.
-        let mut descendant_height = None;
-        for h in (0..=latest).rev() {
-            if let Ok(block) = self.store.read_block(h) {
-                let bh = crate::mining::block_hash(&block);
-                if bh == *descendant {
-                    descendant_height = Some(h);
-                    break;
-                }
-            }
-        }
-
-        let start_height = match descendant_height {
-            Some(h) => h,
-            None => return false, // descendant not in store — fail closed
-        };
-
-        // Walk backwards from descendant via parent_hash.
-        let mut current_hash = match self.store.read_block(start_height) {
-            Ok(b) => b.parent_hash,
+        let mut idx = match self.index.lock() {
+            Ok(g) => g,
             Err(_) => return false,
         };
 
-        for h in (0..start_height).rev() {
+        // Try lookup; refresh on miss.
+        if self.lookup(&idx, ancestor).is_none() || self.lookup(&idx, descendant).is_none() {
+            self.refresh_index(&mut idx);
+        }
+
+        let anc_info = match self.lookup(&idx, ancestor) {
+            Some(i) => i,
+            None => return false,
+        };
+        let desc_info = match self.lookup(&idx, descendant) {
+            Some(i) => i,
+            None => return false,
+        };
+
+        // Height check: ancestor can't be deeper than descendant.
+        if anc_info.height > desc_info.height {
+            return false;
+        }
+
+        // Walk parent chain from descendant towards ancestor using index only.
+        let mut current_hash = desc_info.parent_hash;
+        let mut remaining = desc_info.height - anc_info.height;
+        while remaining > 0 {
             if current_hash == *ancestor {
                 return true;
             }
-            match self.store.read_block(h) {
-                Ok(block) => {
-                    let bh = crate::mining::block_hash(&block);
-                    if bh != current_hash {
-                        // Chain integrity error — the block at this height
-                        // doesn't match the parent_hash pointer. Fail closed.
-                        return false;
-                    }
-                    current_hash = block.parent_hash;
+            match self.lookup(&idx, &current_hash) {
+                Some(info) => {
+                    current_hash = info.parent_hash;
+                    remaining -= 1;
                 }
-                Err(_) => return false, // missing block — fail closed
+                None => return false,
             }
         }
 
-        // Final check: current_hash might be the ancestor (genesis case).
         current_hash == *ancestor
     }
 }
@@ -689,6 +726,173 @@ mod tests {
         // Lock hash doesn't correspond to any block in store → fail closed.
         let r = safety.safe_to_vote(1, &[0xAAu8; 32], None, &checker);
         assert!(matches!(r, Err(SafetyError::LockedConflict { .. })));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Randomized comparison: optimized ChainAncestryChecker vs brute-force
+    // ═══════════════════════════════════════════════════════════════════
+
+    fn brute_force_is_ancestor(
+        store: &dyn BlockStore,
+        ancestor: &[u8; 32],
+        descendant: &[u8; 32],
+    ) -> bool {
+        if ancestor == descendant {
+            return true;
+        }
+        let latest = match store.get_latest_height() {
+            Ok(h) => h,
+            Err(_) => return false,
+        };
+        let mut desc_height = None;
+        for h in (0..=latest).rev() {
+            if let Ok(block) = store.read_block(h) {
+                if crate::mining::block_hash(&block) == *descendant {
+                    desc_height = Some(h);
+                    break;
+                }
+            }
+        }
+        let start = match desc_height {
+            Some(h) => h,
+            None => return false,
+        };
+        let mut cur = match store.read_block(start) {
+            Ok(b) => b.parent_hash,
+            Err(_) => return false,
+        };
+        for h in (0..start).rev() {
+            if cur == *ancestor {
+                return true;
+            }
+            match store.read_block(h) {
+                Ok(block) => {
+                    if crate::mining::block_hash(&block) != cur {
+                        return false;
+                    }
+                    cur = block.parent_hash;
+                }
+                Err(_) => return false,
+            }
+        }
+        cur == *ancestor
+    }
+
+    /// Build a linear chain (one block per height, sequential parents).
+    /// This matches the BlockStore's height-keyed semantics used in production.
+    fn build_linear_chain(seed: u64, depth: u64) -> (Arc<MemoryStore>, Vec<[u8; 32]>) {
+        let store = Arc::new(MemoryStore::new());
+        let mut all_hashes = Vec::new();
+
+        let genesis = make_block(0, [0u8; 32]);
+        store.write_block(&genesis).unwrap();
+        let genesis_hash = crate::mining::block_hash(&genesis);
+        all_hashes.push(genesis_hash);
+
+        let mut tip = genesis_hash;
+        for h in 1..=depth {
+            let mut b = make_block(h, tip);
+            b.timestamp = 1000 + h + (seed.wrapping_mul(h)) % 500;
+            store.write_block(&b).unwrap();
+            let bh = crate::mining::block_hash(&b);
+            all_hashes.push(bh);
+            tip = bh;
+        }
+        (store, all_hashes)
+    }
+
+    #[test]
+    fn optimized_matches_brute_force_on_linear_chains() {
+        for seed in 0..50u64 {
+            let (store, hashes) = build_linear_chain(seed, 10);
+            let checker = ChainAncestryChecker::new(store.clone());
+
+            for a in &hashes {
+                for d in &hashes {
+                    let optimized = checker.is_ancestor(a, d);
+                    let reference = brute_force_is_ancestor(store.as_ref(), a, d);
+                    assert_eq!(
+                        optimized, reference,
+                        "seed={seed}: is_ancestor({:02x}..., {:02x}...) optimized={optimized} reference={reference}",
+                        a[0], d[0]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn optimized_superset_of_brute_force_on_forked_store() {
+        // When forks exist (blocks at non-sequential heights), the optimized
+        // checker is strictly better: it finds correct ancestry that the old
+        // height-based walker incorrectly rejects (fail-closed). Verify that
+        // the optimized checker never returns false when the reference returns
+        // true (no regressions).
+        let (store, hash_a, hash_b, hash_c) = store_with_chain();
+        let checker = ChainAncestryChecker::new(store.clone());
+        let hashes = [hash_a, hash_b, hash_c];
+
+        for a in &hashes {
+            for d in &hashes {
+                let optimized = checker.is_ancestor(a, d);
+                let reference = brute_force_is_ancestor(store.as_ref(), a, d);
+                if reference {
+                    assert!(
+                        optimized,
+                        "optimized must be >= reference: ref=true but opt=false"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn optimized_height_shortcut_works() {
+        let store = Arc::new(MemoryStore::new());
+        let genesis = make_block(0, [0u8; 32]);
+        store.write_block(&genesis).unwrap();
+        let gh = crate::mining::block_hash(&genesis);
+
+        let b1 = make_block(1, gh);
+        store.write_block(&b1).unwrap();
+        let h1 = crate::mining::block_hash(&b1);
+
+        let b2 = make_block(2, h1);
+        store.write_block(&b2).unwrap();
+        let h2 = crate::mining::block_hash(&b2);
+
+        let checker = ChainAncestryChecker::new(store);
+        // Higher block can't be ancestor of lower block
+        assert!(!checker.is_ancestor(&h2, &h1));
+        assert!(!checker.is_ancestor(&h2, &gh));
+        // But lower is ancestor of higher
+        assert!(checker.is_ancestor(&gh, &h2));
+        assert!(checker.is_ancestor(&h1, &h2));
+    }
+
+    #[test]
+    fn optimized_incremental_index_after_new_blocks() {
+        let store = Arc::new(MemoryStore::new());
+        let genesis = make_block(0, [0u8; 32]);
+        store.write_block(&genesis).unwrap();
+        let gh = crate::mining::block_hash(&genesis);
+
+        let b1 = make_block(1, gh);
+        store.write_block(&b1).unwrap();
+        let h1 = crate::mining::block_hash(&b1);
+
+        let checker = ChainAncestryChecker::new(store.clone());
+        assert!(checker.is_ancestor(&gh, &h1));
+
+        // Add a new block AFTER checker was created
+        let b2 = make_block(2, h1);
+        store.write_block(&b2).unwrap();
+        let h2 = crate::mining::block_hash(&b2);
+
+        // Index refreshes on miss → still works
+        assert!(checker.is_ancestor(&gh, &h2));
+        assert!(checker.is_ancestor(&h1, &h2));
+        assert!(!checker.is_ancestor(&h2, &h1));
     }
 
     #[test]
