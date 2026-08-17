@@ -4,6 +4,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.11.2] — 2026-08-17
+
+### Added — SLH-DSA-SHAKE-128s (FIPS 205) hash-based backup signatures
+
+First blockchain DLT to implement all three NIST PQC signature standards.
+
+#### Crypto Module
+- **`slhdsa.rs`** — SLH-DSA-SHAKE-128s keygen, sign, verify (pk=32B, sk=64B, sig=7856B)
+- Power-on self-test KAT for SLH-DSA added to `self_tests::run_all()`
+- Public API: `generate_slhdsa_keypair()`, `slhdsa_sign()`, `slhdsa_verify()`
+
+#### DLT Integration
+- `SigningAlgorithm::SlhDsa128s` variant in signing enum
+- `is_post_quantum()` returns `true` for SLH-DSA (PQC policy enforcement)
+- Signature consistency validation: 7856-byte size check
+- Signature verification dispatch via `pqc_crypto_module::slhdsa`
+- OID `2.16.840.1.101.3.4.3.20` (id-slh-dsa-shake-128s) in CAdES, OCSP, TSA, XAdES
+- COSE algorithm ID `-49` in mdoc issuer auth
+- JWT algorithm `"SLH-DSA-SHAKE-128s"` in SD-JWT
+- PAdES sub_filter support
+
+### Stats
+- 2688 lib tests passed, 0 failed
+- `pqc_crypto_module`: 150 tests (42 unit + 108 integration)
+
+---
+
 ## [0.11.1] — 2026-08-17
 
 ### Added — PQC Certification Gauntlet (CMVP-ready)

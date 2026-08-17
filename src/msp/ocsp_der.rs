@@ -39,6 +39,10 @@ const OID_ED25519: &[u8] = &[0x06, 0x03, 0x2B, 0x65, 0x70];
 const OID_MLDSA65: &[u8] = &[
     0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x11,
 ];
+/// id-slh-dsa-shake-128s 2.16.840.1.101.3.4.3.20 (FIPS 205)
+const OID_SLHDSA128S: &[u8] = &[
+    0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x03, 0x14,
+];
 /// sha256WithRSAEncryption 1.2.840.113549.1.1.11
 const OID_RSA_SHA256: &[u8] = &[
     0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x0B,
@@ -114,6 +118,7 @@ fn signing_oid(alg: SigningAlgorithm) -> &'static [u8] {
         SigningAlgorithm::MlDsa65 => OID_MLDSA65,
         SigningAlgorithm::Rsa => OID_RSA_SHA256,
         SigningAlgorithm::EcdsaP256 => OID_ECDSA_P256,
+        SigningAlgorithm::SlhDsa128s => OID_SLHDSA128S,
     }
 }
 

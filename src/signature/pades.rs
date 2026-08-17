@@ -63,7 +63,8 @@ pub fn to_pades_bes(envelope: &SignedEnvelope, options: &PadesOptions) -> PadesS
         SigningAlgorithm::Ed25519
         | SigningAlgorithm::MlDsa65
         | SigningAlgorithm::Rsa
-        | SigningAlgorithm::EcdsaP256 => "adbe.pkcs7.detached",
+        | SigningAlgorithm::EcdsaP256
+        | SigningAlgorithm::SlhDsa128s => "adbe.pkcs7.detached",
     };
 
     PadesSignature {

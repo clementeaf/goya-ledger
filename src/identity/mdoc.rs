@@ -320,10 +320,11 @@ fn cbor_encode_cose_sign1(
 ) -> Result<Vec<u8>, String> {
     // Simplified COSE_Sign1 as CBOR array: [alg_id, {}, payload_bytes, sig_bytes]
     let alg_id: i64 = match alg {
-        SigningAlgorithm::Ed25519 => -8,   // IANA COSE EdDSA
-        SigningAlgorithm::MlDsa65 => -48,  // draft-ietf-cose-dilithium (pre-IANA)
-        SigningAlgorithm::Rsa => -37,      // IANA COSE PS256 (RSASSA-PSS + SHA-256)
-        SigningAlgorithm::EcdsaP256 => -7, // IANA COSE ES256
+        SigningAlgorithm::Ed25519 => -8,     // IANA COSE EdDSA
+        SigningAlgorithm::MlDsa65 => -48,    // draft-ietf-cose-dilithium (pre-IANA)
+        SigningAlgorithm::Rsa => -37,        // IANA COSE PS256 (RSASSA-PSS + SHA-256)
+        SigningAlgorithm::EcdsaP256 => -7,   // IANA COSE ES256
+        SigningAlgorithm::SlhDsa128s => -49, // draft-ietf-cose-sphincs-plus (pre-IANA)
     };
     let structure = (
         alg_id,

@@ -45,6 +45,7 @@ pub fn validate_signature_consistency(
         SigningAlgorithm::MlDsa65 => 3309,
         SigningAlgorithm::Rsa => 256,      // RSA-2048
         SigningAlgorithm::EcdsaP256 => 64, // ES256 raw r||s
+        SigningAlgorithm::SlhDsa128s => 7856,
     };
     if signature.len() != expected_len {
         Err(format!(

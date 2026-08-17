@@ -29,6 +29,7 @@ pub enum SigningAlgorithm {
     #[default]
     Ed25519,
     MlDsa65,
+    SlhDsa128s,
     Rsa,
     EcdsaP256,
 }
@@ -36,7 +37,7 @@ pub enum SigningAlgorithm {
 impl SigningAlgorithm {
     /// Returns `true` if this algorithm is post-quantum resistant.
     pub fn is_post_quantum(&self) -> bool {
-        matches!(self, Self::MlDsa65)
+        matches!(self, Self::MlDsa65 | Self::SlhDsa128s)
     }
 
     pub fn is_classical(&self) -> bool {
@@ -49,6 +50,7 @@ impl std::fmt::Display for SigningAlgorithm {
         match self {
             Self::Ed25519 => write!(f, "Ed25519"),
             Self::MlDsa65 => write!(f, "ML-DSA-65"),
+            Self::SlhDsa128s => write!(f, "SLH-DSA-SHAKE-128s"),
             Self::Rsa => write!(f, "RSA"),
             Self::EcdsaP256 => write!(f, "ES256"),
         }

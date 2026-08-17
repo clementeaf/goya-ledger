@@ -13,6 +13,7 @@ pub fn run_all() -> Result<(), CryptoError> {
     kat_sha3_256()?;
     kat_mldsa65()?;
     kat_mlkem()?;
+    kat_slhdsa()?;
     test_rng()?;
     Ok(())
 }
@@ -92,6 +93,34 @@ fn kat_mlkem() -> Result<(), CryptoError> {
             ));
         }
         _ => {} // Error or different secret — both acceptable
+    }
+
+    Ok(())
+}
+
+fn kat_slhdsa() -> Result<(), CryptoError> {
+    let kp = crate::slhdsa::generate_keypair_raw();
+    let message = b"FIPS-205-KAT-SLH-DSA-SHAKE-128s";
+
+    let sig = crate::slhdsa::sign_message_raw(&kp.private_key, message)
+        .map_err(|e| CryptoError::SelfTestFailed(format!("SLH-DSA sign: {e}")))?;
+    crate::slhdsa::verify_signature_raw(&kp.public_key, message, &sig)
+        .map_err(|_| CryptoError::SelfTestFailed("SLH-DSA KAT: sign-then-verify failed".into()))?;
+
+    // Corrupted signature must fail
+    let mut bad_sig = sig.clone();
+    bad_sig.0[0] ^= 0xff;
+    if crate::slhdsa::verify_signature_raw(&kp.public_key, message, &bad_sig).is_ok() {
+        return Err(CryptoError::SelfTestFailed(
+            "SLH-DSA KAT: corrupted signature was accepted".into(),
+        ));
+    }
+
+    // Wrong message must fail
+    if crate::slhdsa::verify_signature_raw(&kp.public_key, b"wrong", &sig).is_ok() {
+        return Err(CryptoError::SelfTestFailed(
+            "SLH-DSA KAT: wrong message verified".into(),
+        ));
     }
 
     Ok(())

@@ -81,6 +81,28 @@ pub fn mlkem_decapsulate(
     crate::mlkem::decapsulate(private_key, ciphertext)
 }
 
+/// Generate an SLH-DSA-SHAKE-128s keypair (FIPS 205 — hash-based backup).
+pub fn generate_slhdsa_keypair() -> Result<crate::slhdsa::SlhDsaKeyPair, CryptoError> {
+    crate::slhdsa::generate_keypair()
+}
+
+/// Sign a message with SLH-DSA-SHAKE-128s.
+pub fn slhdsa_sign(
+    private_key: &crate::slhdsa::SlhDsaPrivateKey,
+    message: &[u8],
+) -> Result<crate::slhdsa::SlhDsaSignature, CryptoError> {
+    crate::slhdsa::sign_message(private_key, message)
+}
+
+/// Verify a signature with SLH-DSA-SHAKE-128s.
+pub fn slhdsa_verify(
+    public_key: &crate::slhdsa::SlhDsaPublicKey,
+    message: &[u8],
+    signature: &crate::slhdsa::SlhDsaSignature,
+) -> Result<(), CryptoError> {
+    crate::slhdsa::verify_signature(public_key, message, signature)
+}
+
 /// Generate cryptographically secure random bytes.
 pub fn random_bytes(n: usize) -> Result<Vec<u8>, CryptoError> {
     require_approved()?;

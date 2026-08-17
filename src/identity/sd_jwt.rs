@@ -104,6 +104,7 @@ fn alg_to_jwt(alg: SigningAlgorithm) -> &'static str {
         SigningAlgorithm::MlDsa65 => "ML-DSA-65",
         SigningAlgorithm::Rsa => "RS256",
         SigningAlgorithm::EcdsaP256 => "ES256",
+        SigningAlgorithm::SlhDsa128s => "SLH-DSA-SHAKE-128s",
     }
 }
 
@@ -113,6 +114,7 @@ fn jwt_to_alg(s: &str) -> Option<SigningAlgorithm> {
         "ML-DSA-65" => Some(SigningAlgorithm::MlDsa65),
         "RS256" => Some(SigningAlgorithm::Rsa),
         "ES256" => Some(SigningAlgorithm::EcdsaP256),
+        "SLH-DSA-SHAKE-128s" => Some(SigningAlgorithm::SlhDsa128s),
         _ => None,
     }
 }
@@ -236,6 +238,11 @@ pub fn jwk_thumbprint(pubkey_hex: &str, alg: SigningAlgorithm) -> String {
                 })
             }
         }
+        SigningAlgorithm::SlhDsa128s => serde_json::json!({
+            "alg": "SLH-DSA-SHAKE-128s",
+            "kty": "AKP",
+            "pub": base64url_encode(&hex::decode(pubkey_hex).unwrap_or_default()),
+        }),
     };
     let canonical = serde_json::to_vec(&jwk).unwrap_or_default();
     base64url_encode(&hash_with(HashAlgorithm::Sha256, &canonical))

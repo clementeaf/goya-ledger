@@ -56,6 +56,24 @@ pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str)
         .is_ok()
 }
 
+/// Verify an SLH-DSA-SHAKE-128s (FIPS 205) signature over a message.
+pub fn verify_slhdsa128s(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
+    let pub_bytes = match hex::decode(public_key_hex) {
+        Ok(b) if b.len() == 32 => b,
+        _ => return false,
+    };
+    let sig_bytes = match hex::decode(signature_hex) {
+        Ok(b) if b.len() == 7856 => b,
+        _ => return false,
+    };
+    let pk = match pqc_crypto_module::slhdsa::SlhDsaPublicKey::from_bytes(&pub_bytes) {
+        Ok(pk) => pk,
+        Err(_) => return false,
+    };
+    let sig = pqc_crypto_module::slhdsa::SlhDsaSignature(sig_bytes);
+    pqc_crypto_module::slhdsa::verify_signature_raw(&pk, message, &sig).is_ok()
+}
+
 /// Verify an RSA PKCS#1 v1.5 SHA-256 signature over a message.
 pub fn verify_rsa(public_key_hex: &str, message: &[u8], signature_hex: &str) -> bool {
     let pub_bytes = match hex::decode(public_key_hex) {
@@ -117,6 +135,7 @@ pub fn verify_signature(
         SigningAlgorithm::MlDsa65 => verify_mldsa65(public_key_hex, message, signature_hex),
         SigningAlgorithm::Rsa => verify_rsa(public_key_hex, message, signature_hex),
         SigningAlgorithm::EcdsaP256 => verify_ecdsa_p256(public_key_hex, message, signature_hex),
+        SigningAlgorithm::SlhDsa128s => verify_slhdsa128s(public_key_hex, message, signature_hex),
     }
 }
 
@@ -142,6 +161,7 @@ pub fn validate_public_key(
     let expected_bytes = match algorithm {
         SigningAlgorithm::Ed25519 => 32,
         SigningAlgorithm::MlDsa65 => 1952,
+        SigningAlgorithm::SlhDsa128s => 32,
         SigningAlgorithm::EcdsaP256 => {
             // P-256 SEC1: 65 bytes uncompressed or 33 bytes compressed.
             let len = public_key_hex.len();

@@ -323,6 +323,7 @@ const ED25519_URI: &str = "http://www.w3.org/2021/04/xmldsig-more#eddsa-ed25519"
 const MLDSA65_URI: &str = "http://www.w3.org/2024/xmldsig-pqc#ml-dsa-65";
 const RSA_SHA256_URI: &str = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
 const ECDSA_P256_URI: &str = "http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256";
+const SLHDSA128S_URI: &str = "http://www.w3.org/2024/xmldsig-pqc#slh-dsa-shake-128s";
 
 fn algorithm_uri(algo: SigningAlgorithm) -> &'static str {
     match algo {
@@ -330,6 +331,7 @@ fn algorithm_uri(algo: SigningAlgorithm) -> &'static str {
         SigningAlgorithm::MlDsa65 => MLDSA65_URI,
         SigningAlgorithm::Rsa => RSA_SHA256_URI,
         SigningAlgorithm::EcdsaP256 => ECDSA_P256_URI,
+        SigningAlgorithm::SlhDsa128s => SLHDSA128S_URI,
     }
 }
 

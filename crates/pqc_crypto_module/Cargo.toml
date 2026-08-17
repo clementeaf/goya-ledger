@@ -8,6 +8,7 @@ license = "MIT"
 [dependencies]
 pqcrypto-mldsa = "0.1.2"
 pqcrypto-mlkem = "0.1.1"
+pqcrypto-sphincsplus = "0.7"
 pqcrypto-internals = "0.2"
 pqcrypto-traits = "0.3"
 sha3 = "0.10"

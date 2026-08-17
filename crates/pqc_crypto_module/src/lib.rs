@@ -31,4 +31,5 @@ pub mod mldsa;
 pub mod mlkem;
 pub mod rng;
 pub mod self_tests;
+pub mod slhdsa;
 pub mod types;
