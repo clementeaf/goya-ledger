@@ -1198,7 +1198,9 @@ async fn async_main_inner() -> std::io::Result<()> {
             .wrap(RateLimitMiddleware::new(rate_limit_config.clone()))
             .wrap(crate::api::middleware::TlsIdentityMiddleware)
             .wrap(crate::api::middleware::InputValidationMiddleware::default())
-            .app_data(web::Data::new(app_state.clone()));
+            .app_data(web::Data::new(app_state.clone()))
+            .app_data(web::Data::new(crate::api::handlers::oid4vci::NonceStore::new()))
+            .app_data(web::Data::new(crate::api::handlers::oid4vci::StatusListStore::new()));
         #[cfg(feature = "evm")]
         let app = app.app_data(evm_state.clone());
         app.app_data(json_config.clone())
