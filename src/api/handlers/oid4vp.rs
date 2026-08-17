@@ -596,6 +596,7 @@ mod tests {
                 exp: 2_000_000_000,
                 vct: "IdentityCredential".into(),
                 claims: vec![("given_name".into(), serde_json::json!("Juan"))],
+                cnf: None,
             },
             &provider,
         )
@@ -708,6 +709,7 @@ mod tests {
                 exp: 2_000_000_000,
                 vct: "IdentityCredential".into(),
                 claims: vec![("age_over_18".into(), serde_json::json!(true))],
+                cnf: None,
             },
             &provider,
         )

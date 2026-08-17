@@ -204,6 +204,7 @@ fn sd_jwt_vc_has_required_claims() {
                 serde_json::json!("784-1990-1234567-6"),
             ),
         ],
+        cnf: None,
     };
     let sd_jwt = issue_sd_jwt_vc(&claims, &provider).unwrap();
     assert!(sd_jwt.compact.contains('~'));
