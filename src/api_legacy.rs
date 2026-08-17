@@ -16,6 +16,7 @@ pub fn config_routes(cfg: &mut web::ServiceConfig) {
 
     // OID4VCI endpoints at root (EUDI wallet standard paths)
     cfg.service(oid4vci::issuer_metadata)
+        .service(oid4vci::oauth_as_metadata)
         .service(oid4vci::token_endpoint)
         .service(oid4vci::credential_endpoint)
         .service(oid4vci::nonce_endpoint)

@@ -397,6 +397,31 @@ pub async fn nonce_endpoint(nonce_store: web::Data<NonceStore>) -> ApiResult<Htt
         })))
 }
 
+// ── OAuth Authorization Server Metadata (RFC 8414) ──────────────────────
+
+/// EUDI Wallet fetches this after issuer metadata — mandatory for the flow.
+#[get("/.well-known/oauth-authorization-server")]
+pub async fn oauth_as_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
+    let host = req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:8080");
+    let base = format!("https://{host}");
+
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "issuer": base,
+        "token_endpoint": format!("{base}/token"),
+        "response_types_supported": ["code"],
+        "grant_types_supported": [
+            "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+            "authorization_code"
+        ],
+        "code_challenge_methods_supported": ["S256"],
+        "token_endpoint_auth_methods_supported": ["none"],
+    })))
+}
+
 // ── Issuer Metadata ───────────────────────────────────────────────────────
 
 /// OpenID4VCI Issuer Metadata (OID4VCI 1.0 Final).
@@ -421,7 +446,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
         ],
         "credential_configurations_supported": {
             "IdentityCredential_sd_jwt": {
-                "format": "vc+sd-jwt",
+                "format": "dc+sd-jwt",
                 "vct": "IdentityCredential",
                 "cryptographic_binding_methods_supported": ["jwk"],
                 "credential_signing_alg_values_supported": ["ES256", "EdDSA", "ML-DSA-65"],
@@ -439,7 +464,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                 }
             },
             "eudi_pid_sd_jwt": {
-                "format": "vc+sd-jwt",
+                "format": "dc+sd-jwt",
                 "vct": "eu.europa.ec.eudi.pid.1",
                 "cryptographic_binding_methods_supported": ["jwk"],
                 "credential_signing_alg_values_supported": ["ES256"],
@@ -484,18 +509,20 @@ pub struct TokenRequest {
     pub grant_type: String,
     #[serde(rename = "pre-authorized_code")]
     pub pre_authorized_code: Option<String>,
-    /// Authorization code (for authorization_code grant).
+    #[serde(default)]
+    pub client_id: Option<String>,
+    #[serde(default)]
+    pub tx_code: Option<String>,
     #[serde(default)]
     pub code: Option<String>,
-    /// PKCE code verifier (RFC 7636).
     #[serde(default)]
     pub code_verifier: Option<String>,
-    /// Redirect URI (must match the one used in /authorize).
     #[serde(default)]
     pub redirect_uri: Option<String>,
-    /// Wallet Instance Attestation (optional, for EUDI Wallet flow).
     #[serde(default)]
     pub wallet_instance_attestation: Option<String>,
+    #[serde(default)]
+    pub authorization_details: Option<String>,
 }
 
 /// Verify PKCE S256 challenge (RFC 7636 §4.6).
@@ -660,9 +687,9 @@ impl CredentialRequest {
             if cid.contains("mdoc") || cid.contains("mso") {
                 return "mso_mdoc";
             }
-            return "vc+sd-jwt";
+            return "dc+sd-jwt";
         }
-        self.format.as_deref().unwrap_or("vc+sd-jwt")
+        self.format.as_deref().unwrap_or("dc+sd-jwt")
     }
 
     fn first_proof_jwt(&self) -> Option<&str> {
@@ -918,12 +945,14 @@ pub async fn credential_endpoint(
     };
 
     match resolved_format.as_str() {
-        "vc+sd-jwt" => issue_sd_jwt_credential(provider.as_ref(), &body, status_ref.as_ref()),
+        "dc+sd-jwt" | "vc+sd-jwt" => {
+            issue_sd_jwt_credential(provider.as_ref(), &body, status_ref.as_ref())
+        }
         "mso_mdoc" => issue_mdoc_credential(provider.as_ref(), &body, status_ref.as_ref()),
         other => Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto(
                 "unsupported_credential_format",
-                &format!("format '{other}' not supported; use vc+sd-jwt or mso_mdoc"),
+                &format!("format '{other}' not supported; use dc+sd-jwt or mso_mdoc"),
             ),
             400,
         ))),
@@ -1021,7 +1050,7 @@ fn issue_sd_jwt_credential(
     match issue_sd_jwt_vc(&vc_claims, provider) {
         Ok(sd_jwt) => {
             let mut resp = serde_json::json!({
-                "format": "vc+sd-jwt",
+                "format": "dc+sd-jwt",
                 "credential": sd_jwt.compact,
             });
             if let Some((uri, idx)) = status_ref {
@@ -1138,6 +1167,7 @@ mod tests {
                     .app_data($state)
                     .app_data($nonce)
                     .service(issuer_metadata)
+                    .service(oauth_as_metadata)
                     .service(token_endpoint)
                     .service(credential_endpoint)
                     .service(credential_offer_endpoint)
@@ -1154,6 +1184,7 @@ mod tests {
                     .app_data($sl)
                     .app_data($att)
                     .service(issuer_metadata)
+                    .service(oauth_as_metadata)
                     .service(token_endpoint)
                     .service(credential_endpoint)
                     .service(credential_offer_endpoint)
@@ -1184,16 +1215,36 @@ mod tests {
         );
         let grants = body["grant_types_supported"].as_array().unwrap();
         assert!(grants.len() >= 2);
+        let pid_cfg = &body["credential_configurations_supported"]["eudi_pid_sd_jwt"];
+        assert_eq!(pid_cfg["format"], "dc+sd-jwt");
+    }
+
+    #[actix_web::test]
+    async fn e2e_oauth_as_metadata() {
+        let state = make_state();
+        let app = oid4vci_app!(state);
+        let req = test::TestRequest::get()
+            .uri("/.well-known/oauth-authorization-server")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert!(body["issuer"].as_str().unwrap().starts_with("https://"));
+        assert!(body["token_endpoint"].as_str().is_some());
+        assert!(body["grant_types_supported"].as_array().unwrap().len() >= 2);
     }
 
     fn make_token_form(code: &str) -> TokenRequest {
         TokenRequest {
             grant_type: "urn:ietf:params:oauth:grant-type:pre-authorized_code".to_string(),
             pre_authorized_code: Some(code.to_string()),
+            client_id: None,
+            tx_code: None,
             code: None,
             code_verifier: None,
             redirect_uri: None,
             wallet_instance_attestation: None,
+            authorization_details: None,
         }
     }
 
@@ -1310,10 +1361,13 @@ mod tests {
             .set_form(TokenRequest {
                 grant_type: "urn:ietf:params:oauth:grant-type:pre-authorized_code".to_string(),
                 pre_authorized_code: Some("code-wia-1234567890".to_string()),
+                client_id: None,
+                tx_code: None,
                 code: None,
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: Some(wia),
+                authorization_details: None,
             })
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -1330,10 +1384,13 @@ mod tests {
             .set_form(TokenRequest {
                 grant_type: "urn:ietf:params:oauth:grant-type:pre-authorized_code".to_string(),
                 pre_authorized_code: Some("code-wia-1234567890".to_string()),
+                client_id: None,
+                tx_code: None,
                 code: None,
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: Some(wia),
+                authorization_details: None,
             })
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -1349,10 +1406,13 @@ mod tests {
             .set_form(TokenRequest {
                 grant_type: "client_credentials".to_string(),
                 pre_authorized_code: None,
+                client_id: None,
+                tx_code: None,
                 code: None,
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: None,
+                authorization_details: None,
             })
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -1542,7 +1602,7 @@ mod tests {
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 200);
         let body: serde_json::Value = test::read_body_json(resp).await;
-        assert_eq!(body["format"], "vc+sd-jwt");
+        assert_eq!(body["format"], "dc+sd-jwt");
         let cred = body["credential"].as_str().unwrap();
         assert!(cred.contains('~'));
     }
@@ -1748,10 +1808,13 @@ mod tests {
             .set_form(TokenRequest {
                 grant_type: "authorization_code".to_string(),
                 pre_authorized_code: None,
+                client_id: None,
+                tx_code: None,
                 code: Some("auth-code-1234567890".to_string()),
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: None,
+                authorization_details: None,
             })
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -1776,10 +1839,13 @@ mod tests {
             .set_form(TokenRequest {
                 grant_type: "authorization_code".to_string(),
                 pre_authorized_code: None,
+                client_id: None,
+                tx_code: None,
                 code: None,
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: None,
+                authorization_details: None,
             })
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -1912,7 +1978,7 @@ mod tests {
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 200);
         let cred_body: serde_json::Value = test::read_body_json(resp).await;
-        assert_eq!(cred_body["format"], "vc+sd-jwt");
+        assert_eq!(cred_body["format"], "dc+sd-jwt");
         let credential = cred_body["credential"].as_str().unwrap();
         assert!(credential.contains('~'));
 
