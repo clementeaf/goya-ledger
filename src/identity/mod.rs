@@ -5,6 +5,7 @@
 //! - Key derivation and rotation
 //! - Signature generation and verification
 
+pub mod attestation;
 pub mod did;
 pub mod dual_signing;
 pub mod hsm;
