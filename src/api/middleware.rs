@@ -392,8 +392,10 @@ where
                 | actix_web::http::Method::PUT
                 | actix_web::http::Method::PATCH
         );
-        let is_exempt =
-            path.contains("/events") || path.contains("/ws") || path.contains("/chaincode/install");
+        let is_exempt = path.contains("/events")
+            || path.contains("/ws")
+            || path.contains("/chaincode/install")
+            || path == "/token";
 
         if needs_json && !is_exempt {
             let content_type = req
