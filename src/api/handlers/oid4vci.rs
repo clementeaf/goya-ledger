@@ -797,6 +797,8 @@ pub async fn status_list_endpoint(
 
 /// Credential endpoint — issue a credential to the wallet.
 /// Validates c_nonce, attestation type authorization, and assigns status index.
+/// Supports both OID4VCI 1.0 (credential_configuration_id + proofs) and
+/// legacy (format + proof) request formats.
 #[post("/credential")]
 pub async fn credential_endpoint(
     state: web::Data<AppState>,
@@ -875,6 +877,13 @@ pub async fn credential_endpoint(
         .or(body.doctype.as_deref())
         .or(body.credential_configuration_id.as_deref())
         .unwrap_or("IdentityCredential");
+
+    log::info!(
+        "OID4VCI credential request: format={resolved_format} vct={vct} config_id={:?} has_proof={} has_proofs={}",
+        body.credential_configuration_id,
+        body.proof.is_some(),
+        body.proofs.is_some(),
+    );
     let issuer_did = format!("did:goya:{}", &hex::encode(provider.public_key())[..16]);
     let claims_json = body.claims.clone().unwrap_or(serde_json::json!({}));
 
