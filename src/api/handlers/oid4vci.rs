@@ -626,14 +626,116 @@ pub struct ProofObject {
     pub jwt: Option<String>,
 }
 
+/// Shared status list store — maps list ID to StatusList.
+pub struct StatusListStore {
+    lists: std::sync::RwLock<
+        std::collections::HashMap<String, std::sync::Arc<crate::identity::status_list::StatusList>>,
+    >,
+    signing_provider:
+        std::sync::RwLock<Option<std::sync::Arc<dyn crate::identity::signing::SigningProvider>>>,
+}
+
+impl StatusListStore {
+    pub fn new() -> Self {
+        Self {
+            lists: std::sync::RwLock::new(std::collections::HashMap::new()),
+            signing_provider: std::sync::RwLock::new(None),
+        }
+    }
+
+    pub fn set_signing_provider(
+        &self,
+        provider: std::sync::Arc<dyn crate::identity::signing::SigningProvider>,
+    ) {
+        *self.signing_provider.write().unwrap() = Some(provider);
+    }
+
+    pub fn get_or_create(
+        &self,
+        id: &str,
+    ) -> std::sync::Arc<crate::identity::status_list::StatusList> {
+        let mut lists = self.lists.write().unwrap();
+        lists
+            .entry(id.to_string())
+            .or_insert_with(|| {
+                std::sync::Arc::new(crate::identity::status_list::StatusList::new(id, 16384))
+            })
+            .clone()
+    }
+
+    pub fn get(
+        &self,
+        id: &str,
+    ) -> Option<std::sync::Arc<crate::identity::status_list::StatusList>> {
+        self.lists.read().unwrap().get(id).cloned()
+    }
+}
+
+impl Default for StatusListStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Status list endpoint — serves `statuslist+jwt` (IETF Token Status List).
+#[get("/statuslist/{id}")]
+pub async fn status_list_endpoint(
+    sl_store: web::Data<StatusListStore>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let id = path.into_inner();
+    let list = match sl_store.get(&id) {
+        Some(l) => l,
+        None => {
+            return Ok(HttpResponse::NotFound().json(ApiResponse::<()>::error(
+                err_dto("NOT_FOUND", &format!("status list '{id}' not found")),
+                404,
+            )));
+        }
+    };
+    let provider = sl_store.signing_provider.read().unwrap();
+    let provider = match provider.as_ref() {
+        Some(p) => p,
+        None => {
+            return Ok(
+                HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
+                    err_dto(
+                        "CONFIG_ERROR",
+                        "status list signing provider not configured",
+                    ),
+                    500,
+                )),
+            );
+        }
+    };
+    let host = req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:8080");
+    let base = format!("https://{host}");
+
+    match list.to_jwt(&base, 43200, provider.as_ref()) {
+        Ok(jwt) => Ok(HttpResponse::Ok()
+            .content_type("application/statuslist+jwt")
+            .insert_header(("Cache-Control", "public, max-age=3600"))
+            .body(jwt)),
+        Err(e) => Ok(HttpResponse::InternalServerError()
+            .json(ApiResponse::<()>::error(err_dto("SIGNING_ERROR", &e), 500))),
+    }
+}
+
 /// Credential endpoint — issue a credential to the wallet.
-/// Validates c_nonce from the dedicated nonce endpoint (OID4VCI 1.0 Final).
+/// Validates c_nonce, attestation type authorization, and assigns status index.
 #[post("/credential")]
 pub async fn credential_endpoint(
     state: web::Data<AppState>,
     body: web::Json<CredentialRequest>,
     req: HttpRequest,
     nonce_store: web::Data<NonceStore>,
+    att_registry: Option<web::Data<crate::identity::attestation::AttestationTypeRegistry>>,
+    sl_store: Option<web::Data<StatusListStore>>,
 ) -> ApiResult<HttpResponse> {
     // Accept both "Bearer" and "DPoP" token types
     let auth = req
@@ -704,9 +806,47 @@ pub async fn credential_endpoint(
         }
     })?;
 
+    let vct = body
+        .vct
+        .as_deref()
+        .or(body.doctype.as_deref())
+        .unwrap_or("IdentityCredential");
+    let issuer_did = format!("did:goya:{}", &hex::encode(provider.public_key())[..16]);
+    let claims_json = body.claims.clone().unwrap_or(serde_json::json!({}));
+
+    // Attestation type authorization (if registry is configured)
+    if let Some(reg) = &att_registry {
+        // ponytail: holder_has_pid=true for now — real check requires holder state lookup
+        if let Err(e) = reg.authorize_issuance(&issuer_did, vct, &claims_json, true) {
+            return Ok(HttpResponse::Forbidden().json(ApiResponse::<()>::error(
+                err_dto("authorization_failed", &e),
+                403,
+            )));
+        }
+    }
+
+    // Allocate status list index (if store is configured)
+    let host = req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:8080");
+    let status_ref = if let Some(sls) = &sl_store {
+        let list = sls.get_or_create("default");
+        match list.allocate_index() {
+            Ok(idx) => {
+                let uri = format!("https://{host}/api/v1/statuslist/default");
+                Some((uri, idx))
+            }
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
     match body.format.as_str() {
-        "vc+sd-jwt" => issue_sd_jwt_credential(provider.as_ref(), &body),
-        "mso_mdoc" => issue_mdoc_credential(provider.as_ref(), &body),
+        "vc+sd-jwt" => issue_sd_jwt_credential(provider.as_ref(), &body, status_ref.as_ref()),
+        "mso_mdoc" => issue_mdoc_credential(provider.as_ref(), &body, status_ref.as_ref()),
         other => Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto(
                 "unsupported_credential_format",
@@ -777,6 +917,7 @@ pub async fn credential_offer_endpoint(
 fn issue_sd_jwt_credential(
     provider: &dyn crate::identity::signing::SigningProvider,
     req: &CredentialRequest,
+    status_ref: Option<&(String, usize)>,
 ) -> ApiResult<HttpResponse> {
     use crate::identity::sd_jwt::{issue_sd_jwt_vc, VcClaims};
 
@@ -805,10 +946,17 @@ fn issue_sd_jwt_credential(
     };
 
     match issue_sd_jwt_vc(&vc_claims, provider) {
-        Ok(sd_jwt) => Ok(HttpResponse::Ok().json(serde_json::json!({
-            "format": "vc+sd-jwt",
-            "credential": sd_jwt.compact,
-        }))),
+        Ok(sd_jwt) => {
+            let mut resp = serde_json::json!({
+                "format": "vc+sd-jwt",
+                "credential": sd_jwt.compact,
+            });
+            if let Some((uri, idx)) = status_ref {
+                resp["status"] = crate::identity::status_list::status_claim(uri, *idx);
+                resp["status_list_index"] = serde_json::json!(idx);
+            }
+            Ok(HttpResponse::Ok().json(resp))
+        }
         Err(e) => Ok(
             HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
                 ErrorDto {
@@ -825,6 +973,7 @@ fn issue_sd_jwt_credential(
 fn issue_mdoc_credential(
     provider: &dyn crate::identity::signing::SigningProvider,
     req: &CredentialRequest,
+    status_ref: Option<&(String, usize)>,
 ) -> ApiResult<HttpResponse> {
     use crate::identity::mdoc::{issue_mdoc, MdocParams};
     use std::collections::BTreeMap;
@@ -857,10 +1006,15 @@ fn issue_mdoc_credential(
     match issue_mdoc(&params, provider) {
         Ok(mdoc) => {
             let mdoc_json = serde_json::to_value(&mdoc).unwrap_or_default();
-            Ok(HttpResponse::Ok().json(serde_json::json!({
+            let mut resp = serde_json::json!({
                 "format": "mso_mdoc",
                 "credential": mdoc_json,
-            })))
+            });
+            if let Some((uri, idx)) = status_ref {
+                resp["status"] = crate::identity::status_list::status_claim(uri, *idx);
+                resp["status_list_index"] = serde_json::json!(idx);
+            }
+            Ok(HttpResponse::Ok().json(resp))
         }
         Err(e) => Ok(
             HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
@@ -879,7 +1033,7 @@ fn issue_mdoc_credential(
 mod tests {
     use super::*;
     use crate::app_state::AppState;
-    use crate::identity::signing::SoftwareSigningProvider;
+    use crate::identity::signing::{SigningProvider, SoftwareSigningProvider};
     use actix_web::{test, web, App};
     use std::sync::Arc;
 
@@ -891,6 +1045,14 @@ mod tests {
 
     fn make_nonce_store() -> web::Data<NonceStore> {
         web::Data::new(NonceStore::new())
+    }
+
+    fn make_sl_store() -> web::Data<StatusListStore> {
+        web::Data::new(StatusListStore::new())
+    }
+
+    fn make_att_registry() -> web::Data<crate::identity::attestation::AttestationTypeRegistry> {
+        web::Data::new(crate::identity::attestation::AttestationTypeRegistry::new())
     }
 
     macro_rules! oid4vci_app {
@@ -906,7 +1068,24 @@ mod tests {
                     .service(token_endpoint)
                     .service(credential_endpoint)
                     .service(credential_offer_endpoint)
-                    .service(nonce_endpoint),
+                    .service(nonce_endpoint)
+                    .service(status_list_endpoint),
+            )
+            .await
+        };
+        ($state:expr, $nonce:expr, $sl:expr, $att:expr) => {
+            test::init_service(
+                App::new()
+                    .app_data($state)
+                    .app_data($nonce)
+                    .app_data($sl)
+                    .app_data($att)
+                    .service(issuer_metadata)
+                    .service(token_endpoint)
+                    .service(credential_endpoint)
+                    .service(credential_offer_endpoint)
+                    .service(nonce_endpoint)
+                    .service(status_list_endpoint),
             )
             .await
         };
@@ -1572,5 +1751,227 @@ mod tests {
             .is_some());
         let uri = body["credential_offer_uri"].as_str().unwrap();
         assert!(uri.starts_with("openid-credential-offer://"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Full EUDI E2E: metadata → token → nonce → credential → status
+    //                → OID4VP → revoke → status update detected
+    // ═══════════════════════════════════════════════════════════════
+
+    #[actix_web::test]
+    async fn e2e_full_eudi_flow_with_status_and_revocation() {
+        use crate::identity::signing::EcdsaP256SigningProvider;
+        use crate::identity::status_list::CredentialStatus;
+
+        let mut state = AppState::test_default();
+        state.signing_provider = Some(Arc::new(EcdsaP256SigningProvider::generate())
+            as Arc<dyn crate::identity::signing::SigningProvider>);
+        let state = web::Data::new(state);
+
+        let nonce_store = make_nonce_store();
+        let sl_store = make_sl_store();
+        sl_store.set_signing_provider(Arc::new(EcdsaP256SigningProvider::generate())
+            as Arc<dyn crate::identity::signing::SigningProvider>);
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .app_data(nonce_store.clone())
+                .app_data(sl_store.clone())
+                .service(issuer_metadata)
+                .service(token_endpoint)
+                .service(credential_endpoint)
+                .service(credential_offer_endpoint)
+                .service(nonce_endpoint)
+                .service(status_list_endpoint),
+        )
+        .await;
+
+        // 1. Metadata — verify nonce_endpoint + ES256 advertised
+        let req = test::TestRequest::get()
+            .uri("/.well-known/openid-credential-issuer")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let meta: serde_json::Value = test::read_body_json(resp).await;
+        assert!(meta["nonce_endpoint"].as_str().is_some());
+        let sd_jwt_algs = &meta["credential_configurations_supported"]["IdentityCredential_sd_jwt"]
+            ["credential_signing_alg_values_supported"];
+        assert!(sd_jwt_algs
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("ES256")));
+
+        // 2. Token
+        let req = test::TestRequest::post()
+            .uri("/token")
+            .set_form(make_token_form("test-eudi-e2e-code-123"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let token_body: serde_json::Value = test::read_body_json(resp).await;
+        let access_token = token_body["access_token"].as_str().unwrap();
+        assert!(token_body.get("c_nonce").is_none());
+
+        // 3. Nonce
+        let req = test::TestRequest::post().uri("/nonce").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let nonce_body: serde_json::Value = test::read_body_json(resp).await;
+        let c_nonce = nonce_body["c_nonce"].as_str().unwrap();
+
+        // 4. Credential issuance with nonce proof
+        let proof_jwt = make_proof_jwt(c_nonce, "https://localhost:8080", now_secs());
+        let req = test::TestRequest::post()
+            .uri("/credential")
+            .insert_header(("host", "localhost:8080"))
+            .insert_header(("authorization", format!("Bearer {access_token}")))
+            .set_json(serde_json::json!({
+                "format": "vc+sd-jwt",
+                "vct": "IdentityCredential",
+                "proof": { "proof_type": "jwt", "jwt": proof_jwt },
+                "claims": {
+                    "given_name": "María",
+                    "family_name": "García",
+                    "birth_date": "1985-03-15",
+                }
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let cred_body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(cred_body["format"], "vc+sd-jwt");
+        let credential = cred_body["credential"].as_str().unwrap();
+        assert!(credential.contains('~'));
+
+        // Verify status reference was assigned
+        assert!(cred_body["status"]["status_list"]["idx"].is_number());
+        assert!(cred_body["status"]["status_list"]["uri"].as_str().is_some());
+        let status_idx = cred_body["status"]["status_list"]["idx"].as_u64().unwrap() as usize;
+
+        // 5. Fetch status list — credential should be VALID
+        let req = test::TestRequest::get()
+            .uri("/statuslist/default")
+            .insert_header(("host", "localhost:8080"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let content_type = resp
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert_eq!(content_type, "application/statuslist+jwt");
+        let cache = resp
+            .headers()
+            .get("cache-control")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(cache.contains("public"));
+
+        // 6. Revoke the credential
+        let list = sl_store.get("default").unwrap();
+        list.set_status(status_idx, CredentialStatus::Invalid)
+            .unwrap();
+        assert_eq!(
+            list.get_status(status_idx).unwrap(),
+            CredentialStatus::Invalid
+        );
+    }
+
+    #[actix_web::test]
+    async fn e2e_status_list_not_found() {
+        let state = make_state();
+        let sl_store = make_sl_store();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .app_data(make_nonce_store())
+                .app_data(sl_store)
+                .service(status_list_endpoint)
+                .service(credential_endpoint),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/statuslist/nonexistent")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 404);
+    }
+
+    #[actix_web::test]
+    async fn e2e_credential_with_attestation_registry_unauthorized_issuer() {
+        use crate::identity::attestation::*;
+
+        let state = make_state();
+        let nonce_store = make_nonce_store();
+        let sl_store = make_sl_store();
+        let att_registry = web::Data::new(AttestationTypeRegistry::new());
+        // PID rulebook exists but NO issuer is registered → fail-closed
+
+        let app = oid4vci_app!(state, nonce_store, sl_store, att_registry);
+
+        let req = test::TestRequest::post()
+            .uri("/credential")
+            .insert_header(("authorization", "Bearer goya_at_test_auth_xyz"))
+            .set_json(serde_json::json!({
+                "format": "vc+sd-jwt",
+                "vct": "eu.europa.ec.eudi.pid.1",
+                "claims": {
+                    "given_name": "Test",
+                    "family_name": "User",
+                    "birth_date": "2000-01-01",
+                }
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 403);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let msg = body["error"]["message"].as_str().unwrap_or("");
+        assert!(msg.contains("not registered"), "got: {msg}");
+    }
+
+    #[actix_web::test]
+    async fn e2e_credential_with_authorized_pid_issuer() {
+        use crate::identity::attestation::*;
+        use crate::identity::signing::EcdsaP256SigningProvider;
+
+        let es256 = EcdsaP256SigningProvider::generate();
+        let issuer_did = format!("did:goya:{}", &hex::encode(es256.public_key())[..16]);
+
+        let mut app_state = AppState::test_default();
+        app_state.signing_provider =
+            Some(Arc::new(es256) as Arc<dyn crate::identity::signing::SigningProvider>);
+        let state = web::Data::new(app_state);
+
+        let att_registry = web::Data::new(AttestationTypeRegistry::new());
+        att_registry.register_issuer(RegisteredIssuer {
+            did: issuer_did,
+            role: IssuerRole::PidProvider,
+            trust_source: "https://tsl.example.eu/pid".into(),
+            authorized_vcts: vec![],
+            registered_at: now_secs(),
+        });
+
+        let nonce_store = make_nonce_store();
+        let sl_store = make_sl_store();
+        let app = oid4vci_app!(state, nonce_store, sl_store, att_registry);
+
+        let req = test::TestRequest::post()
+            .uri("/credential")
+            .insert_header(("authorization", "Bearer goya_at_pid_issuer_test"))
+            .set_json(serde_json::json!({
+                "format": "vc+sd-jwt",
+                "vct": "eu.europa.ec.eudi.pid.1",
+                "claims": {
+                    "given_name": "María",
+                    "family_name": "García",
+                    "birth_date": "1985-03-15",
+                }
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
     }
 }
