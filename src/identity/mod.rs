@@ -14,6 +14,7 @@ pub mod pqc_policy;
 pub mod ra;
 pub mod sd_jwt;
 pub mod signing;
+pub mod status_list;
 pub mod zkp;
 
 /// Identity configuration

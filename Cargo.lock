@@ -6504,6 +6504,7 @@ dependencies = [
  "dirs",
  "ed25519-dalek",
  "env_logger",
+ "flate2",
  "futures",
  "hex",
  "hmac",

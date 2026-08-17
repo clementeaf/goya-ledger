@@ -114,6 +114,14 @@ fn jwt_to_alg(s: &str) -> Option<SigningAlgorithm> {
     }
 }
 
+pub fn alg_to_jwt_pub(alg: SigningAlgorithm) -> &'static str {
+    alg_to_jwt(alg)
+}
+
+pub fn jwt_to_alg_pub(s: &str) -> Option<SigningAlgorithm> {
+    jwt_to_alg(s)
+}
+
 /// Issue an SD-JWT VC.
 pub fn issue_sd_jwt_vc(
     claims: &VcClaims,

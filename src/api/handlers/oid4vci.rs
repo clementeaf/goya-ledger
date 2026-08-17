@@ -1246,9 +1246,9 @@ mod tests {
         let store = NonceStore::new();
         let nonce = store.generate(300);
         // Flip a character
-        let mut tampered = nonce.clone();
-        let bytes = unsafe { tampered.as_bytes_mut() };
-        bytes[0] ^= 0x01;
+        let mut chars: Vec<u8> = nonce.bytes().collect();
+        chars[0] ^= 0x01;
+        let tampered = String::from_utf8(chars).unwrap();
         assert_eq!(store.consume(&tampered), Err("unknown nonce"));
         // Original still valid
         assert!(store.consume(&nonce).is_ok());
