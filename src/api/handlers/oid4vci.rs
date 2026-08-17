@@ -424,22 +424,48 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                 "format": "vc+sd-jwt",
                 "vct": "IdentityCredential",
                 "cryptographic_binding_methods_supported": ["jwk"],
-                "credential_signing_alg_values_supported": ["EdDSA", "ES256", "ML-DSA-65", "RS256"],
+                "credential_signing_alg_values_supported": ["ES256", "EdDSA", "ML-DSA-65"],
+                "proof_types_supported": {
+                    "jwt": {
+                        "proof_signing_alg_values_supported": ["ES256", "ES384", "ES512"]
+                    }
+                },
                 "claims": {
                     "given_name": { "mandatory": false },
                     "family_name": { "mandatory": false },
                     "birth_date": { "mandatory": false },
                     "nationality": { "mandatory": false },
                     "age_over_18": { "mandatory": false },
-                    "rut": { "mandatory": false },
-                    "emirates_id": { "mandatory": false },
+                }
+            },
+            "eudi_pid_sd_jwt": {
+                "format": "vc+sd-jwt",
+                "vct": "eu.europa.ec.eudi.pid.1",
+                "cryptographic_binding_methods_supported": ["jwk"],
+                "credential_signing_alg_values_supported": ["ES256"],
+                "proof_types_supported": {
+                    "jwt": {
+                        "proof_signing_alg_values_supported": ["ES256"]
+                    }
+                },
+                "claims": {
+                    "family_name": { "mandatory": true },
+                    "given_name": { "mandatory": true },
+                    "birth_date": { "mandatory": true },
+                    "nationality": { "mandatory": false },
+                    "age_over_18": { "mandatory": false },
                 }
             },
             "eudi_pid_mdoc": {
                 "format": "mso_mdoc",
                 "doctype": "eu.europa.ec.eudi.pid.1",
                 "cryptographic_binding_methods_supported": ["cose_key"],
-                "credential_signing_alg_values_supported": ["EdDSA", "ES256", "ML-DSA-65"],
+                "credential_signing_alg_values_supported": ["ES256", "EdDSA"],
+                "proof_types_supported": {
+                    "jwt": {
+                        "proof_signing_alg_values_supported": ["ES256"]
+                    }
+                },
             }
         },
         "display": [{
@@ -608,22 +634,65 @@ pub async fn token_endpoint(
 
 #[derive(Deserialize)]
 pub struct CredentialRequest {
-    pub format: String,
+    /// OID4VCI 1.0: credential_configuration_id (resolves format+vct from metadata).
+    #[serde(default)]
+    pub credential_configuration_id: Option<String>,
+    /// Legacy: explicit format (vc+sd-jwt / mso_mdoc).
+    #[serde(default)]
+    pub format: Option<String>,
     #[serde(default)]
     pub vct: Option<String>,
     #[serde(default)]
     pub doctype: Option<String>,
+    /// OID4VCI 1.0: `proofs` (plural) — map of proof_type → [jwt, ...].
+    #[serde(default)]
+    pub proofs: Option<ProofsObject>,
+    /// Legacy: `proof` (singular) — still accepted for backward compat.
     #[serde(default)]
     pub proof: Option<ProofObject>,
-    /// Claims to include (for SD-JWT VC).
     #[serde(default)]
     pub claims: Option<serde_json::Value>,
+}
+
+impl CredentialRequest {
+    fn resolved_format(&self) -> &str {
+        if let Some(cid) = &self.credential_configuration_id {
+            if cid.contains("mdoc") || cid.contains("mso") {
+                return "mso_mdoc";
+            }
+            return "vc+sd-jwt";
+        }
+        self.format.as_deref().unwrap_or("vc+sd-jwt")
+    }
+
+    fn first_proof_jwt(&self) -> Option<&str> {
+        // OID4VCI 1.0: proofs.jwt[0]
+        if let Some(proofs) = &self.proofs {
+            if let Some(jwts) = &proofs.jwt {
+                return jwts.first().map(|s| s.as_str());
+            }
+        }
+        // Legacy: proof.jwt
+        if let Some(proof) = &self.proof {
+            if proof.proof_type == "jwt" {
+                return proof.jwt.as_deref();
+            }
+        }
+        None
+    }
 }
 
 #[derive(Deserialize)]
 pub struct ProofObject {
     pub proof_type: String,
     pub jwt: Option<String>,
+}
+
+/// OID4VCI 1.0 proofs object — map of proof_type → array of proof values.
+#[derive(Deserialize)]
+pub struct ProofsObject {
+    #[serde(default)]
+    pub jwt: Option<Vec<String>>,
 }
 
 /// Shared status list store — maps list ID to StatusList.
@@ -761,42 +830,35 @@ pub async fn credential_endpoint(
     }
 
     // Validate proof JWT with c_nonce binding (nonce from dedicated endpoint)
-    if let Some(proof) = &body.proof {
-        if proof.proof_type == "jwt" {
-            if let Some(proof_jwt) = &proof.jwt {
-                let host = req
-                    .headers()
-                    .get("host")
-                    .and_then(|v| v.to_str().ok())
-                    .unwrap_or("localhost:8080");
-                let issuer = format!("https://{host}");
+    if let Some(proof_jwt) = body.first_proof_jwt() {
+        let host = req
+            .headers()
+            .get("host")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("localhost:8080");
+        let issuer = format!("https://{host}");
 
-                // Extract nonce from the proof JWT payload
-                let proof_parts: Vec<&str> = proof_jwt.split('.').collect();
-                let proof_nonce = if proof_parts.len() >= 2 {
-                    base64url_decode(proof_parts[1])
-                        .ok()
-                        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-                        .and_then(|p| p.get("nonce").and_then(|v| v.as_str()).map(String::from))
-                        .unwrap_or_default()
-                } else {
-                    String::new()
-                };
+        let proof_parts: Vec<&str> = proof_jwt.split('.').collect();
+        let proof_nonce = if proof_parts.len() >= 2 {
+            base64url_decode(proof_parts[1])
+                .ok()
+                .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+                .and_then(|p| p.get("nonce").and_then(|v| v.as_str()).map(String::from))
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
 
-                // Consume the nonce (single-use + expiry check)
-                if let Err(e) = nonce_store.consume(&proof_nonce) {
-                    return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                        err_dto("invalid_proof", &format!("c_nonce rejected: {e}")),
-                        400,
-                    )));
-                }
+        if let Err(e) = nonce_store.consume(&proof_nonce) {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("invalid_proof", &format!("c_nonce rejected: {e}")),
+                400,
+            )));
+        }
 
-                // Validate proof JWT structure (typ, aud, iat)
-                if let Err(e) = verify_proof_jwt(proof_jwt, &proof_nonce, &issuer) {
-                    return Ok(HttpResponse::BadRequest()
-                        .json(ApiResponse::<()>::error(err_dto("invalid_proof", &e), 400)));
-                }
-            }
+        if let Err(e) = verify_proof_jwt(proof_jwt, &proof_nonce, &issuer) {
+            return Ok(HttpResponse::BadRequest()
+                .json(ApiResponse::<()>::error(err_dto("invalid_proof", &e), 400)));
         }
     }
 
@@ -806,10 +868,12 @@ pub async fn credential_endpoint(
         }
     })?;
 
+    let resolved_format = body.resolved_format().to_string();
     let vct = body
         .vct
         .as_deref()
         .or(body.doctype.as_deref())
+        .or(body.credential_configuration_id.as_deref())
         .unwrap_or("IdentityCredential");
     let issuer_did = format!("did:goya:{}", &hex::encode(provider.public_key())[..16]);
     let claims_json = body.claims.clone().unwrap_or(serde_json::json!({}));
@@ -844,7 +908,7 @@ pub async fn credential_endpoint(
         None
     };
 
-    match body.format.as_str() {
+    match resolved_format.as_str() {
         "vc+sd-jwt" => issue_sd_jwt_credential(provider.as_ref(), &body, status_ref.as_ref()),
         "mso_mdoc" => issue_mdoc_credential(provider.as_ref(), &body, status_ref.as_ref()),
         other => Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
