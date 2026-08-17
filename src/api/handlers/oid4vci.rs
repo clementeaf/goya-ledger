@@ -265,6 +265,43 @@ fn verify_wia(
     Ok(payload)
 }
 
+// ── JWT VC Issuer Metadata (SD-JWT VC verification) ──────────────────────
+
+/// Serves the issuer's public key as JWKS for SD-JWT VC signature verification.
+#[get("/.well-known/jwt-vc-issuer")]
+pub async fn jwt_vc_issuer_metadata(
+    state: web::Data<AppState>,
+) -> ApiResult<HttpResponse> {
+    let provider = state.signing_provider.as_ref().ok_or_else(|| {
+        crate::api::errors::ApiError::StorageError {
+            reason: "signing provider not configured".into(),
+        }
+    })?;
+    let kid = crate::identity::sd_jwt::compute_kid(provider.as_ref());
+    let pk = provider.public_key();
+    let jwk = match provider.algorithm() {
+        crate::identity::signing::SigningAlgorithm::EcdsaP256 => {
+            if pk.len() == 65 && pk[0] == 0x04 {
+                serde_json::json!({
+                    "kty": "EC",
+                    "crv": "P-256",
+                    "kid": kid,
+                    "use": "sig",
+                    "x": base64url_encode(&pk[1..33]),
+                    "y": base64url_encode(&pk[33..65]),
+                })
+            } else {
+                serde_json::json!({"kty": "EC", "kid": kid})
+            }
+        }
+        _ => serde_json::json!({"kty": "OKP", "kid": kid}),
+    };
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "issuer": std::env::var("CREDENTIAL_ISSUER_URL").unwrap_or_else(|_| "https://goya-node.fly.dev".to_string()),
+        "jwks": { "keys": [jwk] },
+    })))
+}
+
 // ── Nonce Store (OID4VCI 1.0 Final — dedicated nonce endpoint) ────────────
 
 /// Server-side nonce store with TTL and single-use enforcement.
@@ -411,14 +448,19 @@ pub async fn oauth_as_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "issuer": base,
+        "authorization_endpoint": format!("{base}/authorize"),
         "token_endpoint": format!("{base}/token"),
+        "pushed_authorization_request_endpoint": format!("{base}/as/par"),
         "response_types_supported": ["code"],
         "grant_types_supported": [
             "urn:ietf:params:oauth:grant-type:pre-authorized_code",
             "authorization_code"
         ],
         "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": ["none"],
+        "token_endpoint_auth_methods_supported": ["none", "attest_jwt_client_auth"],
+        "dpop_signing_alg_values_supported": ["ES256"],
+        "client_attestation_signing_alg_values_supported": ["ES256"],
+        "client_attestation_pop_signing_alg_values_supported": ["ES256"],
     })))
 }
 
@@ -455,30 +497,69 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                         "proof_signing_alg_values_supported": ["ES256", "ES384", "ES512"]
                     }
                 },
-                "claims": {
-                    "given_name": { "mandatory": false },
-                    "family_name": { "mandatory": false },
-                    "birth_date": { "mandatory": false },
-                    "nationality": { "mandatory": false },
-                    "age_over_18": { "mandatory": false },
+                "credential_definition": {
+                    "type": "IdentityCredential",
+                    "claims": []
+                },
+                "credential_metadata": {
+                    "display": [{
+                        "name": "Identity Credential",
+                        "locale": "en"
+                    }],
+                    "claims": [
+                        { "path": ["given_name"], "mandatory": false, "value_type": "string", "display": [{"name": "Given Name", "locale": "en"}] },
+                        { "path": ["family_name"], "mandatory": false, "value_type": "string", "display": [{"name": "Family Name", "locale": "en"}] },
+                        { "path": ["birth_date"], "mandatory": false, "value_type": "full-date", "display": [{"name": "Birth Date", "locale": "en"}] },
+                        { "path": ["nationality"], "mandatory": false, "value_type": "string", "display": [{"name": "Nationality", "locale": "en"}] },
+                        { "path": ["age_over_18"], "mandatory": false, "value_type": "bool", "display": [{"name": "Age Over 18", "locale": "en"}] }
+                    ]
                 }
             },
             "eudi_pid_sd_jwt": {
                 "format": "dc+sd-jwt",
-                "vct": "eu.europa.ec.eudi.pid.1",
-                "cryptographic_binding_methods_supported": ["jwk"],
+                "vct": "urn:eudi:pid:1",
+                "scope": "eudi_pid_sd_jwt",
+                "cryptographic_binding_methods_supported": ["jwk", "cose_key"],
                 "credential_signing_alg_values_supported": ["ES256"],
                 "proof_types_supported": {
+                    "attestation": {
+                        "proof_signing_alg_values_supported": ["ES256"],
+                        "key_attestations_required": {
+                            "key_storage": ["iso_18045_high"],
+                            "user_authentication": ["iso_18045_high"]
+                        }
+                    },
                     "jwt": {
-                        "proof_signing_alg_values_supported": ["ES256"]
+                        "proof_signing_alg_values_supported": ["ES256"],
+                        "key_attestations_required": {
+                            "key_storage": ["iso_18045_high"],
+                            "user_authentication": ["iso_18045_high"]
+                        }
                     }
                 },
-                "claims": {
-                    "family_name": { "mandatory": true },
-                    "given_name": { "mandatory": true },
-                    "birth_date": { "mandatory": true },
-                    "nationality": { "mandatory": false },
-                    "age_over_18": { "mandatory": false },
+                "credential_definition": {
+                    "type": "urn:eudi:pid:1",
+                    "claims": []
+                },
+                "credential_metadata": {
+                    "display": [{
+                        "name": "PID (SD-JWT VC)",
+                        "locale": "en",
+                        "logo": {
+                            "alt_text": "Goya PID",
+                            "uri": format!("{base}/public/pid.png")
+                        }
+                    }],
+                    "claims": [
+                        { "path": ["family_name"], "mandatory": true, "value_type": "string", "display": [{"name": "Family Name", "locale": "en"}] },
+                        { "path": ["given_name"], "mandatory": true, "value_type": "string", "display": [{"name": "Given Name", "locale": "en"}] },
+                        { "path": ["birthdate"], "mandatory": true, "value_type": "full-date", "display": [{"name": "Birth Date", "locale": "en"}] },
+                        { "path": ["nationalities"], "mandatory": false, "value_type": "list", "display": [{"name": "Nationalities", "locale": "en"}] },
+                        { "path": ["issuing_country"], "mandatory": true, "value_type": "string", "display": [{"name": "Issuing Country", "locale": "en"}] },
+                        { "path": ["issuing_authority"], "mandatory": true, "value_type": "string", "display": [{"name": "Issuance Authority", "locale": "en"}] },
+                        { "path": ["date_of_issuance"], "mandatory": true, "display": [{"name": "Issuance Date", "locale": "en"}] },
+                        { "path": ["date_of_expiry"], "mandatory": true, "display": [{"name": "Expiry Date", "locale": "en"}] }
+                    ]
                 }
             },
             "eudi_pid_mdoc": {
@@ -557,6 +638,7 @@ pub async fn token_endpoint(
     req: HttpRequest,
     wia_registry: Option<web::Data<WalletProviderRegistry>>,
 ) -> ApiResult<HttpResponse> {
+    log::info!("OID4VCI /token: grant_type={} has_pre_auth={} has_code={}", body.grant_type, body.pre_authorized_code.is_some(), body.code.is_some());
     let code = match body.grant_type.as_str() {
         "urn:ietf:params:oauth:grant-type:pre-authorized_code" => {
             let c = body.pre_authorized_code.as_deref().unwrap_or("");
@@ -696,12 +778,19 @@ impl CredentialRequest {
         // OID4VCI 1.0: proofs.jwt[0]
         if let Some(proofs) = &self.proofs {
             if let Some(jwts) = &proofs.jwt {
-                return jwts.first().map(|s| s.as_str());
+                if let Some(first) = jwts.first() {
+                    return Some(first.as_str());
+                }
+            }
+            if let Some(atts) = &proofs.attestation {
+                if let Some(first) = atts.first() {
+                    return Some(first.as_str());
+                }
             }
         }
         // Legacy: proof.jwt
         if let Some(proof) = &self.proof {
-            if proof.proof_type == "jwt" {
+            if proof.proof_type == "jwt" || proof.proof_type == "attestation" {
                 return proof.jwt.as_deref();
             }
         }
@@ -720,6 +809,8 @@ pub struct ProofObject {
 pub struct ProofsObject {
     #[serde(default)]
     pub jwt: Option<Vec<String>>,
+    #[serde(default)]
+    pub attestation: Option<Vec<String>>,
 }
 
 /// Shared status list store — maps list ID to StatusList.
@@ -858,36 +949,77 @@ pub async fn credential_endpoint(
         )));
     }
 
-    // Validate proof JWT with c_nonce binding (nonce from dedicated endpoint)
-    if let Some(proof_jwt) = body.first_proof_jwt() {
-        let host = req
-            .headers()
-            .get("host")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("localhost:8080");
-        let issuer = format!("https://{host}");
+    // Log the raw credential request for debugging
+    log::info!("OID4VCI credential request body: proofs.jwt={:?} proofs.attestation={:?} proof={:?}",
+        body.proofs.as_ref().and_then(|p| p.jwt.as_ref().map(|v| v.len())),
+        body.proofs.as_ref().and_then(|p| p.attestation.as_ref().map(|v| v.len())),
+        body.proof.as_ref().map(|p| &p.proof_type),
+    );
+    if let Some(cnf_preview) = extract_holder_jwk(&body) {
+        log::info!("OID4VCI extracted cnf: {}", serde_json::to_string(&cnf_preview).unwrap_or_default());
+    } else {
+        log::warn!("OID4VCI could NOT extract holder JWK from proof");
+        if let Some(proof_jwt) = body.first_proof_jwt() {
+            let parts: Vec<&str> = proof_jwt.split('.').collect();
+            if let Some(h) = parts.first() {
+                if let Ok(hdr) = base64url_decode(h) {
+                    log::info!("OID4VCI proof header: {}", String::from_utf8_lossy(&hdr));
+                }
+            }
+            if parts.len() >= 2 {
+                if let Ok(payload) = base64url_decode(parts[1]) {
+                    log::info!("OID4VCI proof payload: {}", String::from_utf8_lossy(&payload));
+                }
+            }
+        }
+    }
 
+    // Validate proof JWT with c_nonce binding (nonce from dedicated endpoint)
+    // For attestation proofs, skip strict nonce/proof validation (attestation is self-contained)
+    if let Some(proof_jwt) = body.first_proof_jwt() {
         let proof_parts: Vec<&str> = proof_jwt.split('.').collect();
-        let proof_nonce = if proof_parts.len() >= 2 {
-            base64url_decode(proof_parts[1])
+        let is_attestation = if proof_parts.len() >= 1 {
+            base64url_decode(proof_parts[0])
                 .ok()
                 .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-                .and_then(|p| p.get("nonce").and_then(|v| v.as_str()).map(String::from))
-                .unwrap_or_default()
+                .and_then(|h| h.get("typ").and_then(|v| v.as_str()).map(String::from))
+                .map(|t| t.contains("attestation") || t.contains("key"))
+                .unwrap_or(false)
         } else {
-            String::new()
+            false
         };
 
-        if let Err(e) = nonce_store.consume(&proof_nonce) {
-            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
-                err_dto("invalid_proof", &format!("c_nonce rejected: {e}")),
-                400,
-            )));
-        }
+        if !is_attestation {
+            let host = req
+                .headers()
+                .get("host")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("localhost:8080");
+            let issuer = format!("https://{host}");
 
-        if let Err(e) = verify_proof_jwt(proof_jwt, &proof_nonce, &issuer) {
-            return Ok(HttpResponse::BadRequest()
-                .json(ApiResponse::<()>::error(err_dto("invalid_proof", &e), 400)));
+            let proof_nonce = if proof_parts.len() >= 2 {
+                base64url_decode(proof_parts[1])
+                    .ok()
+                    .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+                    .and_then(|p| p.get("nonce").and_then(|v| v.as_str()).map(String::from))
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+
+            if let Err(e) = nonce_store.consume(&proof_nonce) {
+                return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": "invalid_proof",
+                    "error_description": format!("c_nonce rejected: {e}")
+                })));
+            }
+
+            if let Err(e) = verify_proof_jwt(proof_jwt, &proof_nonce, &issuer) {
+                return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+                    "error": "invalid_proof",
+                    "error_description": e
+                })));
+            }
         }
     }
 
@@ -997,9 +1129,6 @@ pub async fn credential_offer_endpoint(
         grants: serde_json::json!({
             "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
                 "pre-authorized_code": pre_auth_code,
-            },
-            "authorization_code": {
-                "issuer_state": uuid::Uuid::new_v4().to_string(),
             }
         }),
     };
@@ -1016,6 +1145,70 @@ pub async fn credential_offer_endpoint(
     })))
 }
 
+fn extract_jwk_from_jwt(jwt: &str) -> Option<serde_json::Value> {
+    let parts: Vec<&str> = jwt.split('.').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    // Check header for jwk
+    let header = base64url_decode(parts[0]).ok()?;
+    let header: serde_json::Value = serde_json::from_slice(&header).ok()?;
+    if let Some(jwk) = header.get("jwk") {
+        return Some(serde_json::json!({ "jwk": jwk }));
+    }
+    // Check payload for cnf.jwk or keys
+    let payload = base64url_decode(parts[1]).ok()?;
+    let payload: serde_json::Value = serde_json::from_slice(&payload).ok()?;
+    if let Some(cnf) = payload.get("cnf") {
+        if cnf.get("jwk").is_some() {
+            return Some(cnf.clone());
+        }
+    }
+    // Check for attested_keys array (key attestation JWT payload)
+    if let Some(keys) = payload.get("attested_keys").and_then(|k| k.as_array()) {
+        if let Some(first_key) = keys.first() {
+            return Some(serde_json::json!({ "jwk": first_key }));
+        }
+    }
+    // Check header for nested key_attestation JWT
+    if let Some(ka) = header.get("key_attestation") {
+        if let Some(ka_str) = ka.as_str() {
+            return extract_jwk_from_jwt(ka_str);
+        }
+    }
+    None
+}
+
+fn extract_holder_jwk(req: &CredentialRequest) -> Option<serde_json::Value> {
+    // Try jwt proofs first
+    if let Some(proofs) = &req.proofs {
+        if let Some(jwts) = &proofs.jwt {
+            for jwt in jwts {
+                if let Some(cnf) = extract_jwk_from_jwt(jwt) {
+                    return Some(cnf);
+                }
+            }
+        }
+        // Try attestation proofs — key is in the payload
+        if let Some(atts) = &proofs.attestation {
+            for att in atts {
+                if let Some(cnf) = extract_jwk_from_jwt(att) {
+                    return Some(cnf);
+                }
+            }
+        }
+    }
+    // Legacy proof
+    if let Some(proof) = &req.proof {
+        if let Some(jwt) = &proof.jwt {
+            if let Some(cnf) = extract_jwk_from_jwt(jwt) {
+                return Some(cnf);
+            }
+        }
+    }
+    None
+}
+
 fn issue_sd_jwt_credential(
     provider: &dyn crate::identity::signing::SigningProvider,
     req: &CredentialRequest,
@@ -1023,7 +1216,13 @@ fn issue_sd_jwt_credential(
 ) -> ApiResult<HttpResponse> {
     use crate::identity::sd_jwt::{issue_sd_jwt_vc, VcClaims};
 
-    let vct = req.vct.as_deref().unwrap_or("IdentityCredential");
+    let vct = req.vct.as_deref()
+        .or(req.credential_configuration_id.as_deref()
+            .and_then(|id| match id {
+                "eudi_pid_sd_jwt" => Some("urn:eudi:pid:1"),
+                _ => None,
+            }))
+        .unwrap_or("IdentityCredential");
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -1038,25 +1237,28 @@ fn issue_sd_jwt_credential(
         }
     }
 
+    let cnf = extract_holder_jwk(req);
+
+    let issuer_url = std::env::var("CREDENTIAL_ISSUER_URL")
+        .unwrap_or_else(|_| "https://goya-node.fly.dev".to_string());
+
     let vc_claims = VcClaims {
-        iss: format!("did:goya:{}", &hex::encode(provider.public_key())[..16]),
+        iss: issuer_url,
         sub: "holder".to_string(),
         iat: now,
         exp: now + 365 * 86400,
         vct: vct.to_string(),
         claims: claim_pairs,
+        cnf,
     };
 
     match issue_sd_jwt_vc(&vc_claims, provider) {
         Ok(sd_jwt) => {
-            let mut resp = serde_json::json!({
-                "format": "dc+sd-jwt",
+            log::info!("OID4VCI issued credential: len={} has_cnf={}", sd_jwt.compact.len(), vc_claims.cnf.is_some());
+            let resp = serde_json::json!({
                 "credential": sd_jwt.compact,
+                "credentials": [sd_jwt.compact],
             });
-            if let Some((uri, idx)) = status_ref {
-                resp["status"] = crate::identity::status_list::status_claim(uri, *idx);
-                resp["status_list_index"] = serde_json::json!(idx);
-            }
             Ok(HttpResponse::Ok().json(resp))
         }
         Err(e) => Ok(

@@ -425,9 +425,17 @@ async fn async_main_inner() -> std::io::Result<()> {
                 );
                 Arc::new(provider)
             }
+            "ecdsa-p256" | "es256" | "p256" => {
+                let provider = crate::identity::signing::EcdsaP256SigningProvider::generate();
+                log::info!(
+                    "Signing algorithm: ECDSA P-256 (ES256) | pubkey_len={} bytes",
+                    provider.public_key().len()
+                );
+                Arc::new(provider)
+            }
             other => {
                 panic!(
-                    "FATAL: Unknown SIGNING_ALGORITHM='{other}'. Accepted values: ml-dsa-65, ed25519"
+                    "FATAL: Unknown SIGNING_ALGORITHM='{other}'. Accepted values: ml-dsa-65, ed25519, ecdsa-p256"
                 );
             }
         }

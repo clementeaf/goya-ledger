@@ -37,6 +37,9 @@ pub struct VcClaims {
     pub vct: String,
     /// Selectively disclosable claims (name → value).
     pub claims: Vec<(String, serde_json::Value)>,
+    /// Confirmation key (holder's public key as JWK) for key binding.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cnf: Option<serde_json::Value>,
 }
 
 /// A single disclosure: [salt, claim_name, claim_value].
@@ -122,6 +125,11 @@ pub fn jwt_to_alg_pub(s: &str) -> Option<SigningAlgorithm> {
     jwt_to_alg(s)
 }
 
+/// Compute kid from public key (first 8 bytes of SHA-256, base64url).
+pub fn compute_kid(provider: &dyn SigningProvider) -> String {
+    base64url_encode(&hash_with(HashAlgorithm::Sha256, &provider.public_key())[..8])
+}
+
 /// Issue an SD-JWT VC.
 pub fn issue_sd_jwt_vc(
     claims: &VcClaims,
@@ -139,9 +147,10 @@ pub fn issue_sd_jwt_vc(
 
     let header = serde_json::json!({
         "alg": alg_to_jwt(provider.algorithm()),
-        "typ": "vc+sd-jwt",
+        "typ": "dc+sd-jwt",
+        "kid": compute_kid(provider),
     });
-    let payload = serde_json::json!({
+    let mut payload = serde_json::json!({
         "iss": claims.iss,
         "sub": claims.sub,
         "iat": claims.iat,
@@ -150,6 +159,9 @@ pub fn issue_sd_jwt_vc(
         "_sd_alg": "sha-256",
         "_sd": sd_hashes,
     });
+    if let Some(cnf) = &claims.cnf {
+        payload["cnf"] = cnf.clone();
+    }
 
     let header_b64 = base64url_encode(&serde_json::to_vec(&header).map_err(|e| e.to_string())?);
     let payload_b64 = base64url_encode(&serde_json::to_vec(&payload).map_err(|e| e.to_string())?);
@@ -250,7 +262,7 @@ pub fn issue_sd_jwt_vc_with_kb(
 
     let header = serde_json::json!({
         "alg": alg_to_jwt(provider.algorithm()),
-        "typ": "vc+sd-jwt",
+        "typ": "dc+sd-jwt",
     });
     let payload = serde_json::json!({
         "iss": claims.iss,
@@ -707,6 +719,8 @@ mod tests {
             exp: 2_000_000_000,
             vct: "AgeVerification".to_string(),
             claims: vec![("age_over_18".to_string(), serde_json::json!(true))],
+            cnf: None,
+            cnf: None,
         };
         let sd_jwt = issue_sd_jwt_vc(&claims, &provider).unwrap();
         assert_eq!(sd_jwt.disclosures.len(), 1);
@@ -728,6 +742,8 @@ mod tests {
             exp: 2_000_000_000,
             vct: "EmptyVC".to_string(),
             claims: vec![],
+            cnf: None,
+            cnf: None,
         };
         let sd_jwt = issue_sd_jwt_vc(&claims, &provider).unwrap();
         assert!(sd_jwt.disclosures.is_empty());
