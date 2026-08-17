@@ -22,7 +22,7 @@ fn no_sha256_available_in_approved_api() {
     approved_mode::__test_reset();
     api::initialize_approved_mode().unwrap();
 
-    let h = api::sha3_256(b"test").unwrap();
+    let _h = api::sha3_256(b"test").unwrap();
     // SHA3-256 empty string has a known distinct hash from SHA-256
     let h_empty = api::sha3_256(b"").unwrap();
     assert_eq!(

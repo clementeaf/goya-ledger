@@ -39,7 +39,7 @@ pub fn encapsulate(
     encapsulate_raw(public_key)
 }
 
-pub(crate) fn encapsulate_raw(
+pub fn encapsulate_raw(
     public_key: &MlKemPublicKey,
 ) -> Result<(MlKemCiphertext, MlKemSharedSecret), CryptoError> {
     let pk = mlkem768::PublicKey::from_bytes(public_key.as_bytes())
@@ -59,7 +59,7 @@ pub fn decapsulate(
     decapsulate_raw(private_key, ciphertext)
 }
 
-pub(crate) fn decapsulate_raw(
+pub fn decapsulate_raw(
     private_key: &MlKemPrivateKey,
     ciphertext: &MlKemCiphertext,
 ) -> Result<MlKemSharedSecret, CryptoError> {
@@ -71,6 +71,82 @@ pub(crate) fn decapsulate_raw(
     let shared = MlKemSharedSecret(ss.as_bytes().to_vec());
     shared.mlock();
     Ok(shared)
+}
+
+// ── ACVP deterministic variants (FIPS 203) ────────────────────────
+
+// PQClean symbol names vary by arch
+#[cfg(target_arch = "aarch64")]
+extern "C" {
+    #[link_name = "PQCLEAN_MLKEM768_AARCH64_keypair_derand"]
+    fn mlkem768_keypair_derand(pk: *mut u8, sk: *mut u8, coins: *const u8) -> std::os::raw::c_int;
+
+    #[link_name = "PQCLEAN_MLKEM768_AARCH64_enc_derand"]
+    fn mlkem768_enc_derand(
+        ct: *mut u8,
+        ss: *mut u8,
+        pk: *const u8,
+        coins: *const u8,
+    ) -> std::os::raw::c_int;
+}
+
+#[cfg(not(target_arch = "aarch64"))]
+extern "C" {
+    #[link_name = "PQCLEAN_MLKEM768_CLEAN_crypto_kem_keypair_derand"]
+    fn mlkem768_keypair_derand(pk: *mut u8, sk: *mut u8, coins: *const u8) -> std::os::raw::c_int;
+
+    #[link_name = "PQCLEAN_MLKEM768_CLEAN_crypto_kem_enc_derand"]
+    fn mlkem768_enc_derand(
+        ct: *mut u8,
+        ss: *mut u8,
+        pk: *const u8,
+        coins: *const u8,
+    ) -> std::os::raw::c_int;
+}
+
+/// Deterministic ML-KEM-768 keygen from 64 bytes of coins (d || z).
+/// For ACVP/CMVP testing only.
+#[doc(hidden)]
+pub fn generate_keypair_derand(coins: &[u8; 64]) -> Result<MlKemKeyPair, CryptoError> {
+    let mut pk = vec![0u8; 1184];
+    let mut sk = vec![0u8; 2400];
+    let ret = unsafe { mlkem768_keypair_derand(pk.as_mut_ptr(), sk.as_mut_ptr(), coins.as_ptr()) };
+    if ret != 0 {
+        return Err(CryptoError::InvalidKey(
+            "mlkem keypair_derand failed".into(),
+        ));
+    }
+    let private_key = MlKemPrivateKey(sk);
+    private_key.mlock();
+    Ok(MlKemKeyPair {
+        public_key: MlKemPublicKey(pk),
+        private_key,
+    })
+}
+
+/// Deterministic ML-KEM-768 encapsulation from 32 bytes of coins (m).
+/// For ACVP/CMVP testing only.
+#[doc(hidden)]
+pub fn encapsulate_derand(
+    public_key: &MlKemPublicKey,
+    coins: &[u8; 32],
+) -> Result<(MlKemCiphertext, MlKemSharedSecret), CryptoError> {
+    let mut ct = vec![0u8; 1088];
+    let mut ss = vec![0u8; 32];
+    let ret = unsafe {
+        mlkem768_enc_derand(
+            ct.as_mut_ptr(),
+            ss.as_mut_ptr(),
+            public_key.as_bytes().as_ptr(),
+            coins.as_ptr(),
+        )
+    };
+    if ret != 0 {
+        return Err(CryptoError::InvalidKey("mlkem enc_derand failed".into()));
+    }
+    let shared = MlKemSharedSecret(ss);
+    shared.mlock();
+    Ok((MlKemCiphertext(ct), shared))
 }
 
 #[cfg(test)]

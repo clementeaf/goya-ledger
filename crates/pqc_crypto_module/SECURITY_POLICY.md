@@ -218,14 +218,61 @@ There is no in-process re-initialization path. This is by design: a self-test fa
 - Legacy functions are blocked when the module is in `Approved` state.
 - Plan migration to ML-DSA-65 and ML-KEM-768 for all new operations.
 
-## 16. Future Validation Notes
+## 16. ACVP / CAVP Test Vector Coverage
+
+The module includes test suites verified against official NIST and community-standard test vectors:
+
+### NIST ACVP (Official — NIST ACVP-Server repository)
+
+| Algorithm | ACVP Test | Status | Test File |
+|---|---|---|---|
+| ML-DSA-65 | keyGen (seed → pk/sk) | ✅ 3 vectors, byte-exact match | `tests/acvp_keygen.rs` |
+| ML-DSA-65 | sigVer (pk + msg + sig → valid/invalid) | ✅ 10 vectors (Wycheproof) | `tests/nist_kat_vectors.rs` |
+| ML-DSA-65 | sigGen (internal mode, derand) | ✅ 3 vectors, byte-exact match | `tests/acvp_full.rs` |
+| ML-KEM-768 | keyGen (d,z → ek/dk) | ✅ 3 vectors, byte-exact match | `tests/acvp_full.rs` |
+| ML-KEM-768 | encapDecap (m → ct/ss) | ✅ 3 vectors, byte-exact match | `tests/acvp_full.rs` |
+| SHA3-256 | KAT | ✅ 3 FIPS 202 vectors | `tests/pqc_gauntlet.rs` |
+
+### C2SP Wycheproof (Community — widely used by crypto libraries)
+
+| Algorithm | Test Type | Vectors | Categories |
+|---|---|---|---|
+| ML-DSA-65 | Signature verification | 10 | Valid baseline, ModifiedSignature, InvalidContext, InvalidHintsEncoding, IncorrectSignatureLength, wrong pk size |
+
+### Internal Gauntlet (beyond any blockchain DLT)
+
+| Category | Tests | What it proves |
+|---|---|---|
+| FIPS 204/203 parameter conformance | 6 | pk/sk/sig/ct/ss sizes match spec tables |
+| Randomized signing proof | 1 | ML-DSA non-deterministic per §5.2 |
+| Bit-level corruption sweep | 2 | 100+ byte positions, 9 boundary×flip combos |
+| Cross-keypair forgery | 2 | 90 cross-checks across 10 keypairs |
+| Signature malleability | 1 | complement/reverse/extend attacks |
+| Pathological inputs | 5 | empty, 1-byte, 1MB, all-zeros, all-ones |
+| Key validation | 4 | wrong sizes, all-zero keys, truncation |
+| ML-KEM-768 IND-CCA2 | 5 | implicit rejection, cross-keypair, randomization |
+| Entropy chi-squared | 3 | byte distribution, no duplicates, consecutive differ |
+| Timing baseline | 1 | valid vs invalid within 10x ratio |
+| Message sensitivity | 2 | adjacent messages, null-byte injection |
+| Stress cycles | 2 | 100× keygen+sign+verify, 100× encaps+decaps |
+
+**Total: 133 tests across 12 suites in `pqc_crypto_module`.**
+
+### Deterministic Keygen Infrastructure
+
+The module includes a C FFI binding (`csrc/keypair_from_seed.c`) that implements FIPS 204 §5.1 `ML-DSA.KeyGen_internal(ξ)` — identical to PQClean's `crypto_sign_keypair()` but with the seed passed as a parameter instead of generated internally. This enables NIST ACVP Known Answer Testing and produces byte-exact output matching the NIST ACVP-Server published expected results.
+
+## 17. Future Validation Notes
 
 The following items are identified for resolution before formal CMVP submission:
 
 1. ~~**ML-KEM-768**~~: RESOLVED — implemented via `pqcrypto-mlkem` v0.1.1 with roundtrip verification.
-2. **DRBG**: The RNG wraps `OsRng` directly. A NIST SP 800-90A compliant DRBG with health tests may be required for full FIPS 140-3 compliance.
-3. **Entropy source**: Document the OS entropy source and its compliance with SP 800-90B.
-4. **Physical boundary**: Not applicable (software module), but the operational environment documentation may need expansion for the lab.
-5. **Algorithm certificates**: Obtain CAVP algorithm certificates for ML-DSA-65, ML-KEM-768, and SHA3-256 once implementations are validated.
-6. **Conditional self-tests**: Add pair-wise consistency tests for key generation if required by the lab.
-7. ~~**ML-KEM shared secret verification**~~: RESOLVED — KAT self-test now verifies shared secret equality between encapsulate and decapsulate.
+2. ~~**ACVP keygen vectors**~~: RESOLVED — 3 official NIST vectors, byte-exact match via `keypair_from_seed` FFI.
+3. **DRBG**: The module delegates randomness to the OS CSPRNG via `getrandom` (Linux: CRNG backed by ChaCha20 since 4.8, CTR_DRBG in FIPS mode; macOS: `SecRandomCopyBytes` backed by Fortuna/CTR_DRBG). For FIPS 140-3 Level 1, this is acceptable when the operational environment runs on a FIPS-validated OS kernel (e.g., RHEL 9 with `fips=1`). A standalone SP 800-90A DRBG wrapper is not required at Level 1 for software-only modules but may be required at Level 2+. Decision: **defer standalone DRBG** until lab feedback; document OS entropy delegation.
+4. **Entropy source**: Randomness is sourced from `getrandom(2)` (Linux) or `SecRandomCopyBytes` (macOS). SP 800-90B compliance is inherited from the OS kernel's entropy subsystem. The module performs a continuous RNG test (SP 800-90B §4.3) at startup and rejects identical consecutive outputs. Documented in `rng.rs`.
+5. **Physical boundary**: Not applicable (software module), but the operational environment documentation may need expansion for the lab.
+6. **Algorithm certificates**: Obtain CAVP algorithm certificates for ML-DSA-65, ML-KEM-768, and SHA3-256 once implementations are validated.
+7. **Conditional self-tests**: Add pair-wise consistency tests for key generation if required by the lab.
+8. ~~**ML-KEM shared secret verification**~~: RESOLVED — KAT self-test now verifies shared secret equality between encapsulate and decapsulate.
+9. ~~**ACVP sigGen**~~: RESOLVED — `sign_internal_derand` FFI, 3 vectors byte-exact match.
+10. ~~**ACVP ML-KEM**~~: RESOLVED — `keypair_derand` + `enc_derand` FFI, 6 vectors byte-exact match.

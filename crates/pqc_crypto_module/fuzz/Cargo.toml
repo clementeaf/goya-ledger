@@ -1,0 +1,45 @@
+[workspace]
+
+[package]
+name = "pqc-crypto-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+pqc_crypto_module = { path = ".." }
+pqcrypto-mldsa = "0.1.2"
+pqcrypto-mlkem = "0.1.1"
+pqcrypto-traits = "0.3"
+
+[[bin]]
+name = "fuzz_mldsa_verify"
+path = "fuzz_targets/fuzz_mldsa_verify.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_mldsa_sign"
+path = "fuzz_targets/fuzz_mldsa_sign.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_mlkem_decap"
+path = "fuzz_targets/fuzz_mlkem_decap.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_mlkem_encap"
+path = "fuzz_targets/fuzz_mlkem_encap.rs"
+test = false
+doc = false
+bench = false

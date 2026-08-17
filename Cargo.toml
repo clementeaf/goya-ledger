@@ -1,5 +1,6 @@
 [workspace]
 members = [".", "crates/pqc_crypto_module", "tools/acvp_dry_run", "tauri-app"]
+exclude = ["crates/pqc_crypto_module/fuzz"]
 
 [package]
 name = "rust-bc"

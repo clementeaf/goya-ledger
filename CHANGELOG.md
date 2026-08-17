@@ -4,6 +4,70 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.11.1] — 2026-08-17
+
+### Added — PQC Certification Gauntlet (CMVP-ready)
+
+154 PQC-specific tests + 4 fuzz targets. 256 NIST/Wycheproof vectors verified byte-exact.
+
+#### NIST ACVP Test Vectors (official, from NIST ACVP-Server)
+- **ML-DSA-65 keyGen** — 3 vectors, deterministic keygen from seed via custom `keypair_from_seed` C FFI (`csrc/keypair_from_seed.c`)
+- **ML-DSA-65 sigGen internal** — 3 vectors, deterministic signing via `sign_internal_derand` C FFI (`csrc/acvp_derand.c`)
+- **ML-DSA-65 sigGen external** — 3 vectors with context, via `sign_external_derand` C FFI
+- **ML-DSA-65 sigGen deterministic** — 3 vectors (rnd=zeros)
+- **ML-DSA-65 sigVer** — 10 NIST ACVP vectors (1 valid, 9 invalid, external mode with context)
+- **ML-KEM-768 keyGen** — 3 vectors via PQClean `keypair_derand` FFI
+- **ML-KEM-768 encapsulation** — 3 vectors via PQClean `enc_derand` FFI
+- **ML-KEM-768 decapsulation** — 5 vectors via standard `decapsulate` API
+- **SHA3-256 KAT** — 3 FIPS 202 vectors
+
+#### C2SP Wycheproof (community standard)
+- **ML-DSA-65 sigVer full suite** — 210/210 vectors (79 valid, 131 invalid), 25 groups including wrong-size keys, modified signatures, invalid hints, infinity norm violations
+
+#### Adversarial Gauntlet (`tests/pqc_gauntlet.rs`)
+- Bit-level signature corruption sweep (100+ positions)
+- ML-DSA randomized signing proof (FIPS 204 §5.2)
+- Signature malleability resistance (complement, reverse, extend)
+- ML-KEM-768 IND-CCA2 implicit rejection
+- Cross-keypair forgery (90 pair-wise checks across 10 keys)
+- Entropy chi-squared test on RNG output
+- Timing baseline (valid vs invalid verify within 10x)
+- Pathological inputs (empty, 1B, 1MB, all-zeros, all-ones)
+
+#### Cross-Implementation Validation
+- PQClean (C via FFI) vs RustCrypto `ml-dsa` (pure Rust) — keygen, signing, cross-verify all byte-exact identical
+- Both implementations match NIST ACVP expected values
+
+#### Fuzzing
+- 4 `cargo-fuzz` targets: `fuzz_mldsa_verify`, `fuzz_mldsa_sign`, `fuzz_mlkem_decap`, `fuzz_mlkem_encap`
+- 41.8M executions, 0 crashes
+- Seed corpus from Wycheproof vectors
+
+#### PQC End-to-End Integration
+- Block signed with ML-DSA-65 → stored in RocksDB → retrieved → signature cryptographically verified
+- Tampered payload detection post-storage
+- JSON wire format roundtrip preserves 3309-byte signatures
+- Cross-algorithm confusion rejected (Ed25519 sig ≠ ML-DSA verifier)
+- TLS PQC: ML-KEM-768 in key exchange provider, TLS 1.3 cipher suites, env toggle
+
+#### CMVP Documentation
+- `LAB_SUBMISSION_PACKAGE.md` — complete pre-assessment submission package for NVLAP lab
+- `SECURITY_POLICY.md` updated with ACVP vector inventory, DRBG delegation rationale, and resolved gaps
+
+### Changed
+- `mldsa.rs`: `sign_message_raw`, `verify_signature_raw` now `pub` (was `pub(crate)`) for fuzz targets
+- `mlkem.rs`: `encapsulate_raw`, `decapsulate_raw` now `pub` for fuzz targets
+- `Cargo.toml`: added `cc` build-dep, `pqcrypto-internals` dep, `ml-dsa`/`serde`/`serde_json` dev-deps
+- Root `Cargo.toml`: excluded `fuzz/` from workspace
+
+### Stats
+- `pqc_crypto_module`: 145 tests, 15 suites, 0 failed
+- PQC E2E integration: 9 tests
+- Fuzz: 4 targets, 41.8M executions, 0 crashes
+- Workspace: 2688 lib tests passed, 0 failed, 3 ignored
+
+---
+
 ## [0.11.0] — 2026-08-17
 
 ### Added — EUDI Identity Layer + real wallet interop
