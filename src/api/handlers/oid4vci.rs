@@ -981,7 +981,7 @@ pub async fn credential_offer_endpoint(
     let base = format!("https://{host}");
 
     let config_ids = if body.credential_configuration_ids.is_empty() {
-        vec!["IdentityCredential_sd_jwt".to_string()]
+        vec!["eudi_pid_sd_jwt".to_string()]
     } else {
         body.credential_configuration_ids.clone()
     };
