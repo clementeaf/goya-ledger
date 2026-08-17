@@ -4,6 +4,53 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.11.0] — 2026-08-17
+
+### Added — EUDI Identity Layer + real wallet interop
+
+First credential issuance from a PQC blockchain to a real EU Digital Identity Wallet.
+
+#### EUDI Protocol Stack (OID4VCI 1.0 Final)
+- **ES256 (ECDSA P-256) signing provider** — `EcdsaP256SigningProvider` for EUDI-compatible credential signing
+- **OID4VCI issuer metadata** — `/.well-known/openid-credential-issuer` with `dc+sd-jwt` format, `credential_definition`, `credential_metadata`, three credential configs (`IdentityCredential_sd_jwt`, `eudi_pid_sd_jwt`, `eudi_pid_mdoc`)
+- **OAuth AS metadata** — `/.well-known/oauth-authorization-server` (RFC 8414) with PAR, DPoP, attestation signing alg support
+- **JWT VC Issuer metadata** — `/.well-known/jwt-vc-issuer` serving JWKS for SD-JWT VC signature verification
+- **Nonce endpoint** — `POST /nonce` with single-use enforcement via `NonceStore` (5 min TTL)
+- **Token endpoint** — `POST /token` accepting pre-authorized code, `client_id`, `tx_code`, DPoP, WIA
+- **Credential endpoint** — `POST /credential` issuing `dc+sd-jwt` VCs with `cnf` holder key binding, `kid` in header, `iss` as issuer URL
+- **Credential offer** — `POST /credential_offer` generating `openid-credential-offer://` deep links
+- **Attestation proof type** — `proofs.attestation` support with recursive `key_attestation` JWK extraction
+- **OID4VP 1.0 Final** — DCQL-only (dropped PresentationDefinition), `direct_post` response mode
+
+#### Attestation & Status
+- **Attestation Status List** — IETF Token Status List (draft-20/21), `statuslist+jwt` with ZLIB compression, 2-bit entries (VALID/SUSPENDED/REVOKED), `StatusListStore` in `AppState`
+- **Attestation Type Registry** — PID/EAA/QEAA/PuB-EAA hierarchy with `IssuerRole` enforcement (fail-closed)
+
+#### Formal Verification
+- **TLA+ HotStuff model** — `spec/tla/GoyaHotStuff.tla`, 300M states simulated, 0 violations
+- **ChainAncestryChecker** — O(1) hash→height index for BFT ancestry checks
+
+### Changed
+- SD-JWT format: `vc+sd-jwt` → `dc+sd-jwt` (OID4VCI 1.0 Final rename, both accepted in handler)
+- SD-JWT `iss` field: DID → issuer URL (wallet validates `iss == credential_issuer`)
+- SD-JWT `typ` header: `dc+sd-jwt`
+- SD-JWT `vct` for PID: `urn:eudi:pid:1`
+- Credential response: `credential` + `credentials` array (wallet expects plural)
+- OID4VCI endpoints at root path (not `/api/v1`) — wallet standard
+- `/token` exempt from JSON Content-Type middleware (form-urlencoded)
+- `SIGNING_ALGORITHM` accepts `ecdsa-p256` / `es256` / `p256`
+
+### Deployment
+- Live at `https://goya-node.fly.dev` with HTTPS
+- Verified with EUDI Reference Wallet (iOS) — full pre-authorized code flow: metadata discovery → token → nonce → credential issuance
+- SD-JWT VC stored in wallet successfully
+
+### Stats
+- 2688 tests passed, 0 failed, 3 ignored
+- fmt + clippy clean
+
+---
+
 ## [0.10.1] — 2026-08-16
 
 ### Fixed — BFT 4-node quorum + Fly networking

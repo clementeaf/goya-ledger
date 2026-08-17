@@ -1377,10 +1377,6 @@ mod tests {
         web::Data::new(StatusListStore::new())
     }
 
-    fn make_att_registry() -> web::Data<crate::identity::attestation::AttestationTypeRegistry> {
-        web::Data::new(crate::identity::attestation::AttestationTypeRegistry::new())
-    }
-
     macro_rules! oid4vci_app {
         ($state:expr) => {
             oid4vci_app!($state, make_nonce_store())
@@ -1834,7 +1830,7 @@ mod tests {
         let body: serde_json::Value = test::read_body_json(resp).await;
         let cred = body["credential"].as_str().unwrap();
         assert!(cred.contains('~'));
-        assert!(body["credentials"].as_array().unwrap().len() >= 1);
+        assert!(!body["credentials"].as_array().unwrap().is_empty());
     }
 
     #[actix_web::test]
@@ -2210,7 +2206,7 @@ mod tests {
         let cred_body: serde_json::Value = test::read_body_json(resp).await;
         let credential = cred_body["credential"].as_str().unwrap();
         assert!(credential.contains('~'));
-        assert!(cred_body["credentials"].as_array().unwrap().len() >= 1);
+        assert!(!cred_body["credentials"].as_array().unwrap().is_empty());
 
         // Status injection was removed from the simplified response —
         // status list is still available via the /statuslist endpoint.
