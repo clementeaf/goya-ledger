@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Goya — Document Trust Platform</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+:root {
+  --bg: #fafafa;
+  --bg-card: #ffffff;
+  --bg-code: #0a0a0a;
+  --text: #171717;
+  --text-2: #525252;
+  --text-3: #a3a3a3;
+  --border: #e5e5e5;
+  --nav-bg: rgba(255,255,255,0.80);
+  --code-text: #d4d4d4;
+  --hover: #f5f5f5;
+  --pill-bg: #f5f5f5;
+  --pill-text: #171717;
+  --pill-a-bg: #171717;
+  --pill-a-text: #ffffff;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0a0a0a;--bg-card:#141414;--bg-code:#050505;--text:#e5e5e5;
+  --text-2:#a3a3a3;--text-3:#525252;--border:#262626;
+  --nav-bg:rgba(10,10,10,0.85);--code-text:#a3a3a3;--hover:#1a1a1a;
+  --pill-bg:#1a1a1a;--pill-text:#e5e5e5;--pill-a-bg:#e5e5e5;--pill-a-text:#0a0a0a;
+}}
+[data-theme="dark"]{
+  --bg:#0a0a0a;--bg-card:#141414;--bg-code:#050505;--text:#e5e5e5;
+  --text-2:#a3a3a3;--text-3:#525252;--border:#262626;
+  --nav-bg:rgba(10,10,10,0.85);--code-text:#a3a3a3;--hover:#1a1a1a;
+  --pill-bg:#1a1a1a;--pill-text:#e5e5e5;--pill-a-bg:#e5e5e5;--pill-a-text:#0a0a0a;
+}
+[data-theme="light"]{
+  --bg:#fafafa;--bg-card:#ffffff;--bg-code:#0a0a0a;--text:#171717;
+  --text-2:#525252;--text-3:#a3a3a3;--border:#e5e5e5;
+  --nav-bg:rgba(255,255,255,0.80);--code-text:#d4d4d4;--hover:#f5f5f5;
+  --pill-bg:#f5f5f5;--pill-text:#171717;--pill-a-bg:#171717;--pill-a-text:#ffffff;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+
+[lang="es"]{display:none}
+body.es [lang="es"]{display:block}
+body.es [lang="en"]{display:none}
+
+nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:0 24px}
+.ni{max-width:960px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;height:48px}
+.nl{display:flex;align-items:center;gap:24px}
+.logo{font-size:14px;font-weight:700;color:var(--text);text-decoration:none;letter-spacing:-0.02em}
+nav a{color:var(--text-3);text-decoration:none;font-size:12px;font-weight:500;letter-spacing:0.02em;transition:color .15s}
+nav a:hover,nav a:focus{color:var(--text);outline:none}
+.nr{display:flex;align-items:center;gap:12px}
+.btn{background:var(--pill-bg);color:var(--pill-text);border:1px solid var(--border);font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit;letter-spacing:0.02em;transition:all .15s}
+.btn:hover{background:var(--border)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--text);display:inline-block}
+
+.w{max-width:960px;margin:0 auto;padding:0 24px}
+section{padding:64px 0}
+section+section{border-top:1px solid var(--border)}
+
+.hero{padding:80px 0 64px}
+.hero h1{font-size:clamp(28px,4.5vw,44px);font-weight:700;line-height:1.12;letter-spacing:-0.035em;text-wrap:balance;margin-bottom:16px}
+.hero p{font-size:15px;color:var(--text-2);max-width:540px;line-height:1.7;margin-bottom:32px}
+.stats{display:flex;gap:32px;flex-wrap:wrap}
+.sv{font-size:24px;font-weight:700;letter-spacing:-0.03em;font-variant-numeric:tabular-nums}
+.sl{font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-3);margin-top:1px;font-weight:600}
+
+h2{font-size:20px;font-weight:700;letter-spacing:-0.02em;margin-bottom:6px}
+.sd{font-size:13px;color:var(--text-2);margin-bottom:32px;max-width:540px}
+h3{font-size:15px;font-weight:600;margin-bottom:4px;letter-spacing:-0.01em}
+
+.cg{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.cd{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:20px}
+.cd p{color:var(--text-2);font-size:12px;line-height:1.6;margin-top:6px}
+
+.pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;border-radius:5px;background:var(--pill-bg);color:var(--pill-text);margin-bottom:8px}
+.pill-a{background:var(--pill-a-bg);color:var(--pill-a-text)}
+
+.ep{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.eh{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;user-select:none;font-size:13px}
+.eh:hover{background:var(--hover)}
+.eh:focus{outline:2px solid var(--text);outline-offset:-2px}
+.mt{font-family:'SF Mono','Cascadia Code',monospace;font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;letter-spacing:0.04em;background:var(--pill-bg);color:var(--pill-text)}
+.mt-p{background:var(--pill-a-bg);color:var(--pill-a-text)}
+.ep-path{font-family:'SF Mono','Cascadia Code',monospace;font-size:13px}
+.ep-d{font-size:11px;color:var(--text-3);margin-left:auto}
+.eb{display:none;border-top:1px solid var(--border);padding:16px}
+.ep.open .eb{display:block}
+
+pre{background:var(--bg-code);color:var(--code-text);border-radius:8px;padding:16px;overflow-x:auto;font-family:'SF Mono','Cascadia Code',monospace;font-size:12px;line-height:1.7;margin:8px 0}
+
+.tw{overflow-x:auto;margin:12px 0}
+table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);padding:8px 12px;border-bottom:1px solid var(--border);font-weight:600}
+td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--text-2)}
+td:first-child{color:var(--text);font-weight:500}
+
+.rg{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.ri{padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card)}
+.ri-f{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px}
+.ri h4{font-size:13px;font-weight:600;margin-bottom:4px}
+.ri p{font-size:11px;color:var(--text-2);line-height:1.5}
+
+.uc-icon{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-3);margin-bottom:4px}
+
+.lc{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.la{color:var(--text-3);font-size:12px}
+
+footer{border-top:1px solid var(--border);padding:32px 0;text-align:center;color:var(--text-3);font-size:11px}
+footer a{color:var(--text);text-decoration:none}
+
+@media(max-width:640px){.stats{gap:20px}.ep-d{display:none}.nl{gap:16px}nav a{font-size:11px}}
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="ni">
+    <div class="nl">
+      <a href="#" class="logo">Goya</a>
+      <a href="#stack">Stack</a>
+      <a href="#lexchain">LexChain</a>
+      <a href="#api">API</a>
+      <a href="#compliance">Compliance</a>
+    </div>
+    <div class="nr">
+      <span class="dot"></span>
+      <span style="font-size:11px;color:var(--text-3);font-weight:500">PQC-ready</span>
+      <button class="btn" id="theme-btn" onclick="toggleTheme()">Dark</button>
+      <button class="btn" id="lang-btn" onclick="toggleLang()">ES</button>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="w">
+    <div lang="en">
+      <h1>Legal contracts,<br>not smart contracts</h1>
+      <p>Post-quantum blockchain for legally binding digital agreements. Define contract flows in JSON. The engine handles signatures, identity, timestamps, and on-chain archival.</p>
+    </div>
+    <div lang="es">
+      <h1>Contratos legales,<br>no smart contracts</h1>
+      <p>Blockchain post-cu&aacute;ntico para acuerdos digitales legalmente vinculantes. Define flujos contractuales en JSON. El motor gestiona firmas, identidad, timestamps y archivo on-chain.</p>
+    </div>
+    <div class="stats">
+      <div class="st"><span class="sv">3</span><span class="sl">NIST PQC Standards</span></div>
+      <div class="st"><span class="sv">277</span><span class="sl">API Endpoints</span></div>
+      <div class="st"><span class="sv">2,721</span><span class="sl">Tests</span></div>
+      <div class="st"><span class="sv">141K</span><span class="sl">Lines of Rust</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="w">
+    <div lang="en"><h2>Technology Stack</h2><p class="sd">Every layer built for legal-grade cryptography and post-quantum resilience.</p></div>
+    <div lang="es"><h2>Stack Tecnol&oacute;gico</h2><p class="sd">Cada capa construida para criptograf&iacute;a de grado legal y resiliencia post-cu&aacute;ntica.</p></div>
+    <div class="cg">
+      <div class="cd"><span class="pill">FIPS 204</span><h3>ML-DSA-65</h3><div lang="en"><p>Default signing. Lattice-based, NIST-standardized. 3309 B signatures. 256 ACVP vectors verified byte-exact.</p></div><div lang="es"><p>Firma por defecto. Basado en lattices, estandarizado NIST. Firmas de 3309 B. 256 vectores ACVP verificados byte-exacto.</p></div></div>
+      <div class="cd"><span class="pill">FIPS 203</span><h3>ML-KEM-768</h3><div lang="en"><p>Hybrid TLS key exchange (X25519 + ML-KEM-768). Enabled by default. Protects against harvest-now-decrypt-later.</p></div><div lang="es"><p>Intercambio de claves TLS h&iacute;brido (X25519 + ML-KEM-768). Activo por defecto. Protege contra harvest-now-decrypt-later.</p></div></div>
+      <div class="cd"><span class="pill">FIPS 205</span><h3>SLH-DSA</h3><div lang="en"><p>SHAKE-128s hash-based backup signatures. Insurance if lattice cryptography is compromised. 7856 B signatures.</p></div><div lang="es"><p>Firmas backup basadas en hash SHAKE-128s. Seguro si la criptograf&iacute;a lattice se compromete. Firmas de 7856 B.</p></div></div>
+      <div class="cd"><span class="pill pill-a">FIPS 140-3</span><h3>Crypto Module</h3><div lang="en"><p>Four-state machine. KATs at startup. ZeroizeOnDrop on all private keys. CMVP lab submission package ready.</p></div><div lang="es"><p>M&aacute;quina de 4 estados. KATs al inicio. ZeroizeOnDrop en claves privadas. Paquete CMVP listo.</p></div></div>
+      <div class="cd"><span class="pill pill-a">FES / FEA</span><h3 lang="en">Electronic Signatures</h3><h3 lang="es">Firma Electr&oacute;nica</h3><div lang="en"><p>Simple (FES) and Advanced (FEA) per Chile Ley 19.799 and EU eIDAS. FEA requires ML-DSA-65 + biometrics. CAdES DER envelopes.</p></div><div lang="es"><p>Simple (FES) y Avanzada (FEA) seg&uacute;n Ley 19.799 Chile y eIDAS UE. FEA requiere ML-DSA-65 + biometr&iacute;a. Sobres CAdES DER.</p></div></div>
+      <div class="cd"><span class="pill">RFC 3161</span><h3 lang="en">Timestamp Authority</h3><h3 lang="es">Autoridad de Sellado de Tiempo</h3><div lang="en"><p>Built-in TSA with PQC signatures. JSON and DER formats. NTP-aware time source validation.</p></div><div lang="es"><p>TSA integrada con firmas PQC. Formatos JSON y DER. Validaci&oacute;n de fuente de tiempo NTP-aware.</p></div></div>
+      <div class="cd"><span class="pill">W3C DID</span><h3 lang="en">Decentralized Identity</h3><h3 lang="es">Identidad Descentralizada</h3><div lang="en"><p>DID method <code style="font-size:11px">did:goya:{pubkey}</code>. Key rotation. EUDI Wallet interop verified with real EU wallet (iOS).</p></div><div lang="es"><p>M&eacute;todo DID <code style="font-size:11px">did:goya:{pubkey}</code>. Rotaci&oacute;n de claves. Interop EUDI Wallet verificado con wallet EU real (iOS).</p></div></div>
+      <div class="cd"><span class="pill">BFT</span><h3>HotStuff Consensus</h3><div lang="en"><p>DAG-based HotStuff BFT + DPoS. 4-node testnet across 4 continents. TLA+ verified: 300M states, 0 violations.</p></div><div lang="es"><p>HotStuff BFT basado en DAG + DPoS. Testnet de 4 nodos en 4 continentes. Verificado TLA+: 300M estados, 0 violaciones.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="lexchain">
+  <div class="w">
+    <div lang="en"><h2>Goya LexChain</h2><p class="sd">Ethereum has Solidity for smart contracts. Goya has LexChain for legal contracts. Define in JSON, execute with full legal-crypto stack.</p></div>
+    <div lang="es"><h2>Goya LexChain</h2><p class="sd">Ethereum tiene Solidity para smart contracts. Goya tiene LexChain para contratos legales. Define en JSON, ejecuta con el stack legal-crypto completo.</p></div>
+
+    <h3 lang="en">Deploy from template</h3><h3 lang="es">Desplegar desde template</h3>
+<pre>{
+  "template": "nda",
+  "parties": {
+    "discloser": "did:goya:alice",
+    "recipient": "did:goya:bob"
+  },
+  "payload": { "scope": "Project X" }
+}</pre>
+
+    <h3 lang="en" style="margin-top:24px">Full contract definition</h3><h3 lang="es" style="margin-top:24px">Definici&oacute;n completa</h3>
+<pre>{
+  "type": "service_agreement",
+  "parties": [
+    { "role": "provider", "did": "did:goya:alice", "signature_level": "advanced" },
+    { "role": "client",   "did": "did:goya:bob",   "signature_level": "simple" }
+  ],
+  "payload": { "terms": "6-month engagement" },
+  "require_notarization": true,
+  "deadline_secs": 259200,
+  "webhook_url": "https://app.com/hooks/lexchain"
+}</pre>
+
+    <h3 lang="en" style="margin-top:24px">What LexChain handles</h3><h3 lang="es" style="margin-top:24px">Qu&eacute; gestiona LexChain</h3>
+    <div class="tw"><table>
+      <thead><tr><th lang="en">You write</th><th lang="es">T&uacute; escribes</th><th lang="en">LexChain executes</th><th lang="es">LexChain ejecuta</th></tr></thead>
+      <tbody>
+        <tr><td><code>"signature_level": "advanced"</code></td><td>ML-DSA-65 + biometrics + CAdES DER</td></tr>
+        <tr><td><code>"signature_level": "simple"</code></td><td>Ed25519 / ML-DSA-65</td></tr>
+        <tr><td><code>"require_notarization": true</code></td><td>RFC 3161 TSA + PQC</td></tr>
+        <tr><td><code>"deadline_secs": 259200</code></td><td lang="en">Auto-expiry after 72h</td><td lang="es">Auto-expiraci&oacute;n tras 72h</td></tr>
+        <tr><td><code>"webhook_url": "..."</code></td><td lang="en">Async POST on changes</td><td lang="es">POST as&iacute;ncrono en cambios</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 lang="en" style="margin-top:24px">Lifecycle</h3><h3 lang="es" style="margin-top:24px">Ciclo de vida</h3>
+    <div class="lc">
+      <span class="pill">Deploy</span><span class="la">&rarr;</span>
+      <span class="pill">Sign</span><span class="la">&rarr;</span>
+      <span class="pill pill-a">Notarize</span><span class="la">&rarr;</span>
+      <span class="pill pill-a">Archive</span>
+    </div>
+
+    <h3 lang="en" style="margin-top:24px">Built-in templates</h3><h3 lang="es" style="margin-top:24px">Templates integrados</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Template</th><th>Roles</th><th lang="en">Signature</th><th lang="es">Firma</th><th>TSA</th><th>Deadline</th></tr></thead>
+      <tbody>
+        <tr><td><code>nda</code></td><td>discloser, recipient</td><td>FES</td><td lang="en">No</td><td lang="es">No</td><td>7d</td></tr>
+        <tr><td><code>service_agreement</code></td><td>provider, client</td><td>FES</td><td lang="en">Yes</td><td lang="es">S&iacute;</td><td>72h</td></tr>
+        <tr><td><code>power_of_attorney</code></td><td>grantor, attorney</td><td>FEA</td><td lang="en">Yes</td><td lang="es">S&iacute;</td><td>48h</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<section id="api">
+  <div class="w">
+    <div lang="en"><h2>LexChain API</h2><p class="sd">All endpoints under <code>/api/v1</code>. Response: <code>{"status":"ok","data":{...},"trace_id":"..."}</code></p></div>
+    <div lang="es"><h2>API LexChain</h2><p class="sd">Todos los endpoints bajo <code>/api/v1</code>. Respuesta: <code>{"status":"ok","data":{...},"trace_id":"..."}</code></p></div>
+
+    <div class="ep open">
+      <div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')">
+        <span class="mt mt-p">POST</span><span class="ep-path">/lexchain/deploy</span>
+        <span class="ep-d" lang="en">Deploy contract</span><span class="ep-d" lang="es">Desplegar contrato</span>
+      </div>
+      <div class="eb">
+        <p lang="en" style="color:var(--text-2);font-size:12px;margin-bottom:8px">Accepts full definition or template reference. Returns contract with <code>id</code>.</p>
+        <p lang="es" style="color:var(--text-2);font-size:12px;margin-bottom:8px">Acepta definici&oacute;n completa o referencia a template. Retorna contrato con <code>id</code>.</p>
+<pre>curl -X POST https://goya-node.fly.dev/api/v1/lexchain/deploy \
+  -H "Content-Type: application/json" \
+  -d '{"template":"nda","parties":{"discloser":"did:goya:a1b2","recipient":"did:goya:c3d4"},"payload":{"scope":"Project X"}}'</pre>
+      </div>
+    </div>
+    <div class="ep"><div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')"><span class="mt mt-p">POST</span><span class="ep-path">/lexchain/{id}/sign</span><span class="ep-d" lang="en">Sign as party</span><span class="ep-d" lang="es">Firmar como parte</span></div><div class="eb"><p lang="en" style="color:var(--text-2);font-size:12px;margin-bottom:8px">DID + signature + optional biometric evidence. Validates FES/FEA, verifies signature, advances state.</p><p lang="es" style="color:var(--text-2);font-size:12px;margin-bottom:8px">DID + firma + evidencia biom&eacute;trica opcional. Valida FES/FEA, verifica firma, avanza estado.</p>
+<pre>curl -X POST https://goya-node.fly.dev/api/v1/lexchain/lxc-xxx/sign \
+  -H "Content-Type: application/json" \
+  -d '{"did":"did:goya:a1b2","signature":"3045...","public_key":"0482..."}'</pre></div></div>
+    <div class="ep"><div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')"><span class="mt">GET</span><span class="ep-path">/lexchain/{id}</span><span class="ep-d" lang="en">Get contract + proofs</span><span class="ep-d" lang="es">Obtener contrato + pruebas</span></div><div class="eb"><p lang="en" style="color:var(--text-2);font-size:12px">Full state: signatures, TSA token, block height, content hash.</p><p lang="es" style="color:var(--text-2);font-size:12px">Estado completo: firmas, token TSA, altura de bloque, hash de contenido.</p></div></div>
+    <div class="ep"><div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')"><span class="mt">GET</span><span class="ep-path">/lexchain</span><span class="ep-d" lang="en">List contracts</span><span class="ep-d" lang="es">Listar contratos</span></div><div class="eb"><p lang="en" style="color:var(--text-2);font-size:12px">All deployed contracts with current states.</p><p lang="es" style="color:var(--text-2);font-size:12px">Todos los contratos desplegados con estados actuales.</p></div></div>
+    <div class="ep"><div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')"><span class="mt">GET</span><span class="ep-path">/lexchain/templates</span><span class="ep-d" lang="en">List templates</span><span class="ep-d" lang="es">Listar templates</span></div><div class="eb"><p lang="en" style="color:var(--text-2);font-size:12px">Built-in and custom templates with role definitions.</p><p lang="es" style="color:var(--text-2);font-size:12px">Templates integrados y custom con definiciones de roles.</p></div></div>
+  </div>
+</section>
+
+<section id="compliance">
+  <div class="w">
+    <div lang="en"><h2>Regulatory Compliance</h2><p class="sd">Built for jurisdictions where digital signatures carry legal weight.</p></div>
+    <div lang="es"><h2>Cumplimiento Regulatorio</h2><p class="sd">Construido para jurisdicciones donde las firmas digitales tienen peso legal.</p></div>
+    <div class="rg">
+      <div class="ri"><div class="ri-f">Chile</div><h4>Ley 19.799</h4><div lang="en"><p>Simple (FES) and Advanced (FEA) electronic signatures. Article 15 Registration Authority.</p></div><div lang="es"><p>Firma Electr&oacute;nica Simple (FES) y Avanzada (FEA). Art&iacute;culo 15 Autoridad de Registro.</p></div></div>
+      <div class="ri"><div class="ri-f">EU</div><h4>eIDAS</h4><div lang="en"><p>Simple, Advanced, Qualified signatures. EUDI Wallet interop verified. OID4VCI 1.0 Final.</p></div><div lang="es"><p>Firmas Simple, Avanzada, Cualificada. Interop EUDI Wallet verificado. OID4VCI 1.0 Final.</p></div></div>
+      <div class="ri"><div class="ri-f">US</div><h4>ESIGN / UETA</h4><div lang="en"><p>Federal e-signature recognition. FIPS 140-3 Level 1 crypto module. NIST PQC (FIPS 202/203/204/205).</p></div><div lang="es"><p>Reconocimiento federal de firma electr&oacute;nica. M&oacute;dulo FIPS 140-3 Level 1. NIST PQC (FIPS 202/203/204/205).</p></div></div>
+      <div class="ri"><div class="ri-f">NIST</div><h4>CMVP / CAVP</h4><div lang="en"><p>256 ACVP vectors byte-exact. Lab submission package ready. FIPS 140-3 state machine.</p></div><div lang="es"><p>256 vectores ACVP byte-exacto. Paquete de submittal listo. M&aacute;quina de estados FIPS 140-3.</p></div></div>
+      <div class="ri"><div class="ri-f">ETSI</div><h4>CAdES / XAdES / PAdES</h4><div lang="en"><p>EN 319 122/132/142. Trust Service List (TS 119 612). OCSP (RFC 6960).</p></div><div lang="es"><p>EN 319 122/132/142. Lista de servicios de confianza (TS 119 612). OCSP (RFC 6960).</p></div></div>
+      <div class="ri"><div class="ri-f">IETF</div><h4>RFC Standards</h4><p>RFC 3161 (TSA) &middot; RFC 6960 (OCSP) &middot; RFC 8414 (OAuth AS) &middot; RFC 5280 (CRL) &middot; SD-JWT VC &middot; OID4VCI/OID4VP 1.0</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="w">
+    <div lang="en"><h2>Use Cases</h2><p class="sd">Where legally binding agreements meet post-quantum cryptography.</p></div>
+    <div lang="es"><h2>Casos de Uso</h2><p class="sd">Donde los acuerdos legalmente vinculantes se encuentran con la criptograf&iacute;a post-cu&aacute;ntica.</p></div>
+    <div class="cg">
+      <div class="cd"><div class="uc-icon" lang="en">NOTARIAL</div><div class="uc-icon" lang="es">NOTARIAL</div><h3 lang="en">Notarial Instruments</h3><h3 lang="es">Instrumentos Notariales</h3><div lang="en"><p>Digital deeds, powers of attorney, certified copies. FEA with ML-DSA-65 + biometrics. CAdES for long-term validity.</p></div><div lang="es"><p>Escrituras digitales, poderes, copias certificadas. FEA con ML-DSA-65 + biometr&iacute;a. CAdES para validez a largo plazo.</p></div></div>
+      <div class="cd"><div class="uc-icon" lang="en">GOVERNMENT</div><div class="uc-icon" lang="es">GOBIERNO</div><h3 lang="en">Government Digital Services</h3><h3 lang="es">Servicios Digitales de Gobierno</h3><div lang="en"><p>EUDI Wallet credential issuance. PID and EAA attestations. EU Digital Identity framework.</p></div><div lang="es"><p>Emisi&oacute;n de credenciales EUDI Wallet. Atestaciones PID y EAA. Marco de identidad digital UE.</p></div></div>
+      <div class="cd"><div class="uc-icon" lang="en">ENTERPRISE</div><div class="uc-icon" lang="es">EMPRESA</div><h3 lang="en">Contract Management</h3><h3 lang="es">Gesti&oacute;n de Contratos</h3><div lang="en"><p>Multi-party agreements with deadlines, webhooks, auto-notarization. Templates for NDAs, services, custom flows.</p></div><div lang="es"><p>Acuerdos multi-parte con deadlines, webhooks, auto-notarizaci&oacute;n. Templates para NDAs, servicios, flujos custom.</p></div></div>
+      <div class="cd"><div class="uc-icon" lang="en">SUPPLY CHAIN</div><div class="uc-icon" lang="es">CADENA DE SUMINISTRO</div><h3 lang="en">Provenance</h3><h3 lang="es">Trazabilidad</h3><div lang="en"><p>Immutable on-chain archival. Merkle proofs. Cross-chain bridge. SHA-256 document fingerprinting.</p></div><div lang="es"><p>Archivo inmutable on-chain. Pruebas Merkle. Bridge cross-chain. Huella digital SHA-256.</p></div></div>
+      <div class="cd"><div class="uc-icon">PQC SECURITY</div><h3 lang="en">Post-Quantum Enterprise</h3><h3 lang="es">Empresa Post-Cu&aacute;ntica</h3><div lang="en"><p>First DLT with all three NIST PQC standards. Dual signing for migration. TLS 1.3 ML-KEM-768 hybrid default.</p></div><div lang="es"><p>Primer DLT con los tres est&aacute;ndares PQC NIST. Firma dual para migraci&oacute;n. TLS 1.3 ML-KEM-768 h&iacute;brido por defecto.</p></div></div>
+      <div class="cd"><div class="uc-icon">COMPLIANCE</div><h3 lang="en">Regulatory Automation</h3><h3 lang="es">Automatizaci&oacute;n Regulatoria</h3><div lang="en"><p>ISO 20022 validation. KYC/AML checks. Audit trail with RocksDB. OCSP + CRL distribution.</p></div><div lang="es"><p>Validaci&oacute;n ISO 20022. Verificaciones KYC/AML. Trail de auditor&iacute;a con RocksDB. Distribuci&oacute;n OCSP + CRL.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="w">
+    <div lang="en"><h2>PQC Comparison</h2><p class="sd">No other blockchain implements all three NIST post-quantum standards.</p></div>
+    <div lang="es"><h2>Comparaci&oacute;n PQC</h2><p class="sd">Ning&uacute;n otro blockchain implementa los tres est&aacute;ndares post-cu&aacute;nticos de NIST.</p></div>
+    <div class="tw"><table>
+      <thead><tr><th>Project</th><th lang="en">PQC Signatures</th><th lang="es">Firmas PQC</th><th>Key Exchange</th><th>NIST Vectors</th><th>CMVP</th></tr></thead>
+      <tbody>
+        <tr><td style="font-weight:700">Goya Ledger</td><td>ML-DSA-65 + SLH-DSA</td><td>ML-KEM-768</td><td>256 ACVP</td><td lang="en">Yes</td><td lang="es">S&iacute;</td></tr>
+        <tr><td>Bitcoin</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+        <tr><td>Ethereum</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+        <tr><td>QRL</td><td>XMSS</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+        <tr><td>Algorand</td><td lang="en">Proposals</td><td lang="es">Propuestas</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+        <tr><td>Solana</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<footer>
+  <div class="w">
+    <p>Goya Ledger v0.12.3 &mdash; Rust &middot; Actix-Web 4 &middot; RocksDB &middot; HotStuff BFT</p>
+    <p style="margin-top:6px"><a href="https://goya-node.fly.dev">goya-node.fly.dev</a></p>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('.eh').forEach(el=>{
+  el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click()}})
+});
+function toggleLang(){
+  document.body.classList.toggle('es');
+  document.getElementById('lang-btn').textContent=document.body.classList.contains('es')?'EN':'ES';
+}
+function toggleTheme(){
+  const html=document.documentElement;
+  const isDark=html.getAttribute('data-theme')==='dark';
+  html.setAttribute('data-theme',isDark?'light':'dark');
+  document.getElementById('theme-btn').textContent=isDark?'Dark':'Light';
+}
+</script>
+</body>
+</html>

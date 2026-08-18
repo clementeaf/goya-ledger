@@ -912,7 +912,7 @@ async fn async_main_inner() -> std::io::Result<()> {
             log::info!("Certificate lifecycle manager initialized");
             Some(Arc::new(lm))
         },
-        lexchain_store: crate::lexchain::store::LexChainStore::new(),
+        lexchain_store: crate::lexchain::store::LexChainStore::with_backend(gateway_store.clone()),
     };
     log::info!("LexChain engine initialized");
 
