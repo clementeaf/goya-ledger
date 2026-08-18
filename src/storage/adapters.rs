@@ -88,6 +88,7 @@ const CF_INVITATIONS: &str = "invitations";
 const CF_NOTARIZATIONS: &str = "notarizations";
 /// Ownership transfers: key = `{content_hash}:{timestamp}`, value = JSON OwnershipTransfer
 const CF_OWNERSHIP_TRANSFERS: &str = "ownership_transfers";
+const CF_LEXCONTRACTS: &str = "lexcontracts";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -130,6 +131,7 @@ const ALL_CFS: &[&str] = &[
     CF_INVITATIONS,
     CF_NOTARIZATIONS,
     CF_OWNERSHIP_TRANSFERS,
+    CF_LEXCONTRACTS,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -1757,6 +1759,52 @@ impl BlockStore for RocksDbBlockStore {
             }
         }
         result.sort_by_key(|t| t.transferred_at);
+        Ok(result)
+    }
+
+    fn write_lexcontract(
+        &self,
+        contract: &crate::lexchain::types::LexContract,
+    ) -> StorageResult<()> {
+        let cf = self
+            .db
+            .cf_handle(CF_LEXCONTRACTS)
+            .ok_or_else(|| StorageError::RocksDbError("missing lexcontracts CF".into()))?;
+        let json = serde_json::to_vec(contract)
+            .map_err(|e| StorageError::SerializationError(e.to_string()))?;
+        self.db
+            .put_cf(&cf, contract.id.as_bytes(), &json)
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn read_lexcontract(&self, id: &str) -> StorageResult<crate::lexchain::types::LexContract> {
+        let cf = self
+            .db
+            .cf_handle(CF_LEXCONTRACTS)
+            .ok_or_else(|| StorageError::RocksDbError("missing lexcontracts CF".into()))?;
+        match self
+            .db
+            .get_cf(&cf, id.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+        {
+            Some(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|e| StorageError::DeserializationError(e.to_string())),
+            None => Err(StorageError::KeyNotFound(format!("lexcontract:{id}"))),
+        }
+    }
+
+    fn list_lexcontracts(&self) -> StorageResult<Vec<crate::lexchain::types::LexContract>> {
+        let cf = self
+            .db
+            .cf_handle(CF_LEXCONTRACTS)
+            .ok_or_else(|| StorageError::RocksDbError("missing lexcontracts CF".into()))?;
+        let mut result = Vec::new();
+        for item in self.db.iterator_cf(&cf, rocksdb::IteratorMode::Start) {
+            let (_, value) = item.map_err(|e| StorageError::RocksDbError(e.to_string()))?;
+            let contract: crate::lexchain::types::LexContract = serde_json::from_slice(&value)
+                .map_err(|e| StorageError::DeserializationError(e.to_string()))?;
+            result.push(contract);
+        }
         Ok(result)
     }
 }

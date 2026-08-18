@@ -1005,6 +1005,25 @@ pub trait BlockStore: Send + Sync {
         }
         Ok((blocks, total))
     }
+
+    // ── LexChain contract persistence ─────────────────────────────────────
+
+    fn write_lexcontract(
+        &self,
+        _contract: &crate::lexchain::types::LexContract,
+    ) -> StorageResult<()> {
+        Ok(())
+    }
+
+    fn read_lexcontract(&self, _id: &str) -> StorageResult<crate::lexchain::types::LexContract> {
+        Err(super::errors::StorageError::KeyNotFound(
+            "lexcontract".into(),
+        ))
+    }
+
+    fn list_lexcontracts(&self) -> StorageResult<Vec<crate::lexchain::types::LexContract>> {
+        Ok(vec![])
+    }
 }
 
 /// Blanket impl so `Arc<T>` can be used wherever `Box<dyn BlockStore>` is expected.
@@ -1133,6 +1152,18 @@ impl<T: BlockStore> BlockStore for Arc<T> {
         content_hash: &str,
     ) -> StorageResult<Vec<OwnershipTransfer>> {
         (**self).read_ownership_transfers(content_hash)
+    }
+    fn write_lexcontract(
+        &self,
+        contract: &crate::lexchain::types::LexContract,
+    ) -> StorageResult<()> {
+        (**self).write_lexcontract(contract)
+    }
+    fn read_lexcontract(&self, id: &str) -> StorageResult<crate::lexchain::types::LexContract> {
+        (**self).read_lexcontract(id)
+    }
+    fn list_lexcontracts(&self) -> StorageResult<Vec<crate::lexchain::types::LexContract>> {
+        (**self).list_lexcontracts()
     }
 }
 

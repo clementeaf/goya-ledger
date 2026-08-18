@@ -1,33 +1,39 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use crate::storage::traits::BlockStore;
 
 use super::types::LexContract;
 
 #[derive(Clone)]
 pub struct LexChainStore {
-    contracts: Arc<Mutex<HashMap<String, LexContract>>>,
+    backend: Arc<dyn BlockStore>,
 }
 
 impl LexChainStore {
     pub fn new() -> Self {
         Self {
-            contracts: Arc::new(Mutex::new(HashMap::new())),
+            backend: Arc::new(crate::storage::MemoryStore::new()),
         }
     }
 
+    pub fn with_backend(backend: Arc<dyn BlockStore>) -> Self {
+        Self { backend }
+    }
+
     pub fn save(&self, contract: LexContract) {
-        self.contracts
-            .lock()
-            .unwrap()
-            .insert(contract.id.clone(), contract);
+        let _ = self.backend.write_lexcontract(&contract);
     }
 
     pub fn get(&self, id: &str) -> Option<LexContract> {
-        self.contracts.lock().unwrap().get(id).cloned()
+        self.backend.read_lexcontract(id).ok()
     }
 
     pub fn list(&self) -> Vec<LexContract> {
-        self.contracts.lock().unwrap().values().cloned().collect()
+        self.backend.list_lexcontracts().unwrap_or_default()
+    }
+
+    pub fn backend(&self) -> &dyn BlockStore {
+        &*self.backend
     }
 }
 

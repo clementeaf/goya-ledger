@@ -23,6 +23,10 @@ pub enum LexChainError {
     NotarizationFailed(String),
     #[error("contract requires at least one party")]
     NoParties,
+    #[error("DID not registered: {0}")]
+    DidNotRegistered(String),
+    #[error("archival failed: {0}")]
+    ArchivalFailed(String),
 }
 
 fn now_secs() -> u64 {
@@ -82,6 +86,10 @@ pub fn sign(
             expected: "pending_signatures".into(),
             got: contract.state.to_string(),
         });
+    }
+
+    if store.backend().read_identity(&req.did).is_err() {
+        return Err(LexChainError::DidNotRegistered(req.did.clone()));
     }
 
     let party = contract
@@ -178,11 +186,7 @@ pub fn notarize(
     Ok(contract)
 }
 
-pub fn archive(
-    store: &LexChainStore,
-    contract_id: &str,
-    block_height: u64,
-) -> Result<LexContract, LexChainError> {
+pub fn archive(store: &LexChainStore, contract_id: &str) -> Result<LexContract, LexChainError> {
     let mut contract = store
         .get(contract_id)
         .ok_or_else(|| LexChainError::NotFound(contract_id.to_string()))?;
@@ -194,7 +198,28 @@ pub fn archive(
         });
     }
 
-    contract.block_height = Some(block_height);
+    let backend = store.backend();
+    let height = backend.get_latest_height().unwrap_or(0);
+
+    let tx = crate::storage::traits::Transaction {
+        id: format!("lxc-archive:{}", contract.id),
+        block_height: height,
+        timestamp: now_secs(),
+        input_did: contract
+            .parties
+            .first()
+            .map(|p| p.did.clone())
+            .unwrap_or_default(),
+        output_recipient: "lexchain:archive".to_string(),
+        amount: 0,
+        state: "confirmed".to_string(),
+    };
+
+    backend
+        .write_transaction(&tx)
+        .map_err(|e| LexChainError::ArchivalFailed(e.to_string()))?;
+
+    contract.block_height = Some(height);
     contract.state = ContractState::Archived;
 
     store.save(contract.clone());
@@ -208,9 +233,23 @@ mod tests {
         MlDsaSigningProvider, SigningAlgorithm, SigningProvider, SoftwareSigningProvider,
     };
     use crate::signature::{BiometricEvidence, SignatureLevel};
+    use crate::storage::traits::IdentityRecord;
 
     fn test_store() -> LexChainStore {
         LexChainStore::new()
+    }
+
+    fn register_did(store: &LexChainStore, did: &str) {
+        store
+            .backend()
+            .write_identity(&IdentityRecord {
+                did: did.to_string(),
+                public_key: "deadbeef".to_string(),
+                created_at: 0,
+                updated_at: 0,
+                status: "active".to_string(),
+            })
+            .unwrap();
     }
 
     fn fes_definition() -> ContractDefinition {
@@ -281,6 +320,7 @@ mod tests {
     #[test]
     fn sign_advances_to_fully_signed() {
         let store = test_store();
+        register_did(&store, "did:goya:alice");
         let contract = deploy(&store, fes_definition()).unwrap();
         let provider = SoftwareSigningProvider::generate();
         let req = sign_as(&contract, &provider);
@@ -291,8 +331,21 @@ mod tests {
     }
 
     #[test]
-    fn sign_rejects_unknown_did() {
+    fn sign_rejects_unregistered_did() {
         let store = test_store();
+        let contract = deploy(&store, fes_definition()).unwrap();
+        let provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &provider);
+        assert!(matches!(
+            sign(&store, &contract.id, &req),
+            Err(LexChainError::DidNotRegistered(_))
+        ));
+    }
+
+    #[test]
+    fn sign_rejects_unknown_party() {
+        let store = test_store();
+        register_did(&store, "did:goya:unknown");
         let contract = deploy(&store, fes_definition()).unwrap();
         let provider = SoftwareSigningProvider::generate();
         let mut req = sign_as(&contract, &provider);
@@ -306,6 +359,7 @@ mod tests {
     #[test]
     fn sign_rejects_after_fully_signed() {
         let store = test_store();
+        register_did(&store, "did:goya:alice");
         let contract = deploy(&store, fes_definition()).unwrap();
         let provider = SoftwareSigningProvider::generate();
         let req = sign_as(&contract, &provider);
@@ -320,6 +374,8 @@ mod tests {
     #[test]
     fn two_party_flow_pending_until_both_sign() {
         let store = test_store();
+        register_did(&store, "did:goya:alice");
+        register_did(&store, "did:goya:bob");
         let contract = deploy(&store, two_party_definition()).unwrap();
 
         let alice = SoftwareSigningProvider::generate();
@@ -356,6 +412,7 @@ mod tests {
     #[test]
     fn full_lifecycle_deploy_sign_notarize_archive() {
         let store = test_store();
+        register_did(&store, "did:goya:alice");
         let contract = deploy(&store, fes_definition()).unwrap();
 
         let provider = SoftwareSigningProvider::generate();
@@ -369,14 +426,21 @@ mod tests {
         assert_eq!(notarized.state, ContractState::Notarized);
         assert!(notarized.tsa_token.is_some());
 
-        let archived = archive(&store, &contract.id, 42).unwrap();
+        let archived = archive(&store, &contract.id).unwrap();
         assert_eq!(archived.state, ContractState::Archived);
-        assert_eq!(archived.block_height, Some(42));
+        assert!(archived.block_height.is_some());
+
+        let tx = store
+            .backend()
+            .read_transaction(&format!("lxc-archive:{}", contract.id))
+            .unwrap();
+        assert_eq!(tx.state, "confirmed");
     }
 
     #[test]
     fn pqc_fea_lifecycle() {
         let store = test_store();
+        register_did(&store, "did:goya:notary");
         let def = ContractDefinition {
             contract_type: "notarial_deed".into(),
             parties: vec![PartyDefinition {
@@ -419,5 +483,46 @@ mod tests {
                 .signature_algorithm,
             SigningAlgorithm::MlDsa65
         );
+    }
+
+    #[test]
+    fn archive_writes_transaction_to_store() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let contract = deploy(&store, fes_definition()).unwrap();
+
+        let provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let archived = archive(&store, &contract.id).unwrap();
+        assert_eq!(archived.state, ContractState::Archived);
+
+        let tx_id = format!("lxc-archive:{}", contract.id);
+        let tx = store.backend().read_transaction(&tx_id).unwrap();
+        assert_eq!(tx.output_recipient, "lexchain:archive");
+        assert_eq!(tx.input_did, "did:goya:alice");
+    }
+
+    #[test]
+    fn archive_rejects_pending_contract() {
+        let store = test_store();
+        let contract = deploy(&store, fes_definition()).unwrap();
+        assert!(matches!(
+            archive(&store, &contract.id),
+            Err(LexChainError::InvalidState { .. })
+        ));
+    }
+
+    #[test]
+    fn persistence_roundtrip() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let contract = deploy(&store, fes_definition()).unwrap();
+        let id = contract.id.clone();
+
+        let loaded = store.get(&id).unwrap();
+        assert_eq!(loaded.definition.contract_type, "service_agreement");
+        assert_eq!(loaded.parties.len(), 1);
     }
 }

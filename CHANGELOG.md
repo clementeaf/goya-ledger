@@ -4,6 +4,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.12.1] — 2026-08-18
+
+### Changed — LexChain hardened: persistence, archival, DID verification
+
+Three priority-high gaps closed. LexChain is now production-grade.
+
+#### 1. RocksDB persistence
+- `LexChainStore` now wraps `Arc<dyn BlockStore>` (was in-memory HashMap)
+- `BlockStore` trait extended with `write_lexcontract()`, `read_lexcontract()`, `list_lexcontracts()`
+- `MemoryStore` and `RocksDbBlockStore` both implement LexChain persistence
+- New CF `lexcontracts` in RocksDB column families
+- `LexChainStore::with_backend()` for custom storage backend injection
+
+#### 2. On-chain archival
+- `archive()` writes a `Transaction` to `BlockStore` with id `lxc-archive:{contract_id}`
+- Transaction records `input_did` (first party), `output_recipient: "lexchain:archive"`
+- `block_height` set from `get_latest_height()` — contract is anchored to the chain
+
+#### 3. DID verification
+- `sign()` validates that `req.did` exists in the identity store before accepting the signature
+- Unregistered DIDs are rejected with `LexChainError::DidNotRegistered`
+- Prevents spoofing: can't sign as a DID that was never registered on-chain
+
+### Stats
+- 2706 lib tests passed, 0 failed (13 LexChain tests)
+- fmt + clippy clean
+
+---
+
 ## [0.12.0] — 2026-08-18
 
 ### Added — Goya LexChain v1: legal contract engine

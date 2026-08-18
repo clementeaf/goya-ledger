@@ -58,6 +58,8 @@ pub struct MemoryStore {
     notarizations: Mutex<HashMap<String, NotarizationEntry>>,
     /// Ownership transfers: content_hash → Vec<OwnershipTransfer>
     ownership_transfers: Mutex<HashMap<String, Vec<OwnershipTransfer>>>,
+    /// LexChain contracts: id → LexContract
+    lexcontracts: Mutex<HashMap<String, crate::lexchain::types::LexContract>>,
 }
 
 impl MemoryStore {
@@ -87,6 +89,7 @@ impl MemoryStore {
             invitations: Mutex::new(HashMap::new()),
             notarizations: Mutex::new(HashMap::new()),
             ownership_transfers: Mutex::new(HashMap::new()),
+            lexcontracts: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -839,6 +842,36 @@ impl BlockStore for MemoryStore {
             .get(content_hash)
             .cloned()
             .unwrap_or_default())
+    }
+
+    fn write_lexcontract(
+        &self,
+        contract: &crate::lexchain::types::LexContract,
+    ) -> StorageResult<()> {
+        self.lexcontracts
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(contract.id.clone(), contract.clone());
+        Ok(())
+    }
+
+    fn read_lexcontract(&self, id: &str) -> StorageResult<crate::lexchain::types::LexContract> {
+        self.lexcontracts
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(id)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("lexcontract:{id}")))
+    }
+
+    fn list_lexcontracts(&self) -> StorageResult<Vec<crate::lexchain::types::LexContract>> {
+        Ok(self
+            .lexcontracts
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .cloned()
+            .collect())
     }
 }
 
