@@ -1,0 +1,28 @@
+{
+  "name": "goya-sdk",
+  "version": "0.1.0",
+  "description": "Goya Ledger SDK — deploy and sign legal contracts with post-quantum cryptography",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/test.js"
+  },
+  "keywords": [
+    "blockchain",
+    "pqc",
+    "post-quantum",
+    "legal",
+    "signature",
+    "lexchain"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@noble/ed25519": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^5.5.0"
+  }
+}
