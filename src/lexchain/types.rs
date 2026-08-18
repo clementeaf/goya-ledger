@@ -16,6 +16,10 @@ pub struct ContractDefinition {
     pub payload: serde_json::Value,
     #[serde(default)]
     pub require_notarization: bool,
+    /// Seconds from deploy until the contract expires if not fully signed.
+    /// `None` = no deadline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deadline_secs: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,6 +29,7 @@ pub enum ContractState {
     FullySigned,
     Notarized,
     Archived,
+    Expired,
 }
 
 impl std::fmt::Display for ContractState {
@@ -34,6 +39,7 @@ impl std::fmt::Display for ContractState {
             Self::FullySigned => write!(f, "fully_signed"),
             Self::Notarized => write!(f, "notarized"),
             Self::Archived => write!(f, "archived"),
+            Self::Expired => write!(f, "expired"),
         }
     }
 }
@@ -84,6 +90,14 @@ impl LexContract {
 
     pub fn party_by_did_mut(&mut self, did: &str) -> Option<&mut PartyState> {
         self.parties.iter_mut().find(|p| p.did == did)
+    }
+
+    pub fn is_expired(&self, now: u64) -> bool {
+        if let Some(deadline) = self.definition.deadline_secs {
+            self.state == ContractState::PendingSignatures && now > self.created_at + deadline
+        } else {
+            false
+        }
     }
 }
 

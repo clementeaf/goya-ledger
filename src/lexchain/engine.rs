@@ -27,6 +27,8 @@ pub enum LexChainError {
     DidNotRegistered(String),
     #[error("archival failed: {0}")]
     ArchivalFailed(String),
+    #[error("contract expired")]
+    Expired,
 }
 
 fn now_secs() -> u64 {
@@ -86,6 +88,12 @@ pub fn sign(
             expected: "pending_signatures".into(),
             got: contract.state.to_string(),
         });
+    }
+
+    if contract.is_expired(now_secs()) {
+        contract.state = ContractState::Expired;
+        store.save(contract);
+        return Err(LexChainError::Expired);
     }
 
     if store.backend().read_identity(&req.did).is_err() {
@@ -226,6 +234,20 @@ pub fn archive(store: &LexChainStore, contract_id: &str) -> Result<LexContract, 
     Ok(contract)
 }
 
+/// Check and expire contracts past their deadline. Returns expired contract IDs.
+pub fn expire_pending(store: &LexChainStore) -> Vec<String> {
+    let now = now_secs();
+    let mut expired = Vec::new();
+    for mut contract in store.list() {
+        if contract.is_expired(now) {
+            contract.state = ContractState::Expired;
+            store.save(contract.clone());
+            expired.push(contract.id);
+        }
+    }
+    expired
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -262,6 +284,7 @@ mod tests {
             }],
             payload: serde_json::json!({"terms": "test"}),
             require_notarization: false,
+            deadline_secs: None,
         }
     }
 
@@ -282,6 +305,7 @@ mod tests {
             ],
             payload: serde_json::json!({"terms": "mutual agreement"}),
             require_notarization: true,
+            deadline_secs: None,
         }
     }
 
@@ -450,6 +474,7 @@ mod tests {
             }],
             payload: serde_json::json!({"document": "deed"}),
             require_notarization: true,
+            deadline_secs: None,
         };
         let contract = deploy(&store, def).unwrap();
 
@@ -524,5 +549,112 @@ mod tests {
         let loaded = store.get(&id).unwrap();
         assert_eq!(loaded.definition.contract_type, "service_agreement");
         assert_eq!(loaded.parties.len(), 1);
+    }
+
+    fn expired_definition() -> ContractDefinition {
+        ContractDefinition {
+            contract_type: "urgent_agreement".into(),
+            parties: vec![PartyDefinition {
+                role: "client".into(),
+                did: "did:goya:alice".into(),
+                signature_level: SignatureLevel::Simple,
+            }],
+            payload: serde_json::json!({"terms": "expires fast"}),
+            require_notarization: false,
+            deadline_secs: Some(1),
+        }
+    }
+
+    #[test]
+    fn contract_without_deadline_never_expires() {
+        let store = test_store();
+        let contract = deploy(&store, fes_definition()).unwrap();
+        assert!(!contract.is_expired(contract.created_at + 999_999));
+    }
+
+    #[test]
+    fn contract_with_deadline_expires_after_timeout() {
+        let store = test_store();
+        let contract = deploy(&store, expired_definition()).unwrap();
+        assert!(!contract.is_expired(contract.created_at));
+        assert!(!contract.is_expired(contract.created_at + 1));
+        assert!(contract.is_expired(contract.created_at + 2));
+    }
+
+    #[test]
+    fn sign_rejects_expired_contract() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let mut def = fes_definition();
+        def.deadline_secs = Some(0);
+        let contract = deploy(&store, def).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+
+        let provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &provider);
+        let result = sign(&store, &contract.id, &req);
+        assert!(matches!(result, Err(LexChainError::Expired)));
+
+        let updated = store.get(&contract.id).unwrap();
+        assert_eq!(updated.state, ContractState::Expired);
+    }
+
+    #[test]
+    fn expire_pending_sweeps_expired_contracts() {
+        let store = test_store();
+        let mut def = fes_definition();
+        def.deadline_secs = Some(0);
+        deploy(&store, def).unwrap();
+
+        let no_deadline = deploy(&store, fes_definition()).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+
+        let expired_ids = expire_pending(&store);
+        assert_eq!(expired_ids.len(), 1);
+
+        let still_pending = store.get(&no_deadline.id).unwrap();
+        assert_eq!(still_pending.state, ContractState::PendingSignatures);
+    }
+
+    #[test]
+    fn signed_contract_with_deadline_does_not_expire() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let mut def = fes_definition();
+        def.deadline_secs = Some(3600);
+        let contract = deploy(&store, def).unwrap();
+
+        let provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &provider);
+        let signed = sign(&store, &contract.id, &req).unwrap();
+        assert_eq!(signed.state, ContractState::FullySigned);
+        assert!(!signed.is_expired(signed.created_at + 7200));
+    }
+
+    #[test]
+    fn deadline_preserved_in_json_roundtrip() {
+        let def = ContractDefinition {
+            contract_type: "test".into(),
+            parties: vec![PartyDefinition {
+                role: "a".into(),
+                did: "did:goya:a".into(),
+                signature_level: SignatureLevel::Simple,
+            }],
+            payload: serde_json::json!({}),
+            require_notarization: false,
+            deadline_secs: Some(259200),
+        };
+        let json = serde_json::to_string(&def).unwrap();
+        let parsed: ContractDefinition = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.deadline_secs, Some(259200));
+    }
+
+    #[test]
+    fn deadline_absent_in_json_defaults_to_none() {
+        let json = r#"{"type":"test","parties":[],"payload":{}}"#;
+        let parsed: ContractDefinition = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.deadline_secs, None);
     }
 }

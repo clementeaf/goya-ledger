@@ -4,6 +4,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.12.2] — 2026-08-18
+
+### Added — LexChain contract deadlines and expiry
+
+Contracts can now expire if not fully signed within a deadline.
+
+- `deadline_secs` field in `ContractDefinition` — seconds from deploy until expiry (`null` = no deadline)
+- `Expired` state in `ContractState` — terminal, no further signatures accepted
+- `sign()` checks expiry before accepting — auto-transitions to `Expired` and rejects
+- `expire_pending()` — batch sweep function to expire all overdue contracts
+- `is_expired(now)` on `LexContract` — pure check, no side effects
+
+#### JSON example
+```json
+{
+  "type": "service_agreement",
+  "parties": [...],
+  "payload": {...},
+  "deadline_secs": 259200
+}
+```
+259200 = 72 hours. After 72h without all signatures, the contract expires.
+
+### Stats
+- 2713 lib tests passed, 0 failed (20 LexChain tests, 7 new timeout tests)
+- fmt + clippy clean
+
+---
+
 ## [0.12.1] — 2026-08-18
 
 ### Changed — LexChain hardened: persistence, archival, DID verification
