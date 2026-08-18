@@ -9,14 +9,14 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// Returns `true` when `TLS_PQC_KEM` env var is set to a truthy value.
+/// Returns `true` unless `TLS_PQC_KEM` is explicitly set to a falsy value.
 ///
-/// When enabled, TLS connections use X25519+ML-KEM-768 hybrid key exchange
-/// (post-quantum resistant). This affects both server and client configs.
+/// PQC key exchange (X25519+ML-KEM-768 hybrid) is enabled by default.
+/// Set `TLS_PQC_KEM=false` to fall back to classical X25519-only.
 pub fn pqc_kem_enabled() -> bool {
     std::env::var("TLS_PQC_KEM")
-        .map(|v| matches!(v.as_str(), "true" | "1" | "yes"))
-        .unwrap_or(false)
+        .map(|v| !matches!(v.as_str(), "false" | "0" | "no"))
+        .unwrap_or(true)
 }
 
 /// Install the appropriate `CryptoProvider` as the global default.
@@ -1509,10 +1509,10 @@ mod tests {
     }
 
     #[test]
-    fn pqc_kem_disabled_by_default() {
+    fn pqc_kem_enabled_by_default() {
         let _lock = ENV_LOCK.lock().unwrap();
         std::env::remove_var("TLS_PQC_KEM");
-        assert!(!pqc_kem_enabled());
+        assert!(pqc_kem_enabled());
     }
 
     #[test]

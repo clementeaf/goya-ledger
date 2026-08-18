@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.11.4] — 2026-08-18
+
+### Changed — TLS PQC key exchange enabled by default
+
+- `TLS_PQC_KEM` now defaults to `true` — X25519+ML-KEM-768 hybrid key exchange active out of the box
+- Set `TLS_PQC_KEM=false` to fall back to classical X25519-only
+- No production nodes exist yet, so no backward-compat risk — first deploy will be PQC-native
+
+---
+
 ## [0.11.3] — 2026-08-18
 
 ### Changed — PQC integration gaps closed (algorithm-agnostic paths)
