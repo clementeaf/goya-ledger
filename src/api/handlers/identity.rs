@@ -22,7 +22,12 @@ async fn create_identity(
         .unwrap_or_default()
         .as_secs();
 
-    let key_mgr = KeyManager::new(now);
+    let algorithm = state
+        .signing_provider
+        .as_ref()
+        .map(|p| p.algorithm())
+        .unwrap_or_default();
+    let key_mgr = KeyManager::with_algorithm(algorithm, now);
     let public_key_hex = hex::encode(key_mgr.public_key());
     let did = crate::identity::did::did_from_pubkey_hex(&public_key_hex);
 

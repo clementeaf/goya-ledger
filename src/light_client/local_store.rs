@@ -139,7 +139,7 @@ mod tests {
             did: did.to_string(),
             public_key_hex: "abcd1234".to_string(),
             private_key_enc: "encrypted_data".to_string(),
-            algorithm: "Ed25519".to_string(),
+            algorithm: "ML-DSA-65".to_string(),
             created_at: "2026-06-24T00:00:00Z".to_string(),
         }
     }

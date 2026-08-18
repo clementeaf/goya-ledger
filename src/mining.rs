@@ -34,6 +34,7 @@ pub struct MiningService {
     store: Arc<dyn BlockStore>,
     config: MiningConfig,
     signer: Option<Arc<dyn SigningProvider>>,
+    secondary_signer: Option<Arc<dyn SigningProvider>>,
 }
 
 impl MiningService {
@@ -42,12 +43,19 @@ impl MiningService {
             store,
             config,
             signer: None,
+            secondary_signer: None,
         }
     }
 
     /// Attach a signing provider for block signatures.
     pub fn with_signer(mut self, signer: Arc<dyn SigningProvider>) -> Self {
         self.signer = Some(signer);
+        self
+    }
+
+    /// Attach a secondary signing provider for dual signatures (PQC migration).
+    pub fn with_secondary_signer(mut self, signer: Arc<dyn SigningProvider>) -> Self {
+        self.secondary_signer = Some(signer);
         self
     }
 
@@ -123,8 +131,11 @@ impl MiningService {
             signature,
             signature_algorithm: sig_algorithm,
             endorsements: Vec::new(),
-            secondary_signature: None,
-            secondary_signature_algorithm: None,
+            secondary_signature: self
+                .secondary_signer
+                .as_ref()
+                .and_then(|s| s.sign(block_data.as_bytes()).ok()),
+            secondary_signature_algorithm: self.secondary_signer.as_ref().map(|s| s.algorithm()),
             hash_algorithm: HashAlgorithm::default(),
             orderer_signature: None,
             commit_qc: None,
@@ -247,5 +258,29 @@ mod tests {
         let stored_tx = store.read_transaction("tx-1").unwrap();
         assert_eq!(stored_tx.state, "confirmed");
         assert_eq!(stored_tx.block_height, 0);
+    }
+
+    #[test]
+    fn mine_block_with_dual_signature() {
+        use crate::identity::signing::{MlDsaSigningProvider, SoftwareSigningProvider};
+
+        let store = Arc::new(MemoryStore::new());
+        let primary: Arc<dyn SigningProvider> = Arc::new(SoftwareSigningProvider::generate());
+        let secondary: Arc<dyn SigningProvider> = Arc::new(MlDsaSigningProvider::generate());
+
+        let service = MiningService::new(store.clone(), MiningConfig::default())
+            .with_signer(primary)
+            .with_secondary_signer(secondary);
+
+        service.mine_block("miner1", vec![]).unwrap();
+        let block = store.read_block(0).unwrap();
+
+        assert_eq!(block.signature_algorithm, SigningAlgorithm::Ed25519);
+        assert_eq!(block.signature.len(), 64);
+        assert_eq!(
+            block.secondary_signature_algorithm,
+            Some(SigningAlgorithm::MlDsa65)
+        );
+        assert_eq!(block.secondary_signature.as_ref().unwrap().len(), 3309);
     }
 }

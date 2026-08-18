@@ -4,6 +4,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.11.3] — 2026-08-18
+
+### Changed — PQC integration gaps closed (algorithm-agnostic paths)
+
+Eliminated all remaining Ed25519-hardcoded paths. Every signing subsystem now
+dispatches through `SigningProvider` trait — Ed25519, ML-DSA-65, SLH-DSA, ES256.
+
+#### Key Management (`src/identity/keys.rs`)
+- `KeyManager` rewritten over `Box<dyn SigningProvider>` (was `ed25519_dalek::SigningKey`)
+- `KeyManager::with_algorithm(SigningAlgorithm, timestamp)` — construct with any supported algo
+- `KeyManager::new()` preserved for backward compat (defaults to Ed25519)
+- `rotate_key()` generates keypair of the same algorithm as the active key
+- `PublicKeyInfo` now tracks `algorithm` per key (was `[u8; 32]` fixed)
+
+#### HSM (`src/identity/hsm.rs`)
+- `HsmConfig.algorithm` field — reads from `HSM_KEY_ALGORITHM` env var (`ml-dsa-65` / `ed25519`)
+- `HsmSigningProvider.algorithm()` reads from config (was hardcoded Ed25519)
+- `SimulatedHsmProvider` uses `Box<dyn SigningProvider>` internally — supports Ed25519 and ML-DSA-65
+
+#### Dual Signing Integration (`src/mining.rs`, `src/ordering/mod.rs`)
+- `MiningService.secondary_signer` — optional second `SigningProvider` for PQC migration
+- `mine_block()` fills `Block.secondary_signature` + `secondary_signature_algorithm` when present
+- `verify_block_secondary_signature()` — new verification function for dual-signed blocks
+
+#### Identity API (`src/api/handlers/identity.rs`)
+- `create_identity` reads algorithm from node's `AppState.signing_provider` (was always Ed25519)
+
+#### Test Alignment
+- Equivocation detector tests: Ed25519 literals → MlDsa65 (production code was already algo-agnostic)
+- Light client test helper: Ed25519 → ML-DSA-65
+
+### Stats
+- 2695 lib tests passed, 0 failed
+- fmt + clippy clean
+
+---
+
 ## [0.11.2] — 2026-08-17
 
 ### Added — SLH-DSA-SHAKE-128s (FIPS 205) hash-based backup signatures

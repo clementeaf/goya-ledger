@@ -7,7 +7,8 @@
 //! - `HSM_PKCS11_LIB` — path to the PKCS#11 shared library
 //! - `HSM_SLOT_ID` — PKCS#11 slot identifier
 //! - `HSM_PIN` — user PIN for the slot
-//! - `HSM_KEY_LABEL` — label of the Ed25519 signing key object
+//! - `HSM_KEY_LABEL` — label of the signing key object
+//! - `HSM_KEY_ALGORITHM` — `ed25519` (default) or `ml-dsa-65`
 
 use thiserror::Error;
 
@@ -42,12 +43,22 @@ pub struct HsmConfig {
     pub pin: String,
     #[allow(dead_code)]
     pub key_label: String,
+    #[allow(dead_code)]
+    pub algorithm: super::signing::SigningAlgorithm,
 }
 
 impl HsmConfig {
     #[allow(dead_code)]
     /// Load configuration from environment variables.
     pub fn from_env() -> Result<Self, HsmError> {
+        let algorithm = match std::env::var("HSM_KEY_ALGORITHM")
+            .unwrap_or_default()
+            .to_lowercase()
+            .as_str()
+        {
+            "ml-dsa-65" | "mldsa65" | "mldsa" => super::signing::SigningAlgorithm::MlDsa65,
+            _ => super::signing::SigningAlgorithm::Ed25519,
+        };
         Ok(Self {
             pkcs11_lib: std::env::var("HSM_PKCS11_LIB")
                 .map_err(|_| HsmError::LibraryNotFound("HSM_PKCS11_LIB not set".into()))?,
@@ -57,6 +68,7 @@ impl HsmConfig {
                 .unwrap_or(0),
             pin: std::env::var("HSM_PIN").map_err(|_| HsmError::AuthFailed)?,
             key_label: std::env::var("HSM_KEY_LABEL").unwrap_or_else(|_| "ed25519-key".into()),
+            algorithm,
         })
     }
 }
@@ -176,6 +188,7 @@ impl HsmSigningProvider {
                 slot_id,
                 pin: pin.to_string(),
                 key_label: key_label.to_string(),
+                algorithm: super::signing::SigningAlgorithm::Ed25519,
             },
         })
     }
@@ -198,7 +211,7 @@ impl HsmSigningProvider {
 
 impl super::signing::SigningProvider for HsmSigningProvider {
     fn algorithm(&self) -> super::signing::SigningAlgorithm {
-        super::signing::SigningAlgorithm::Ed25519
+        self._config.algorithm
     }
 
     #[cfg(not(feature = "hsm"))]
@@ -245,16 +258,17 @@ impl super::signing::SigningProvider for HsmSigningProvider {
 /// Software-backed HSM simulator for testing and development.
 ///
 /// Implements `SigningProvider` with the same lifecycle as a real HSM
-/// (config, session open, key lookup by label) but uses in-memory Ed25519.
-/// Allows full integration testing without hardware.
+/// (config, session open, key lookup by label) but uses in-memory keys.
+/// Algorithm determined by `HsmConfig.algorithm`. Allows full integration
+/// testing without hardware.
 pub struct SimulatedHsmProvider {
     config: HsmConfig,
-    signing_key: ed25519_dalek::SigningKey,
+    inner: Box<dyn super::signing::SigningProvider>,
     session_open: bool,
 }
 
 impl SimulatedHsmProvider {
-    /// Create a simulated HSM with a generated key.
+    /// Create a simulated HSM with a generated key matching `config.algorithm`.
     pub fn new(config: HsmConfig) -> Result<Self, HsmError> {
         if config.pin.is_empty() {
             return Err(HsmError::AuthFailed);
@@ -262,10 +276,15 @@ impl SimulatedHsmProvider {
         if config.key_label.is_empty() {
             return Err(HsmError::KeyNotFound("empty label".into()));
         }
-        use pqc_crypto_module::legacy::rng::OsRng;
+        let inner: Box<dyn super::signing::SigningProvider> = match config.algorithm {
+            super::signing::SigningAlgorithm::MlDsa65 => {
+                Box::new(super::signing::MlDsaSigningProvider::generate())
+            }
+            _ => Box::new(super::signing::SoftwareSigningProvider::generate()),
+        };
         Ok(Self {
             config,
-            signing_key: ed25519_dalek::SigningKey::generate(&mut OsRng),
+            inner,
             session_open: true,
         })
     }
@@ -312,31 +331,20 @@ impl SimulatedHsmProvider {
 
 impl super::signing::SigningProvider for SimulatedHsmProvider {
     fn algorithm(&self) -> super::signing::SigningAlgorithm {
-        super::signing::SigningAlgorithm::Ed25519
+        self.config.algorithm
     }
 
     fn sign(&self, data: &[u8]) -> Result<Vec<u8>, super::signing::SigningError> {
         self.require_session()?;
-        use pqc_crypto_module::legacy::ed25519::Signer;
-        let sig = self.signing_key.sign(data);
-        Ok(sig.to_bytes().to_vec())
+        self.inner.sign(data)
     }
 
     fn public_key(&self) -> Vec<u8> {
-        self.signing_key.verifying_key().to_bytes().to_vec()
+        self.inner.public_key()
     }
 
     fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, super::signing::SigningError> {
-        use pqc_crypto_module::legacy::ed25519::{Signature, Verifier};
-        let sig_bytes: [u8; 64] = sig.try_into().map_err(|_| {
-            super::signing::SigningError::VerifyFailed("Ed25519 signature must be 64 bytes".into())
-        })?;
-        let signature = Signature::from_bytes(&sig_bytes);
-        Ok(self
-            .signing_key
-            .verifying_key()
-            .verify(data, &signature)
-            .is_ok())
+        self.inner.verify(data, sig)
     }
 }
 
@@ -351,6 +359,17 @@ mod tests {
             slot_id: 0,
             pin: "1234".into(),
             key_label: "ed25519-key".into(),
+            algorithm: crate::identity::signing::SigningAlgorithm::Ed25519,
+        }
+    }
+
+    fn test_config_mldsa() -> HsmConfig {
+        HsmConfig {
+            pkcs11_lib: "/usr/lib/softhsm/libsofthsm2.so".into(),
+            slot_id: 0,
+            pin: "1234".into(),
+            key_label: "mldsa65-key".into(),
+            algorithm: crate::identity::signing::SigningAlgorithm::MlDsa65,
         }
     }
 
@@ -446,6 +465,28 @@ mod tests {
             provider.algorithm(),
             crate::identity::signing::SigningAlgorithm::Ed25519
         );
+    }
+
+    #[test]
+    fn sim_mldsa65_sign_and_verify() {
+        let provider = SimulatedHsmProvider::new(test_config_mldsa()).unwrap();
+        assert_eq!(
+            provider.algorithm(),
+            crate::identity::signing::SigningAlgorithm::MlDsa65
+        );
+        let data = b"pqc hsm test";
+        let sig = provider.sign(data).unwrap();
+        assert_eq!(sig.len(), 3309);
+        assert_eq!(provider.public_key().len(), 1952);
+        assert!(provider.verify(data, &sig).unwrap());
+    }
+
+    #[test]
+    fn sim_mldsa65_trait_object() {
+        let provider = SimulatedHsmProvider::new(test_config_mldsa()).unwrap();
+        let boxed: Box<dyn SigningProvider> = Box::new(provider);
+        let sig = boxed.sign(b"trait pqc").unwrap();
+        assert!(boxed.verify(b"trait pqc", &sig).unwrap());
     }
 
     #[test]

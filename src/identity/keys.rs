@@ -1,15 +1,18 @@
 //! Key management for identity system
 //!
-//! Supports Ed25519 keypair generation, storage, and rotation
+//! Algorithm-agnostic key rotation via `SigningProvider` trait.
 
-use pqc_crypto_module::legacy::ed25519::{Signer, SigningKey, Verifier, VerifyingKey};
-use pqc_crypto_module::legacy::rng::OsRng;
+use crate::identity::signing::{
+    MlDsaSigningProvider, SigningAlgorithm, SigningError, SigningProvider, SoftwareSigningProvider,
+};
 
 /// Public key information
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PublicKeyInfo {
-    /// Public key bytes (32 bytes for Ed25519)
-    pub public_key: [u8; 32],
+    /// Public key bytes (variable length per algorithm)
+    pub public_key: Vec<u8>,
+    /// Algorithm used to generate this key
+    pub algorithm: SigningAlgorithm,
     /// Key creation timestamp
     pub created_at: u64,
     /// Key expiration (optional)
@@ -18,59 +21,52 @@ pub struct PublicKeyInfo {
     pub is_active: bool,
 }
 
-#[allow(dead_code)]
-/// Key pair for signing operations
-#[derive(Debug, Clone)]
-pub struct KeyPair {
-    /// Active signing key
-    pub signing_key: SigningKey,
-    /// Public key bytes
-    pub public_key: [u8; 32],
-    /// Creation timestamp
-    pub created_at: u64,
-}
-
-#[allow(dead_code)]
-/// Key manager for identity
+/// Key manager for identity — delegates to `SigningProvider`.
 pub struct KeyManager {
-    /// Active keypair
-    active_key: KeyPair,
-    /// Previous (retired) keypairs for verification
+    provider: Box<dyn SigningProvider>,
+    created_at: u64,
     retired_keys: Vec<PublicKeyInfo>,
 }
 
+fn new_provider(algorithm: SigningAlgorithm) -> Box<dyn SigningProvider> {
+    match algorithm {
+        SigningAlgorithm::Ed25519 => Box::new(SoftwareSigningProvider::generate()),
+        SigningAlgorithm::MlDsa65 => Box::new(MlDsaSigningProvider::generate()),
+        _ => Box::new(SoftwareSigningProvider::generate()),
+    }
+}
+
 impl KeyManager {
-    #[allow(dead_code)]
-    /// Create a new key manager with generated keypair
-    pub fn new(timestamp: u64) -> Self {
-        let signing_key = SigningKey::generate(&mut OsRng);
-        let verifying_key = signing_key.verifying_key();
-        let public_key = verifying_key.to_bytes();
-
-        let active_key = KeyPair {
-            signing_key,
-            public_key,
-            created_at: timestamp,
-        };
-
+    /// Create a new key manager with the given algorithm.
+    pub fn with_algorithm(algorithm: SigningAlgorithm, timestamp: u64) -> Self {
         KeyManager {
-            active_key,
+            provider: new_provider(algorithm),
+            created_at: timestamp,
             retired_keys: Vec::new(),
         }
     }
 
-    #[allow(dead_code)]
-    /// Get the current public key
-    pub fn public_key(&self) -> [u8; 32] {
-        self.active_key.public_key
+    /// Create a new key manager defaulting to Ed25519 (backward compat).
+    pub fn new(timestamp: u64) -> Self {
+        Self::with_algorithm(SigningAlgorithm::Ed25519, timestamp)
     }
 
-    #[allow(dead_code)]
-    /// Get all public keys (active + retired)
+    /// The algorithm of the active key.
+    pub fn algorithm(&self) -> SigningAlgorithm {
+        self.provider.algorithm()
+    }
+
+    /// Get the current public key bytes.
+    pub fn public_key(&self) -> Vec<u8> {
+        self.provider.public_key()
+    }
+
+    /// Get all public keys (active + retired).
     pub fn all_public_keys(&self) -> Vec<PublicKeyInfo> {
         let mut keys = vec![PublicKeyInfo {
-            public_key: self.active_key.public_key,
-            created_at: self.active_key.created_at,
+            public_key: self.provider.public_key(),
+            algorithm: self.provider.algorithm(),
+            created_at: self.created_at,
             expires_at: None,
             is_active: true,
         }];
@@ -79,86 +75,38 @@ impl KeyManager {
         keys
     }
 
-    #[allow(dead_code)]
-    /// Rotate to a new keypair
+    /// Rotate to a new keypair of the same algorithm.
     pub fn rotate_key(&mut self, timestamp: u64) {
-        // Archive current key as retired
         let retired = PublicKeyInfo {
-            public_key: self.active_key.public_key,
-            created_at: self.active_key.created_at,
+            public_key: self.provider.public_key(),
+            algorithm: self.provider.algorithm(),
+            created_at: self.created_at,
             expires_at: Some(timestamp),
             is_active: false,
         };
         self.retired_keys.push(retired);
 
-        // Generate new active key
-        let signing_key = SigningKey::generate(&mut OsRng);
-        let verifying_key = signing_key.verifying_key();
-        let public_key = verifying_key.to_bytes();
-
-        self.active_key = KeyPair {
-            signing_key,
-            public_key,
-            created_at: timestamp,
-        };
+        let algorithm = self.provider.algorithm();
+        self.provider = new_provider(algorithm);
+        self.created_at = timestamp;
     }
 
-    #[allow(dead_code)]
-    /// Get the active signing key for creating signatures
-    pub fn signing_key(&self) -> &SigningKey {
-        &self.active_key.signing_key
+    /// Sign data with the active key.
+    pub fn sign(&self, data: &[u8]) -> Result<Vec<u8>, SigningError> {
+        self.provider.sign(data)
     }
 
-    #[allow(dead_code)]
-    /// Sign data with the active key
-    pub fn sign(&self, data: &[u8]) -> [u8; 64] {
-        let signature = self.active_key.signing_key.sign(data);
-        signature.to_bytes()
+    /// Verify a signature with the active key.
+    pub fn verify(&self, data: &[u8], signature: &[u8]) -> Result<bool, SigningError> {
+        self.provider.verify(data, signature)
     }
 
-    #[allow(dead_code)]
-    /// Verify a signature with the active key
-    pub fn verify(&self, data: &[u8], signature: &[u8; 64]) -> bool {
-        let verifying_key = self.active_key.signing_key.verifying_key();
-        use pqc_crypto_module::legacy::ed25519::Signature;
-        if let Ok(sig) = Signature::from_slice(signature) {
-            verifying_key.verify(data, &sig).is_ok()
-        } else {
-            false
-        }
-    }
-
-    #[allow(dead_code)]
-    /// Verify a signature with any available key (including retired)
-    pub fn verify_with_any_key(&self, data: &[u8], signature: &[u8; 64]) -> bool {
-        // Try active key first
-        if self.verify(data, signature) {
-            return true;
-        }
-
-        // Try retired keys
-        for retired_key in &self.retired_keys {
-            if let Ok(verifying_key) = VerifyingKey::from_bytes(&retired_key.public_key) {
-                use pqc_crypto_module::legacy::ed25519::Signature;
-                if let Ok(sig) = Signature::from_slice(signature) {
-                    if verifying_key.verify(data, &sig).is_ok() {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        false
-    }
-
-    #[allow(dead_code)]
-    /// Get key creation timestamp
+    /// Get key creation timestamp.
     pub fn key_created_at(&self) -> u64 {
-        self.active_key.created_at
+        self.created_at
     }
 
-    #[allow(dead_code)]
-    /// Number of retired keys
+    /// Number of retired keys.
     pub fn retired_key_count(&self) -> usize {
         self.retired_keys.len()
     }
@@ -169,71 +117,89 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_keypair_generation() {
+    fn ed25519_keypair_generation() {
         let km = KeyManager::new(1000);
         assert_eq!(km.key_created_at(), 1000);
         assert_eq!(km.public_key().len(), 32);
+        assert_eq!(km.algorithm(), SigningAlgorithm::Ed25519);
     }
 
     #[test]
-    fn test_sign_and_verify() {
+    fn mldsa65_keypair_generation() {
+        let km = KeyManager::with_algorithm(SigningAlgorithm::MlDsa65, 1000);
+        assert_eq!(km.public_key().len(), 1952);
+        assert_eq!(km.algorithm(), SigningAlgorithm::MlDsa65);
+    }
+
+    #[test]
+    fn ed25519_sign_and_verify() {
         let km = KeyManager::new(1000);
         let data = b"test message";
-        let signature = km.sign(data);
-        assert!(km.verify(data, &signature));
+        let signature = km.sign(data).unwrap();
+        assert!(km.verify(data, &signature).unwrap());
     }
 
     #[test]
-    fn test_verify_fails_with_wrong_data() {
+    fn mldsa65_sign_and_verify() {
+        let km = KeyManager::with_algorithm(SigningAlgorithm::MlDsa65, 1000);
+        let data = b"pqc test message";
+        let signature = km.sign(data).unwrap();
+        assert_eq!(signature.len(), 3309);
+        assert!(km.verify(data, &signature).unwrap());
+    }
+
+    #[test]
+    fn verify_fails_with_wrong_data() {
         let km = KeyManager::new(1000);
-        let data = b"test message";
-        let signature = km.sign(data);
-        let wrong_data = b"different message";
-        assert!(!km.verify(wrong_data, &signature));
+        let signature = km.sign(b"test message").unwrap();
+        assert!(!km.verify(b"different message", &signature).unwrap());
     }
 
     #[test]
-    fn test_key_rotation() {
+    fn ed25519_key_rotation() {
         let mut km = KeyManager::new(1000);
         let old_key = km.public_key();
         km.rotate_key(2000);
         let new_key = km.public_key();
         assert_ne!(old_key, new_key);
         assert_eq!(km.retired_key_count(), 1);
+        assert_eq!(km.algorithm(), SigningAlgorithm::Ed25519);
     }
 
     #[test]
-    fn test_verify_after_rotation() {
-        let mut km = KeyManager::new(1000);
-        let data = b"test message";
-        let signature = km.sign(data);
+    fn mldsa65_key_rotation() {
+        let mut km = KeyManager::with_algorithm(SigningAlgorithm::MlDsa65, 1000);
+        let old_key = km.public_key();
         km.rotate_key(2000);
-        // Verify with any key should still work
-        assert!(km.verify_with_any_key(data, &signature));
+        let new_key = km.public_key();
+        assert_ne!(old_key, new_key);
+        assert_eq!(km.retired_key_count(), 1);
+        assert_eq!(km.algorithm(), SigningAlgorithm::MlDsa65);
     }
 
     #[test]
-    fn test_all_public_keys() {
-        let mut km = KeyManager::new(1000);
+    fn all_public_keys_tracks_algorithm() {
+        let mut km = KeyManager::with_algorithm(SigningAlgorithm::MlDsa65, 1000);
         km.rotate_key(2000);
         km.rotate_key(3000);
         let keys = km.all_public_keys();
-        assert_eq!(keys.len(), 3); // 1 active + 2 retired
+        assert_eq!(keys.len(), 3);
         assert!(keys[0].is_active);
         assert!(!keys[1].is_active);
-        assert!(!keys[2].is_active);
+        for k in &keys {
+            assert_eq!(k.algorithm, SigningAlgorithm::MlDsa65);
+        }
     }
 
     #[test]
-    fn test_signature_format() {
+    fn ed25519_signature_format() {
         let km = KeyManager::new(1000);
-        let data = b"test";
-        let signature = km.sign(data);
-        assert_eq!(signature.len(), 64); // Ed25519 signature is 64 bytes
+        let signature = km.sign(b"test").unwrap();
+        assert_eq!(signature.len(), 64);
     }
 
     #[test]
-    fn test_multiple_rotations() {
+    fn multiple_rotations() {
         let mut km = KeyManager::new(1000);
         for i in 1..=5 {
             km.rotate_key(1000 + i as u64 * 1000);

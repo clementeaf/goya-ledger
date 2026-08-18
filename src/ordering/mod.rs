@@ -111,6 +111,36 @@ pub fn verify_block_signature(
         .map_err(|e| format!("block signature verification failed: {e}"))
 }
 
+/// Verify a block's secondary (dual) signature, if present.
+///
+/// Returns `Ok(None)` when no secondary signature exists,
+/// `Ok(Some(true/false))` for verification result.
+#[allow(dead_code)]
+pub fn verify_block_secondary_signature(
+    block: &Block,
+    provider: &dyn SigningProvider,
+) -> Result<Option<bool>, String> {
+    let (Some(ref sig), Some(algo)) = (
+        &block.secondary_signature,
+        block.secondary_signature_algorithm,
+    ) else {
+        return Ok(None);
+    };
+
+    if algo != provider.algorithm() {
+        return Err(format!(
+            "secondary algorithm mismatch: block uses {algo:?}, provider uses {:?}",
+            provider.algorithm()
+        ));
+    }
+
+    let hash = block_hash_for_signing(block);
+    let result = provider
+        .verify(&hash, sig)
+        .map_err(|e| format!("secondary signature verification failed: {e}"))?;
+    Ok(Some(result))
+}
+
 /// Common interface for ordering backends (solo batching vs Raft consensus).
 pub trait OrderingBackend: Send + Sync {
     fn submit_tx(&self, tx: &Transaction) -> StorageResult<()>;

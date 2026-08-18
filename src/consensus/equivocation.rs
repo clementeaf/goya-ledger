@@ -208,7 +208,7 @@ mod tests {
             "alice",
             [1u8; 32],
             &[42u8; 64],
-            SigningAlgorithm::Ed25519,
+            SigningAlgorithm::MlDsa65,
         );
         assert!(result.is_none());
     }
@@ -222,7 +222,7 @@ mod tests {
             "alice",
             [1u8; 32],
             &[42u8; 64],
-            SigningAlgorithm::Ed25519,
+            SigningAlgorithm::MlDsa65,
         );
         let result = det.check_proposal(
             0,
@@ -230,7 +230,7 @@ mod tests {
             "alice",
             [1u8; 32],
             &[42u8; 64],
-            SigningAlgorithm::Ed25519,
+            SigningAlgorithm::MlDsa65,
         );
         assert!(result.is_none(), "duplicate is not equivocation");
     }
