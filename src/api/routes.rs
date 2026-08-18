@@ -260,7 +260,8 @@ impl ApiRoutes {
         cfg.service(lexchain::deploy_contract)
             .service(lexchain::sign_contract)
             .service(lexchain::get_contract)
-            .service(lexchain::list_contracts);
+            .service(lexchain::list_contracts)
+            .service(lexchain::list_templates);
         // Registration Authority (Ley 19.799 Art. 15)
         cfg.service(ra::submit_proof)
             .service(ra::approve_proof)

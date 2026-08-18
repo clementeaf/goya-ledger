@@ -20,6 +20,9 @@ pub struct ContractDefinition {
     /// `None` = no deadline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deadline_secs: Option<u64>,
+    /// Webhook URL to POST contract state changes to. Fire-and-forget.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub webhook_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,6 +102,47 @@ impl LexContract {
             false
         }
     }
+}
+
+/// A reusable contract template. Developers instantiate with their own parties + payload.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractTemplate {
+    pub name: String,
+    pub contract_type: String,
+    /// Role definitions — the developer provides the DIDs, the template defines roles + sig levels.
+    pub roles: Vec<RoleTemplate>,
+    #[serde(default)]
+    pub require_notarization: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deadline_secs: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoleTemplate {
+    pub role: String,
+    pub signature_level: SignatureLevel,
+}
+
+/// Deploy request — either a full definition or a template reference.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DeployRequest {
+    Full(ContractDefinition),
+    FromTemplate {
+        template: String,
+        /// DID assignments: role → DID
+        parties: std::collections::HashMap<String, String>,
+        #[serde(default)]
+        payload: serde_json::Value,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebhookEvent {
+    pub contract_id: String,
+    pub event: String,
+    pub state: ContractState,
+    pub timestamp: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

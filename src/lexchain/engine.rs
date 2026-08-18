@@ -29,6 +29,10 @@ pub enum LexChainError {
     ArchivalFailed(String),
     #[error("contract expired")]
     Expired,
+    #[error("template not found: {0}")]
+    TemplateNotFound(String),
+    #[error("missing role assignment: {0}")]
+    MissingRole(String),
 }
 
 fn now_secs() -> u64 {
@@ -41,6 +45,54 @@ fn now_secs() -> u64 {
 fn content_hash(def: &ContractDefinition) -> String {
     let canonical = serde_json::to_string(def).unwrap_or_default();
     hex::encode(hash(canonical.as_bytes()))
+}
+
+pub fn deploy_request(
+    store: &LexChainStore,
+    req: DeployRequest,
+) -> Result<LexContract, LexChainError> {
+    match req {
+        DeployRequest::Full(def) => deploy(store, def),
+        DeployRequest::FromTemplate {
+            template,
+            parties,
+            payload,
+        } => deploy_from_template(store, &template, parties, payload),
+    }
+}
+
+pub fn deploy_from_template(
+    store: &LexChainStore,
+    template_name: &str,
+    role_dids: std::collections::HashMap<String, String>,
+    payload: serde_json::Value,
+) -> Result<LexContract, LexChainError> {
+    let template = store
+        .get_template(template_name)
+        .ok_or_else(|| LexChainError::TemplateNotFound(template_name.to_string()))?;
+
+    let mut parties = Vec::new();
+    for role in &template.roles {
+        let did = role_dids
+            .get(&role.role)
+            .ok_or_else(|| LexChainError::MissingRole(role.role.clone()))?;
+        parties.push(PartyDefinition {
+            role: role.role.clone(),
+            did: did.clone(),
+            signature_level: role.signature_level,
+        });
+    }
+
+    let definition = ContractDefinition {
+        contract_type: template.contract_type.clone(),
+        parties,
+        payload,
+        require_notarization: template.require_notarization,
+        deadline_secs: template.deadline_secs,
+        webhook_url: None,
+    };
+
+    deploy(store, definition)
 }
 
 pub fn deploy(
@@ -285,6 +337,7 @@ mod tests {
             payload: serde_json::json!({"terms": "test"}),
             require_notarization: false,
             deadline_secs: None,
+            webhook_url: None,
         }
     }
 
@@ -306,6 +359,7 @@ mod tests {
             payload: serde_json::json!({"terms": "mutual agreement"}),
             require_notarization: true,
             deadline_secs: None,
+            webhook_url: None,
         }
     }
 
@@ -475,6 +529,7 @@ mod tests {
             payload: serde_json::json!({"document": "deed"}),
             require_notarization: true,
             deadline_secs: None,
+            webhook_url: None,
         };
         let contract = deploy(&store, def).unwrap();
 
@@ -562,6 +617,7 @@ mod tests {
             payload: serde_json::json!({"terms": "expires fast"}),
             require_notarization: false,
             deadline_secs: Some(1),
+            webhook_url: None,
         }
     }
 
@@ -645,6 +701,7 @@ mod tests {
             payload: serde_json::json!({}),
             require_notarization: false,
             deadline_secs: Some(259200),
+            webhook_url: None,
         };
         let json = serde_json::to_string(&def).unwrap();
         let parsed: ContractDefinition = serde_json::from_str(&json).unwrap();
@@ -656,5 +713,131 @@ mod tests {
         let json = r#"{"type":"test","parties":[],"payload":{}}"#;
         let parsed: ContractDefinition = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.deadline_secs, None);
+    }
+
+    // ── Template tests ──────────────────────────────────────────────
+
+    #[test]
+    fn builtin_templates_exist() {
+        let store = test_store();
+        assert!(store.get_template("nda").is_some());
+        assert!(store.get_template("service_agreement").is_some());
+        assert!(store.get_template("power_of_attorney").is_some());
+    }
+
+    #[test]
+    fn deploy_from_nda_template() {
+        let store = test_store();
+        let mut parties = std::collections::HashMap::new();
+        parties.insert("discloser".into(), "did:goya:alice".into());
+        parties.insert("recipient".into(), "did:goya:bob".into());
+
+        let contract = deploy_from_template(
+            &store,
+            "nda",
+            parties,
+            serde_json::json!({"scope": "project X"}),
+        )
+        .unwrap();
+
+        assert_eq!(
+            contract.definition.contract_type,
+            "non_disclosure_agreement"
+        );
+        assert_eq!(contract.parties.len(), 2);
+        assert_eq!(contract.definition.deadline_secs, Some(604800));
+        assert!(!contract.definition.require_notarization);
+    }
+
+    #[test]
+    fn deploy_from_template_rejects_missing_role() {
+        let store = test_store();
+        let mut parties = std::collections::HashMap::new();
+        parties.insert("discloser".into(), "did:goya:alice".into());
+        // missing "recipient"
+
+        let result = deploy_from_template(&store, "nda", parties, serde_json::json!({}));
+        assert!(matches!(result, Err(LexChainError::MissingRole(_))));
+    }
+
+    #[test]
+    fn deploy_from_template_rejects_unknown_template() {
+        let store = test_store();
+        let result = deploy_from_template(
+            &store,
+            "nonexistent",
+            std::collections::HashMap::new(),
+            serde_json::json!({}),
+        );
+        assert!(matches!(result, Err(LexChainError::TemplateNotFound(_))));
+    }
+
+    #[test]
+    fn deploy_request_full_definition() {
+        let store = test_store();
+        let req = DeployRequest::Full(fes_definition());
+        let contract = deploy_request(&store, req).unwrap();
+        assert_eq!(contract.state, ContractState::PendingSignatures);
+    }
+
+    #[test]
+    fn deploy_request_from_template() {
+        let store = test_store();
+        let mut parties = std::collections::HashMap::new();
+        parties.insert("provider".into(), "did:goya:alice".into());
+        parties.insert("client".into(), "did:goya:bob".into());
+
+        let req = DeployRequest::FromTemplate {
+            template: "service_agreement".into(),
+            parties,
+            payload: serde_json::json!({"terms": "template test"}),
+        };
+        let contract = deploy_request(&store, req).unwrap();
+        assert_eq!(contract.definition.contract_type, "service_agreement");
+        assert!(contract.definition.require_notarization);
+        assert_eq!(contract.definition.deadline_secs, Some(259200));
+    }
+
+    #[test]
+    fn power_of_attorney_requires_advanced_signatures() {
+        let store = test_store();
+        let template = store.get_template("power_of_attorney").unwrap();
+        for role in &template.roles {
+            assert_eq!(role.signature_level, SignatureLevel::Advanced);
+        }
+    }
+
+    #[test]
+    fn custom_template_registration() {
+        let store = test_store();
+        store.register_template(ContractTemplate {
+            name: "lease".into(),
+            contract_type: "residential_lease".into(),
+            roles: vec![
+                RoleTemplate {
+                    role: "landlord".into(),
+                    signature_level: SignatureLevel::Simple,
+                },
+                RoleTemplate {
+                    role: "tenant".into(),
+                    signature_level: SignatureLevel::Simple,
+                },
+            ],
+            require_notarization: true,
+            deadline_secs: Some(86400),
+        });
+
+        let mut parties = std::collections::HashMap::new();
+        parties.insert("landlord".into(), "did:goya:owner".into());
+        parties.insert("tenant".into(), "did:goya:renter".into());
+
+        let contract = deploy_from_template(
+            &store,
+            "lease",
+            parties,
+            serde_json::json!({"address": "123 Main St"}),
+        )
+        .unwrap();
+        assert_eq!(contract.definition.contract_type, "residential_lease");
     }
 }

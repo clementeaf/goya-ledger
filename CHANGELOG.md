@@ -4,6 +4,39 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.12.3] — 2026-08-18
+
+### Added — LexChain templates + webhooks
+
+#### Contract Templates
+- 3 built-in templates: `nda`, `service_agreement`, `power_of_attorney`
+- `deploy_from_template()` — instantiate with role→DID map + payload
+- `DeployRequest` enum: accepts either full `ContractDefinition` or `{template, parties, payload}`
+- `register_template()` for custom templates at runtime
+- `GET /api/v1/lexchain/templates` — list available templates
+- `power_of_attorney` enforces `SignatureLevel::Advanced` (FEA + biometric)
+
+#### JSON deploy from template
+```json
+{
+  "template": "nda",
+  "parties": {"discloser": "did:goya:alice", "recipient": "did:goya:bob"},
+  "payload": {"scope": "project X"}
+}
+```
+
+#### Webhooks
+- `webhook_url` field in `ContractDefinition` — fire-and-forget POST on state changes
+- Events fired: `deployed`, `signed`, `notarized`
+- `WebhookEvent` payload: contract_id, event, state, timestamp
+- Non-blocking via `tokio::spawn`, 10s timeout, failures logged
+
+### Stats
+- 2721 lib tests passed, 0 failed (28 LexChain tests, 8 new)
+- fmt + clippy clean
+
+---
+
 ## [0.12.2] — 2026-08-18
 
 ### Added — LexChain contract deadlines and expiry
