@@ -4,6 +4,57 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.13.0] — 2026-08-18
+
+### Added — Bulk FES sign & verify, SDK, FES/FEA end-to-end, goya-sign CLI
+
+Production-ready document signing and verification at scale.
+
+#### Bulk FES Signing (`POST /sign/fes/bulk`)
+- Server-side signing: upload up to 100 files (base64), node hashes + signs each
+- SHA-256 fingerprint, Ed25519/ML-DSA-65 signature, optional TSA timestamp per file
+- Duplicate detection, invalid base64 handling, per-file status
+- PDF fingerprint stored in metadata for dimensional analysis
+
+#### Bulk FES Verification (`POST /verify/fes/bulk`)
+- Verify up to 100 items per request (file base64 or content_hash)
+- 4 statuses: `verified` (intact), `altered` (modified, shows who signed original), `not_found`, `error`
+- `original_hash` field enables alteration detection against signed original
+- PDF dimensional analysis (content, structure, metadata) when fingerprint available
+- Reports: original signer, timestamp, algorithm, match_ratio, per-dimension verdict
+
+#### FES End-to-End (`scripts/try-fes.sh`)
+- Full lifecycle: create DIDs → deploy NDA → sign both parties (Ed25519) → verify
+- Runs against local or remote node
+
+#### FEA End-to-End (`scripts/try-fea.sh`)
+- Power of Attorney with ML-DSA-65 (FIPS 204) + biometric evidence
+- Fingerprint + facial recognition biometrics
+- Runs against local or remote node
+
+#### goya-sign CLI (`src/bin/goya_sign.rs`)
+- `goya-sign keygen ed25519` / `goya-sign keygen ml-dsa-65`
+- `goya-sign sign ed25519 <sk> <payload>` / `goya-sign sign ml-dsa-65 <sk> <payload>`
+- Enables client-side PQC operations without external dependencies
+
+#### TypeScript SDK (`sdk/`)
+- `npm install goya-sdk`
+- `GoyaClient`: deploy, signWithKeypair, sign, getContract, listContracts, listTemplates, registerIdentity
+- `generateKeypair()`: Ed25519 via @noble/ed25519 (pure JS)
+- 12 lines from zero to signed contract
+- Proven end-to-end against running node
+
+#### Documentation (`docs/`)
+- Bilingual EN/ES landing page (Plus Jakarta Sans, B&W, dark/light)
+- Live at goya-docs.fly.dev
+- Sections: Stack, LexChain, API (with Bulk FES), SDK, Compliance, Use Cases, PQC Comparison
+
+#### Infrastructure
+- LexChainStore shares gateway BlockStore backend (DID verification works cross-module)
+- 280 API endpoints, 2721 tests, 0 failures
+
+---
+
 ## [0.12.3] — 2026-08-18
 
 ### Added — LexChain templates + webhooks
