@@ -130,6 +130,7 @@ footer a{color:var(--text);text-decoration:none}
       <a href="#lexchain">LexChain</a>
       <a href="#api">API</a>
       <a href="#compliance">Compliance</a>
+      <a href="#sdk">SDK</a>
     </div>
     <div class="nr">
       <span class="dot"></span>
@@ -152,9 +153,9 @@ footer a{color:var(--text);text-decoration:none}
     </div>
     <div class="stats">
       <div class="st"><span class="sv">3</span><span class="sl">NIST PQC Standards</span></div>
-      <div class="st"><span class="sv">277</span><span class="sl">API Endpoints</span></div>
+      <div class="st"><span class="sv">278</span><span class="sl">API Endpoints</span></div>
       <div class="st"><span class="sv">2,721</span><span class="sl">Tests</span></div>
-      <div class="st"><span class="sv">141K</span><span class="sl">Lines of Rust</span></div>
+      <div class="st"><span class="sv">143K</span><span class="sl">Lines of Rust</span></div>
     </div>
   </div>
 </section>
@@ -261,6 +262,66 @@ footer a{color:var(--text);text-decoration:none}
     <div class="ep"><div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')"><span class="mt">GET</span><span class="ep-path">/lexchain/{id}</span><span class="ep-d" lang="en">Get contract + proofs</span><span class="ep-d" lang="es">Obtener contrato + pruebas</span></div><div class="eb"><p lang="en" style="color:var(--text-2);font-size:12px">Full state: signatures, TSA token, block height, content hash.</p><p lang="es" style="color:var(--text-2);font-size:12px">Estado completo: firmas, token TSA, altura de bloque, hash de contenido.</p></div></div>
     <div class="ep"><div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')"><span class="mt">GET</span><span class="ep-path">/lexchain</span><span class="ep-d" lang="en">List contracts</span><span class="ep-d" lang="es">Listar contratos</span></div><div class="eb"><p lang="en" style="color:var(--text-2);font-size:12px">All deployed contracts with current states.</p><p lang="es" style="color:var(--text-2);font-size:12px">Todos los contratos desplegados con estados actuales.</p></div></div>
     <div class="ep"><div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')"><span class="mt">GET</span><span class="ep-path">/lexchain/templates</span><span class="ep-d" lang="en">List templates</span><span class="ep-d" lang="es">Listar templates</span></div><div class="eb"><p lang="en" style="color:var(--text-2);font-size:12px">Built-in and custom templates with role definitions.</p><p lang="es" style="color:var(--text-2);font-size:12px">Templates integrados y custom con definiciones de roles.</p></div></div>
+
+    <h3 style="margin-top:24px" lang="en">Bulk FES — Sign multiple files</h3><h3 style="margin-top:24px" lang="es">FES Masivo — Firmar m&uacute;ltiples archivos</h3>
+
+    <div class="ep">
+      <div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')">
+        <span class="mt mt-p">POST</span><span class="ep-path">/sign/fes/bulk</span>
+        <span class="ep-d" lang="en">Bulk sign files (server-side)</span><span class="ep-d" lang="es">Firma masiva (server-side)</span>
+      </div>
+      <div class="eb">
+        <p lang="en" style="color:var(--text-2);font-size:12px;margin-bottom:8px">Upload up to 100 files (base64). Node hashes, signs, timestamps each. Returns all proofs in one response. Duplicates detected automatically.</p>
+        <p lang="es" style="color:var(--text-2);font-size:12px;margin-bottom:8px">Sube hasta 100 archivos (base64). El nodo hashea, firma y timestampea cada uno. Retorna todas las pruebas en una respuesta. Duplicados detectados autom&aacute;ticamente.</p>
+<pre>curl -X POST https://goya-node.fly.dev/api/v1/sign/fes/bulk \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signer": "did:goya:company",
+    "files": [
+      {"data_base64": "JVBERi0x...", "filename": "contract_1.pdf"},
+      {"data_base64": "JVBERi0x...", "filename": "contract_2.pdf"}
+    ]
+  }'</pre>
+        <p style="color:var(--text-2);font-size:11px;margin-top:8px" lang="en">Response: <code>{"total": 2, "signed": 2, "results": [{"status": "signed", "content_hash": "...", "signature": "...", ...}]}</code></p>
+        <p style="color:var(--text-2);font-size:11px;margin-top:8px" lang="es">Respuesta: <code>{"total": 2, "signed": 2, "results": [{"status": "signed", "content_hash": "...", "signature": "...", ...}]}</code></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="sdk">
+  <div class="w">
+    <div lang="en"><h2>TypeScript SDK</h2><p class="sd">12 lines from zero to a signed contract. Ed25519 keygen + signing built-in.</p></div>
+    <div lang="es"><h2>SDK TypeScript</h2><p class="sd">12 l&iacute;neas de cero a un contrato firmado. Keygen + firma Ed25519 integrados.</p></div>
+<pre>import { GoyaClient, generateKeypair } from 'goya-sdk'
+
+const client = new GoyaClient('https://goya-node.fly.dev')
+const alice = await generateKeypair()
+const bob = await generateKeypair()
+
+await client.registerIdentity(alice)
+await client.registerIdentity(bob)
+
+const contract = await client.deploy({
+  template: 'nda',
+  parties: { discloser: alice.did, recipient: bob.did },
+  payload: { scope: 'Project X' },
+})
+
+await client.signWithKeypair(contract.id, alice, contract.content_hash)
+await client.signWithKeypair(contract.id, bob, contract.content_hash)
+// → fully_signed NDA with Ed25519 cryptographic proof</pre>
+    <div lang="en"><h3 style="margin-top:24px">Install</h3></div>
+    <div lang="es"><h3 style="margin-top:24px">Instalar</h3></div>
+<pre>npm install goya-sdk</pre>
+    <div lang="en" style="margin-top:16px">
+      <p class="sd">API: <code>deploy()</code> · <code>signWithKeypair()</code> · <code>getContract()</code> · <code>listContracts()</code> · <code>listTemplates()</code> · <code>registerIdentity()</code></p>
+      <p class="sd">CLI: <code>goya-sign keygen ml-dsa-65</code> · <code>goya-sign sign ml-dsa-65 &lt;sk&gt; &lt;payload&gt;</code></p>
+    </div>
+    <div lang="es" style="margin-top:16px">
+      <p class="sd">API: <code>deploy()</code> · <code>signWithKeypair()</code> · <code>getContract()</code> · <code>listContracts()</code> · <code>listTemplates()</code> · <code>registerIdentity()</code></p>
+      <p class="sd">CLI: <code>goya-sign keygen ml-dsa-65</code> · <code>goya-sign sign ml-dsa-65 &lt;sk&gt; &lt;payload&gt;</code></p>
+    </div>
   </div>
 </section>
 
@@ -314,7 +375,7 @@ footer a{color:var(--text);text-decoration:none}
 
 <footer>
   <div class="w">
-    <p>Goya Ledger v0.12.3 &mdash; Rust &middot; Actix-Web 4 &middot; RocksDB &middot; HotStuff BFT</p>
+    <p>Goya Ledger v0.12.4 &mdash; Rust &middot; Actix-Web 4 &middot; RocksDB &middot; HotStuff BFT</p>
     <p style="margin-top:6px"><a href="https://goya-node.fly.dev">goya-node.fly.dev</a></p>
   </div>
 </footer>
