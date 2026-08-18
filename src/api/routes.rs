@@ -251,7 +251,8 @@ impl ApiRoutes {
             .service(notarize::get_document_owner)
             .service(notarize::get_document_provenance)
             .service(notarize::sign_fea)
-            .service(notarize::sign_fes_bulk);
+            .service(notarize::sign_fes_bulk)
+            .service(notarize::verify_fes_bulk);
         // TSA (Time Stamping Authority — RFC 3161)
         cfg.service(tsa::request_timestamp)
             .service(tsa::request_timestamp_der)
@@ -419,7 +420,8 @@ impl LightRoutes {
             .service(notarize::get_document_owner)
             .service(notarize::get_document_provenance)
             .service(notarize::sign_fea)
-            .service(notarize::sign_fes_bulk);
+            .service(notarize::sign_fes_bulk)
+            .service(notarize::verify_fes_bulk);
         // Audit trail
         cfg.service(audit::list_audit_entries)
             .service(audit::export_audit_csv);

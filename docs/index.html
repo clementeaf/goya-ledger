@@ -263,7 +263,7 @@ footer a{color:var(--text);text-decoration:none}
     <div class="ep"><div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')"><span class="mt">GET</span><span class="ep-path">/lexchain</span><span class="ep-d" lang="en">List contracts</span><span class="ep-d" lang="es">Listar contratos</span></div><div class="eb"><p lang="en" style="color:var(--text-2);font-size:12px">All deployed contracts with current states.</p><p lang="es" style="color:var(--text-2);font-size:12px">Todos los contratos desplegados con estados actuales.</p></div></div>
     <div class="ep"><div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')"><span class="mt">GET</span><span class="ep-path">/lexchain/templates</span><span class="ep-d" lang="en">List templates</span><span class="ep-d" lang="es">Listar templates</span></div><div class="eb"><p lang="en" style="color:var(--text-2);font-size:12px">Built-in and custom templates with role definitions.</p><p lang="es" style="color:var(--text-2);font-size:12px">Templates integrados y custom con definiciones de roles.</p></div></div>
 
-    <h3 style="margin-top:24px" lang="en">Bulk FES — Sign multiple files</h3><h3 style="margin-top:24px" lang="es">FES Masivo — Firmar m&uacute;ltiples archivos</h3>
+    <h3 style="margin-top:24px" lang="en">Bulk FES — Sign &amp; verify multiple files</h3><h3 style="margin-top:24px" lang="es">FES Masivo — Firmar y verificar m&uacute;ltiples archivos</h3>
 
     <div class="ep">
       <div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')">
@@ -284,6 +284,27 @@ footer a{color:var(--text);text-decoration:none}
   }'</pre>
         <p style="color:var(--text-2);font-size:11px;margin-top:8px" lang="en">Response: <code>{"total": 2, "signed": 2, "results": [{"status": "signed", "content_hash": "...", "signature": "...", ...}]}</code></p>
         <p style="color:var(--text-2);font-size:11px;margin-top:8px" lang="es">Respuesta: <code>{"total": 2, "signed": 2, "results": [{"status": "signed", "content_hash": "...", "signature": "...", ...}]}</code></p>
+      </div>
+    </div>
+
+    <div class="ep">
+      <div class="eh" tabindex="0" onclick="this.parentElement.classList.toggle('open')">
+        <span class="mt mt-p">POST</span><span class="ep-path">/verify/fes/bulk</span>
+        <span class="ep-d" lang="en">Bulk verify files/hashes</span><span class="ep-d" lang="es">Verificaci&oacute;n masiva de archivos</span>
+      </div>
+      <div class="eb">
+        <p lang="en" style="color:var(--text-2);font-size:12px;margin-bottom:8px">Verify up to 100 items. Each can be a file (base64 &rarr; auto-hash) or a direct content_hash. Returns verification status with signer, timestamp, and algorithm.</p>
+        <p lang="es" style="color:var(--text-2);font-size:12px;margin-bottom:8px">Verifica hasta 100 items. Cada uno puede ser un archivo (base64 &rarr; auto-hash) o un content_hash directo. Retorna estado de verificaci&oacute;n con firmante, timestamp y algoritmo.</p>
+<pre>curl -X POST https://goya-node.fly.dev/api/v1/verify/fes/bulk \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {"data_base64": "JVBERi0x...", "filename": "contract.pdf"},
+      {"content_hash": "56e3beb3..."}
+    ]
+  }'</pre>
+        <p style="color:var(--text-2);font-size:11px;margin-top:8px" lang="en">Response: <code>{"total": 2, "verified": 2, "results": [{"status": "verified", "signer": "...", ...}]}</code></p>
+        <p style="color:var(--text-2);font-size:11px;margin-top:8px" lang="es">Respuesta: <code>{"total": 2, "verified": 2, "results": [{"status": "verified", "signer": "...", ...}]}</code></p>
       </div>
     </div>
   </div>

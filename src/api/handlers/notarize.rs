@@ -1173,6 +1173,126 @@ pub async fn sign_fes_bulk(
     )))
 }
 
+// ── Bulk verify endpoint ───────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct BulkVerifyItem {
+    /// Either a content hash (64 hex chars) or base64-encoded file data.
+    #[serde(default)]
+    pub content_hash: Option<String>,
+    #[serde(default)]
+    pub data_base64: Option<String>,
+    #[serde(default)]
+    pub filename: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct BulkVerifyRequest {
+    pub items: Vec<BulkVerifyItem>,
+}
+
+/// Verify multiple documents/hashes against the notarization store.
+///
+/// Each item can provide either `content_hash` (64 hex) or `data_base64`
+/// (file content — will be SHA-256 hashed). Returns verification status
+/// for each item including signature details when found.
+///
+/// Maximum 100 items per request.
+#[post("/verify/fes/bulk")]
+pub async fn verify_fes_bulk(
+    state: web::Data<AppState>,
+    body: web::Json<BulkVerifyRequest>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    use pqc_crypto_module::legacy::sha256::{Digest, Sha256};
+
+    let trace = uuid::Uuid::new_v4().to_string();
+    let channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, channel)?;
+
+    if body.items.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("EMPTY", "no items provided"),
+            400,
+        )));
+    }
+    if body.items.len() > 100 {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("TOO_MANY", "maximum 100 items per bulk request"),
+            400,
+        )));
+    }
+
+    let mut results = Vec::with_capacity(body.items.len());
+
+    for (i, item) in body.items.iter().enumerate() {
+        let hash = if let Some(ref h) = item.content_hash {
+            if h.len() != 64 || hex::decode(h).is_err() {
+                results.push(serde_json::json!({
+                    "index": i, "status": "error", "error": "invalid hash format",
+                    "filename": item.filename,
+                }));
+                continue;
+            }
+            h.clone()
+        } else if let Some(ref b64) = item.data_base64 {
+            match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64) {
+                Ok(raw) => hex::encode(Sha256::digest(&raw)),
+                Err(_) => {
+                    results.push(serde_json::json!({
+                        "index": i, "status": "error", "error": "invalid base64",
+                        "filename": item.filename,
+                    }));
+                    continue;
+                }
+            }
+        } else {
+            results.push(serde_json::json!({
+                "index": i, "status": "error",
+                "error": "provide either content_hash or data_base64",
+                "filename": item.filename,
+            }));
+            continue;
+        };
+
+        match store.read_notarization_by_hash(&hash) {
+            Ok(entry) => {
+                results.push(serde_json::json!({
+                    "index": i,
+                    "status": "verified",
+                    "content_hash": hash,
+                    "id": entry.id,
+                    "signer": entry.signer,
+                    "notarized_at": entry.notarized_at,
+                    "block_height": entry.block_height,
+                    "signature_algorithm": entry.signature_algorithm,
+                    "signature_level": entry.signature_level,
+                    "filename": item.filename,
+                }));
+            }
+            Err(_) => {
+                results.push(serde_json::json!({
+                    "index": i,
+                    "status": "not_found",
+                    "content_hash": hash,
+                    "filename": item.filename,
+                }));
+            }
+        }
+    }
+
+    let verified_count = results.iter().filter(|r| r["status"] == "verified").count();
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        serde_json::json!({
+            "total": body.items.len(),
+            "verified": verified_count,
+            "results": results,
+        }),
+        trace,
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
