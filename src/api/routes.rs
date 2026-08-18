@@ -6,9 +6,9 @@ use crate::api::handlers::{
     acl, airdrop, alias, audit, billing, blocks, bridge, chain, chaincode, channels, compliance,
     compliance_auto, contact, contracts, credentials, crl, discovery, events, forensic, gateway,
     governance, governance_entities, identity, inference, intelligence, interop, invitations,
-    legal_oracle, msp, network, notarize, ocsp, oid4vci, oid4vp, oracle, organizations, pentest,
-    pin, policy, private_data, proposals, ra, registry, regulatory, snapshots, staking, stats,
-    stress, stripe, tokenization, transactions, tsa, tsl, utilities, vault, wallets, zkp,
+    legal_oracle, lexchain, msp, network, notarize, ocsp, oid4vci, oid4vp, oracle, organizations,
+    pentest, pin, policy, private_data, proposals, ra, registry, regulatory, snapshots, staking,
+    stats, stress, stripe, tokenization, transactions, tsa, tsl, utilities, vault, wallets, zkp,
 };
 
 /// API routes configuration
@@ -256,6 +256,11 @@ impl ApiRoutes {
             .service(tsa::request_timestamp_der)
             .service(tsa::tsa_policy)
             .service(tsa::verify_timestamp);
+        // LexChain (legal contract engine)
+        cfg.service(lexchain::deploy_contract)
+            .service(lexchain::sign_contract)
+            .service(lexchain::get_contract)
+            .service(lexchain::list_contracts);
         // Registration Authority (Ley 19.799 Art. 15)
         cfg.service(ra::submit_proof)
             .service(ra::approve_proof)

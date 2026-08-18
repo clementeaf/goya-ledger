@@ -30,6 +30,7 @@ pub mod intelligence;
 pub mod interop;
 pub mod invitations;
 pub mod legal_oracle;
+pub mod lexchain;
 pub mod msp;
 pub mod network;
 pub mod notarize;

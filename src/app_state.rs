@@ -115,6 +115,8 @@ pub struct AppState {
     pub ocsp_responder: Option<Arc<crate::msp::ocsp::OcspResponder>>,
     /// Certificate lifecycle manager (revoke→CRL, suspend, expiry monitoring).
     pub lifecycle_manager: Option<Arc<crate::pki_lifecycle::LifecycleManager>>,
+    /// LexChain contract store.
+    pub lexchain_store: crate::lexchain::store::LexChainStore,
 }
 
 impl AppState {
@@ -183,6 +185,7 @@ impl AppState {
             ra_store: None,
             ocsp_responder: None,
             lifecycle_manager: None,
+            lexchain_store: crate::lexchain::store::LexChainStore::new(),
         }
     }
 }

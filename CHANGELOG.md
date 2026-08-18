@@ -4,6 +4,57 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.12.0] — 2026-08-18
+
+### Added — Goya LexChain v1: legal contract engine
+
+Goya's equivalent of Ethereum Smart Contracts — but for legal instruments.
+Developers define contract flows in JSON; LexChain executes them with
+FES/FEA signatures, DID identity, TSA timestamps, and PQC cryptography.
+
+#### Engine (`src/lexchain/`)
+- **State machine**: PendingSignatures → FullySigned → Notarized → Archived
+- `deploy()` — validate definition, create contract, assign party states
+- `sign()` — validate FES/FEA constraints, verify cryptographic signature, advance state
+- `notarize()` — TSA timestamp (RFC 3161) over contract content hash
+- `archive()` — mark contract with on-chain block height
+- Auto-notarization: when all parties sign and `require_notarization: true`, TSA fires automatically
+
+#### API (`/api/v1/lexchain/`)
+- `POST /lexchain/deploy` — deploy contract from JSON definition, returns contract_id
+- `POST /lexchain/{id}/sign` — party signs with DID + signature + optional biometric evidence
+- `GET /lexchain/{id}` — contract state + all cryptographic proofs
+- `GET /lexchain` — list all contracts
+- ACL enforced on all endpoints
+
+#### Contract JSON Schema
+```json
+{
+  "type": "service_agreement",
+  "parties": [
+    {"role": "provider", "did": "did:goya:...", "signature_level": "advanced"},
+    {"role": "client", "did": "did:goya:...", "signature_level": "simple"}
+  ],
+  "payload": {"terms": "..."},
+  "require_notarization": true
+}
+```
+
+#### What LexChain orchestrates (existing infrastructure, zero new crypto)
+- FES (Firma Electrónica Simple) — Ed25519/ML-DSA-65
+- FEA (Firma Electrónica Avanzada) — ML-DSA-65 + biometric evidence
+- DID identity verification
+- TSA RFC 3161 timestamps with PQC signatures
+- SignedEnvelope + CAdES DER proofs
+- Signature consistency validation (algorithm ↔ key size ↔ level)
+
+### Stats
+- 2702 lib tests passed, 0 failed
+- 9 new LexChain engine tests (deploy, sign, notarize, archive, multi-party, FEA+PQC)
+- fmt + clippy clean
+
+---
+
 ## [0.11.5] — 2026-08-18
 
 ### Fixed — FIPS 140-3 audit readiness (5 findings resolved)

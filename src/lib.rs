@@ -52,6 +52,7 @@ pub mod governance;
 pub mod inference;
 pub mod intelligence;
 pub mod legal_oracle;
+pub mod lexchain;
 pub mod light_client;
 pub mod mining;
 pub mod msp;

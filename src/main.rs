@@ -30,6 +30,7 @@ mod identity;
 mod inference;
 mod intelligence;
 mod legal_oracle;
+mod lexchain;
 mod metrics;
 mod middleware;
 mod mining;
@@ -911,7 +912,9 @@ async fn async_main_inner() -> std::io::Result<()> {
             log::info!("Certificate lifecycle manager initialized");
             Some(Arc::new(lm))
         },
+        lexchain_store: crate::lexchain::store::LexChainStore::new(),
     };
+    log::info!("LexChain engine initialized");
 
     // Log vault recovery secret fingerprint for rotation verification.
     app_state.vault_recovery_secret.as_ref().inspect(|secret| {
