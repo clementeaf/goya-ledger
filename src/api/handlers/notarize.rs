@@ -1110,14 +1110,19 @@ pub async fn sign_fes_bulk(
         let ts = now_secs();
         let id = uuid::Uuid::new_v4().to_string();
 
+        let mut meta = serde_json::json!({});
+        if let Some(ref f) = file.filename {
+            meta["filename"] = serde_json::json!(f);
+        }
+        if let Ok(fp) = crate::document::pdf_parser::fingerprint_pdf(&raw) {
+            meta["fingerprint"] = serde_json::to_value(&fp).unwrap_or_default();
+        }
+
         let entry = NotarizationEntry {
             id: id.clone(),
             content_hash: content_hash.clone(),
             signer: body.signer.clone(),
-            metadata: file
-                .filename
-                .as_ref()
-                .map(|f| serde_json::json!({"filename": f})),
+            metadata: Some(meta),
             notarized_at: ts,
             block_height,
             signature: sig_hex.clone(),
@@ -1184,6 +1189,9 @@ pub struct BulkVerifyItem {
     pub data_base64: Option<String>,
     #[serde(default)]
     pub filename: Option<String>,
+    /// Original hash to compare against (for dimensional analysis of altered files).
+    #[serde(default)]
+    pub original_hash: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1226,7 +1234,7 @@ pub async fn verify_fes_bulk(
     let mut results = Vec::with_capacity(body.items.len());
 
     for (i, item) in body.items.iter().enumerate() {
-        let hash = if let Some(ref h) = item.content_hash {
+        let (hash, raw_bytes) = if let Some(ref h) = item.content_hash {
             if h.len() != 64 || hex::decode(h).is_err() {
                 results.push(serde_json::json!({
                     "index": i, "status": "error", "error": "invalid hash format",
@@ -1234,10 +1242,13 @@ pub async fn verify_fes_bulk(
                 }));
                 continue;
             }
-            h.clone()
+            (h.clone(), None)
         } else if let Some(ref b64) = item.data_base64 {
             match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64) {
-                Ok(raw) => hex::encode(Sha256::digest(&raw)),
+                Ok(raw) => {
+                    let h = hex::encode(Sha256::digest(&raw));
+                    (h, Some(raw))
+                }
                 Err(_) => {
                     results.push(serde_json::json!({
                         "index": i, "status": "error", "error": "invalid base64",
@@ -1271,12 +1282,60 @@ pub async fn verify_fes_bulk(
                 }));
             }
             Err(_) => {
-                results.push(serde_json::json!({
-                    "index": i,
-                    "status": "not_found",
-                    "content_hash": hash,
-                    "filename": item.filename,
-                }));
+                if let Some(ref orig_hash) = item.original_hash {
+                    if let Ok(original_entry) = store.read_notarization_by_hash(orig_hash) {
+                        let mut analysis = serde_json::json!({
+                            "original_hash": orig_hash,
+                            "current_hash": hash,
+                            "original_signer": original_entry.signer,
+                            "original_notarized_at": original_entry.notarized_at,
+                            "original_signature_algorithm": original_entry.signature_algorithm,
+                        });
+
+                        // Try dimensional PDF analysis if both fingerprints are available
+                        let original_fp: Option<DocumentFingerprint> = original_entry
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.get("fingerprint"))
+                            .and_then(|v| serde_json::from_value(v.clone()).ok());
+
+                        if let (Some(ref raw), Some(ref_fp)) = (&raw_bytes, original_fp) {
+                            if let Ok(candidate_fp) =
+                                crate::document::pdf_parser::fingerprint_pdf(raw)
+                            {
+                                let report = candidate_fp.verify_against(&ref_fp);
+                                analysis["verdict"] = serde_json::json!(report.verdict.to_string());
+                                analysis["match_ratio"] = serde_json::json!(report.match_ratio);
+                                analysis["file_identical"] =
+                                    serde_json::json!(report.file_identical);
+                                analysis["dimensions"] =
+                                    serde_json::to_value(&report.dimensions).unwrap_or_default();
+                            }
+                        }
+
+                        results.push(serde_json::json!({
+                            "index": i,
+                            "status": "altered",
+                            "content_hash": hash,
+                            "filename": item.filename,
+                            "analysis": analysis,
+                        }));
+                    } else {
+                        results.push(serde_json::json!({
+                            "index": i,
+                            "status": "not_found",
+                            "content_hash": hash,
+                            "filename": item.filename,
+                        }));
+                    }
+                } else {
+                    results.push(serde_json::json!({
+                        "index": i,
+                        "status": "not_found",
+                        "content_hash": hash,
+                        "filename": item.filename,
+                    }));
+                }
             }
         }
     }
