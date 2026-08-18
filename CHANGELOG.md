@@ -4,6 +4,42 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.11.5] — 2026-08-18
+
+### Fixed — FIPS 140-3 audit readiness (5 findings resolved)
+
+Closes all findings that would fail a CMVP/FIPS 140-3 lab audit.
+
+#### 1. SAFETY comments on all unsafe FFI blocks
+- `mldsa.rs`: 3 unsafe blocks (keypair_from_seed, sign_internal_derand, sign_external_derand)
+- `mlkem.rs`: 2 unsafe blocks (keypair_derand, enc_derand)
+- `types.rs`: already had SAFETY comments (mlock/VirtualLock)
+
+#### 2. assert_eq! → Result in production crypto (no more panics)
+- `generate_keypair_from_seed()` returns `Result<MldsaKeyPair, CryptoError>` (was panic)
+- `sign_message_derand()` / `sign_message_external_derand()` return `Err` on siglen mismatch (was assert)
+- FFI failure transitions to `Error` state (FIPS 140-3 fail-closed) instead of panicking
+
+#### 3. Cryptographic boundary enforced — zero direct ed25519_dalek imports
+- All `ed25519_dalek::*` in `src/` replaced with `pqc_crypto_module::legacy::ed25519::*`
+- 14 files updated across signing, ordering, channels, consensus, bin
+
+#### 4. ML-DSA production path through module internals (not legacy::mldsa_raw)
+- `MlDsaSigningProvider` rewritten over `pqc_crypto_module::types` + `pqc_crypto_module::mldsa`
+- `verify_mldsa65()` uses `pqc_crypto_module::mldsa::verify_signature_raw` (not legacy)
+- `ValidatorRegistry::verify_vote()` uses `pqc_crypto_module::mldsa` (not legacy)
+- `legacy::mldsa_raw` no longer used in any production path
+
+#### 5. SECURITY_POLICY §2 updated to match code
+- Boundary description now accurately reflects api.rs + mldsa/mlkem/slhdsa internal modules
+- Documents legacy module blocking and `approved-only` feature gate
+
+### Stats
+- 2693 lib tests + 150 pqc_crypto_module tests = 2843 total, 0 failed
+- fmt + clippy clean
+
+---
+
 ## [0.11.4] — 2026-08-18
 
 ### Changed — TLS PQC key exchange enabled by default

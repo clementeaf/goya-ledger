@@ -152,26 +152,17 @@ impl SignatureVerifier for RegistryVerifier {
             None => return false, // unknown voter → reject
         };
 
-        // Parse public key.
-        use pqc_crypto_module::legacy::mldsa_raw::PublicKey;
-        let pk =
-            match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(pk_bytes) {
-                Ok(pk) => pk,
-                Err(_) => return false, // malformed key → reject
-            };
-
-        // Parse signature.
-        use pqc_crypto_module::legacy::mldsa_raw::DetachedSignature;
-        let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(
-            signature,
-        ) {
-            Ok(sig) => sig,
-            Err(_) => return false, // malformed signature → reject
+        let pk = match pqc_crypto_module::types::MldsaPublicKey::from_bytes(pk_bytes) {
+            Ok(pk) => pk,
+            Err(_) => return false,
         };
 
-        // Verify.
-        pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, payload, &pk)
-            .is_ok()
+        let sig = match pqc_crypto_module::types::MldsaSignature::from_bytes(signature) {
+            Ok(sig) => sig,
+            Err(_) => return false,
+        };
+
+        pqc_crypto_module::mldsa::verify_signature_raw(&pk, payload, &sig).is_ok()
     }
 }
 

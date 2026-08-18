@@ -26,7 +26,7 @@ fn cross_impl_keygen_same_pk() {
     ];
 
     for (i, seed) in seeds.iter().enumerate() {
-        let pqclean_pk = generate_keypair_from_seed(seed).public_key;
+        let pqclean_pk = generate_keypair_from_seed(seed).unwrap().public_key;
         let rc_pk = rc_keygen(seed).verifying_key().encode();
 
         assert_eq!(
@@ -48,7 +48,7 @@ fn cross_impl_deterministic_sign_matches() {
     let seed = [0x42; 32];
     let msg = b"cross-implementation deterministic sign test";
 
-    let pqclean_kp = generate_keypair_from_seed(&seed);
+    let pqclean_kp = generate_keypair_from_seed(&seed).unwrap();
     let pqclean_sig = mldsa::sign_message_derand(&pqclean_kp.private_key, msg, &[0u8; 32]).unwrap();
 
     let rc_sk = rc_keygen(&seed);
@@ -75,7 +75,7 @@ fn cross_impl_sign_multiple_messages() {
     let seed = [0xAB; 32];
     let messages: [&[u8]; 5] = [b"", b"a", b"Hello world", &[0xFF; 1000], &[0u8; 10000]];
 
-    let pqclean_kp = generate_keypair_from_seed(&seed);
+    let pqclean_kp = generate_keypair_from_seed(&seed).unwrap();
     let rc_sk = rc_keygen(&seed);
     let rc_esk = rc_sk.expanded_key();
 
@@ -117,7 +117,7 @@ fn cross_impl_acvp_keygen_both_match_nist() {
         let seed: [u8; 32] = hex::decode(&v.seed).unwrap().try_into().unwrap();
         let expected_pk = hex::decode(&v.pk).unwrap();
 
-        let pq_pk = generate_keypair_from_seed(&seed).public_key;
+        let pq_pk = generate_keypair_from_seed(&seed).unwrap().public_key;
         assert_eq!(
             pq_pk.as_bytes(),
             &expected_pk[..],
@@ -144,7 +144,7 @@ fn cross_impl_pqclean_sig_verified_by_rustcrypto() {
     let seed = [0x77; 32];
     let msg = b"cross-verify external mode";
 
-    let pqclean_kp = generate_keypair_from_seed(&seed);
+    let pqclean_kp = generate_keypair_from_seed(&seed).unwrap();
 
     // Sign with PQClean external mode (empty context)
     let sig = pqc_crypto_module::mldsa::sign_message_external_derand(

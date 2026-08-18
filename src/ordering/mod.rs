@@ -26,7 +26,7 @@ pub fn block_hash_for_signing(block: &Block) -> [u8; 32] {
 }
 
 /// Sign a block with an Ed25519 signing key, populating `orderer_signature`.
-pub fn sign_block(block: &mut Block, key: &ed25519_dalek::SigningKey) {
+pub fn sign_block(block: &mut Block, key: &pqc_crypto_module::legacy::ed25519::SigningKey) {
     let hash = block_hash_for_signing(block);
     let sig = key.sign(&hash);
     block.orderer_signature = Some(sig.to_bytes().to_vec());
@@ -65,7 +65,7 @@ pub fn sign_block_with_provider(block: &mut Block, provider: &dyn SigningProvide
 /// - `Err(...)` if signature is present but invalid
 pub fn verify_orderer_signature(
     block: &Block,
-    orderer_key: &ed25519_dalek::VerifyingKey,
+    orderer_key: &pqc_crypto_module::legacy::ed25519::VerifyingKey,
 ) -> Result<bool, String> {
     let sig_bytes = match &block.orderer_signature {
         None => return Ok(false),
@@ -76,7 +76,7 @@ pub fn verify_orderer_signature(
         .as_slice()
         .try_into()
         .map_err(|_| "invalid signature length: expected 64 bytes".to_string())?;
-    let sig = ed25519_dalek::Signature::from_bytes(sig_array);
+    let sig = pqc_crypto_module::legacy::ed25519::Signature::from_bytes(sig_array);
     use pqc_crypto_module::legacy::ed25519::Verifier;
     orderer_key
         .verify(&hash, &sig)

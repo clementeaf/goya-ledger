@@ -40,20 +40,15 @@ pub fn verify_mldsa65(public_key_hex: &str, message: &[u8], signature_hex: &str)
         Ok(b) if b.len() == 3309 => b,
         _ => return false,
     };
-    use pqc_crypto_module::legacy::mldsa_raw::{DetachedSignature, PublicKey};
-    let pk = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(&pub_bytes)
-    {
+    let pk = match pqc_crypto_module::types::MldsaPublicKey::from_bytes(&pub_bytes) {
         Ok(pk) => pk,
         Err(_) => return false,
     };
-    let sig = match pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(
-        &sig_bytes,
-    ) {
+    let sig = match pqc_crypto_module::types::MldsaSignature::from_bytes(&sig_bytes) {
         Ok(sig) => sig,
         Err(_) => return false,
     };
-    pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(&sig, message, &pk)
-        .is_ok()
+    pqc_crypto_module::mldsa::verify_signature_raw(&pk, message, &sig).is_ok()
 }
 
 /// Verify an SLH-DSA-SHAKE-128s (FIPS 205) signature over a message.

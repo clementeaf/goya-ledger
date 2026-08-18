@@ -14,7 +14,7 @@ pub struct RaftOrderingService {
     pub max_batch_size: usize,
     #[allow(dead_code)]
     pub batch_timeout_ms: u64,
-    signing_key: Option<ed25519_dalek::SigningKey>,
+    signing_key: Option<pqc_crypto_module::legacy::ed25519::SigningKey>,
     signing_provider: Option<Arc<dyn SigningProvider>>,
 }
 
@@ -72,7 +72,7 @@ impl RaftOrderingService {
 
     #[allow(dead_code)]
     /// Attach an Ed25519 signing key so `cut_block` signs each block.
-    pub fn with_signing_key(mut self, key: ed25519_dalek::SigningKey) -> Self {
+    pub fn with_signing_key(mut self, key: pqc_crypto_module::legacy::ed25519::SigningKey) -> Self {
         self.signing_key = Some(key);
         self
     }

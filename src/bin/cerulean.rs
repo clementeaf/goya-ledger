@@ -416,7 +416,7 @@ fn verify_ed25519(public_key_hex: &str, message_hex: &str, signature_hex: &str) 
     let Ok(verifying_key) = VerifyingKey::from_bytes(&pk_arr) else {
         return false;
     };
-    let signature = ed25519_dalek::Signature::from_bytes(&sig_arr);
+    let signature = pqc_crypto_module::legacy::ed25519::Signature::from_bytes(&sig_arr);
 
     use pqc_crypto_module::legacy::ed25519::Verifier;
     verifying_key.verify(&msg_bytes, &signature).is_ok()

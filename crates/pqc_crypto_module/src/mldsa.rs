@@ -14,7 +14,7 @@ pub fn generate_keypair() -> Result<MldsaKeyPair, CryptoError> {
 }
 
 /// Internal keygen without approved-mode check (for self-tests).
-pub(crate) fn generate_keypair_raw() -> MldsaKeyPair {
+pub fn generate_keypair_raw() -> MldsaKeyPair {
     let (pk, sk) = mldsa65::keypair();
     let private_key = MldsaPrivateKey(sk.as_bytes().to_vec());
     private_key.mlock();
@@ -101,18 +101,27 @@ extern "C" {
 /// Deterministic ML-DSA-65 keygen from a 32-byte seed (FIPS 204 §5.1).
 /// For ACVP/CMVP testing only — production uses randomized keygen.
 #[doc(hidden)]
-pub fn generate_keypair_from_seed(seed: &[u8; 32]) -> MldsaKeyPair {
+pub fn generate_keypair_from_seed(seed: &[u8; 32]) -> Result<MldsaKeyPair, CryptoError> {
     let mut pk = vec![0u8; 1952];
     let mut sk = vec![0u8; 4032];
+    // SAFETY: pk (1952 B) and sk (4032 B) are pre-allocated to spec sizes.
+    // seed is a valid 32-byte slice. PQClean's keypair_from_seed writes
+    // exactly pk_len + sk_len bytes and returns 0 on success.
     let ret =
         unsafe { goya_mldsa65_keypair_from_seed(pk.as_mut_ptr(), sk.as_mut_ptr(), seed.as_ptr()) };
-    assert_eq!(ret, 0, "keypair_from_seed failed");
+    if ret != 0 {
+        // Transition to error state rather than panicking — FIPS 140-3 fail-closed.
+        crate::approved_mode::set_state(crate::approved_mode::ModuleState::Error);
+        return Err(CryptoError::InvalidKey(
+            "keypair_from_seed: FFI returned non-zero".into(),
+        ));
+    }
     let private_key = MldsaPrivateKey(sk);
     private_key.mlock();
-    MldsaKeyPair {
+    Ok(MldsaKeyPair {
         public_key: MldsaPublicKey(pk),
         private_key,
-    }
+    })
 }
 
 /// Deterministic ML-DSA-65 internal signing with injected randomness.
@@ -126,6 +135,9 @@ pub fn sign_message_derand(
 ) -> Result<MldsaSignature, CryptoError> {
     let mut sig = vec![0u8; 3309];
     let mut siglen: usize = 0;
+    // SAFETY: sig is pre-allocated to 3309 B (max ML-DSA-65 sig size).
+    // siglen is a valid mutable usize pointer. message, private_key, and rnd
+    // are valid slices of correct lengths. PQClean writes at most 3309 B to sig.
     let ret = unsafe {
         goya_mldsa65_sign_internal_derand(
             sig.as_mut_ptr(),
@@ -139,7 +151,9 @@ pub fn sign_message_derand(
     if ret != 0 {
         return Err(CryptoError::InvalidKey("sign_derand failed".into()));
     }
-    assert_eq!(siglen, 3309);
+    if siglen != 3309 {
+        return Err(CryptoError::InvalidSignature);
+    }
     Ok(MldsaSignature(sig))
 }
 
@@ -158,6 +172,9 @@ pub fn sign_message_external_derand(
     }
     let mut sig = vec![0u8; 3309];
     let mut siglen: usize = 0;
+    // SAFETY: sig pre-allocated to 3309 B. context length validated ≤255 above.
+    // All pointer/length pairs (message, context, private_key, rnd) are valid
+    // slices. PQClean writes at most 3309 B to sig.
     let ret = unsafe {
         goya_mldsa65_sign_external_derand(
             sig.as_mut_ptr(),
@@ -175,7 +192,9 @@ pub fn sign_message_external_derand(
             "sign_external_derand failed".into(),
         ));
     }
-    assert_eq!(siglen, 3309);
+    if siglen != 3309 {
+        return Err(CryptoError::InvalidSignature);
+    }
     Ok(MldsaSignature(sig))
 }
 
@@ -225,22 +244,22 @@ mod tests {
     #[test]
     fn seeded_keygen_is_deterministic() {
         let seed = [0x42u8; 32];
-        let kp1 = super::generate_keypair_from_seed(&seed);
-        let kp2 = super::generate_keypair_from_seed(&seed);
+        let kp1 = super::generate_keypair_from_seed(&seed).unwrap();
+        let kp2 = super::generate_keypair_from_seed(&seed).unwrap();
         assert_eq!(kp1.public_key.as_bytes(), kp2.public_key.as_bytes());
         assert_eq!(kp1.private_key.as_bytes(), kp2.private_key.as_bytes());
     }
 
     #[test]
     fn seeded_keygen_different_seeds_produce_different_keys() {
-        let kp1 = super::generate_keypair_from_seed(&[0x01; 32]);
-        let kp2 = super::generate_keypair_from_seed(&[0x02; 32]);
+        let kp1 = super::generate_keypair_from_seed(&[0x01; 32]).unwrap();
+        let kp2 = super::generate_keypair_from_seed(&[0x02; 32]).unwrap();
         assert_ne!(kp1.public_key.as_bytes(), kp2.public_key.as_bytes());
     }
 
     #[test]
     fn seeded_keygen_sign_verify_roundtrip() {
-        let kp = super::generate_keypair_from_seed(&[0xAB; 32]);
+        let kp = super::generate_keypair_from_seed(&[0xAB; 32]).unwrap();
         let sig = sign_message_raw(&kp.private_key, b"ACVP test").unwrap();
         verify_signature_raw(&kp.public_key, b"ACVP test", &sig).unwrap();
     }

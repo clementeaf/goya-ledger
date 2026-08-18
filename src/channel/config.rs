@@ -507,15 +507,15 @@ mod tests {
 
     // ── validate_config_tx tests ─────────────────────────────────────────────
 
-    fn make_keypair() -> (ed25519_dalek::SigningKey, [u8; 32]) {
+    fn make_keypair() -> (pqc_crypto_module::legacy::ed25519::SigningKey, [u8; 32]) {
         use pqc_crypto_module::legacy::rng::OsRng;
-        let sk = ed25519_dalek::SigningKey::generate(&mut OsRng);
+        let sk = pqc_crypto_module::legacy::ed25519::SigningKey::generate(&mut OsRng);
         let pk = sk.verifying_key().to_bytes();
         (sk, pk)
     }
 
     fn make_signed_endorsement(
-        sk: &ed25519_dalek::SigningKey,
+        sk: &pqc_crypto_module::legacy::ed25519::SigningKey,
         payload_hash: [u8; 32],
         org_id: &str,
     ) -> Endorsement {

@@ -56,6 +56,16 @@ impl MldsaPrivateKey {
         &self.0
     }
 
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::errors::CryptoError> {
+        if bytes.len() != 4032 {
+            return Err(crate::errors::CryptoError::InvalidKey(format!(
+                "ML-DSA-65 secret key must be 4032 bytes, got {}",
+                bytes.len()
+            )));
+        }
+        Ok(Self(bytes.to_vec()))
+    }
+
     /// Lock memory pages to prevent swap-out. Called after construction.
     pub fn mlock(&self) {
         mlock_buffer(&self.0);

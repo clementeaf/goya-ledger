@@ -30,7 +30,7 @@ The cryptographic boundary encompasses all source files within `crates/pqc_crypt
 | `legacy.rs` | Non-approved algorithms (outside approved boundary) |
 | `lib.rs` | Module re-exports |
 
-The boundary is enforced by the Rust crate system. External code accesses cryptographic operations exclusively through `pqc_crypto_module::api`. Boundary integrity is verified by `tests/api_boundary.rs`.
+The boundary is enforced by the Rust crate system. External code accesses approved cryptographic operations through `pqc_crypto_module::api` (state-guarded) or `pqc_crypto_module::mldsa`/`mlkem`/`slhdsa` (internal modules with `require_approved()` guards). Non-approved legacy algorithms (Ed25519, SHA-256) are accessed through `pqc_crypto_module::legacy`, which is blocked in `Approved` state and excluded entirely under `--features approved-only`. Boundary integrity is verified by `tests/api_boundary.rs` and `tests/crypto_boundary`.
 
 Files outside `src/` (tests, Cargo.toml, documentation) are outside the cryptographic boundary.
 

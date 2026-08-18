@@ -81,13 +81,13 @@ pub trait SigningProvider: Send + Sync {
 /// The inner `SigningKey` implements `ZeroizeOnDrop` — key material is
 /// automatically overwritten when the provider is dropped.
 pub struct SoftwareSigningProvider {
-    signing_key: ed25519_dalek::SigningKey,
+    signing_key: pqc_crypto_module::legacy::ed25519::SigningKey,
 }
 
 impl SoftwareSigningProvider {
     #[allow(dead_code)]
     /// Create a provider from an existing signing key.
-    pub fn from_key(signing_key: ed25519_dalek::SigningKey) -> Self {
+    pub fn from_key(signing_key: pqc_crypto_module::legacy::ed25519::SigningKey) -> Self {
         Self { signing_key }
     }
 
@@ -95,7 +95,7 @@ impl SoftwareSigningProvider {
     pub fn generate() -> Self {
         use pqc_crypto_module::legacy::rng::OsRng;
         Self {
-            signing_key: ed25519_dalek::SigningKey::generate(&mut OsRng),
+            signing_key: pqc_crypto_module::legacy::ed25519::SigningKey::generate(&mut OsRng),
         }
     }
 }
@@ -131,56 +131,41 @@ impl SigningProvider for SoftwareSigningProvider {
 
 /// Post-quantum signing provider using ML-DSA-65 (FIPS 204, security level 3).
 ///
+/// Routes through `pqc_crypto_module::mldsa` (approved-mode guarded) — NOT
+/// through `legacy::mldsa_raw`. This ensures all ML-DSA operations respect
+/// the FIPS 140-3 state machine and cryptographic boundary.
+///
 /// Key and signature sizes:
 /// - Public key: 1952 bytes
 /// - Secret key: 4032 bytes
 /// - Signature:  3309 bytes
 pub struct MlDsaSigningProvider {
-    public_key: pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey,
-    secret_key: pqc_crypto_module::legacy::mldsa_raw::mldsa65::SecretKey,
-}
-
-impl Drop for MlDsaSigningProvider {
-    fn drop(&mut self) {
-        use pqc_crypto_module::legacy::mldsa_raw::SecretKey;
-        use zeroize::Zeroize;
-        // SecretKey is an opaque struct; extract mutable bytes and zeroize.
-        let sk_bytes = self.secret_key.as_bytes();
-        let mut zeroed = sk_bytes.to_vec();
-        zeroed.zeroize();
-        // Overwrite the secret key with a fresh keypair (deterministic zeroing
-        // is not possible for opaque C types, so we replace the value).
-        let (_, fresh_sk) = pqc_crypto_module::legacy::mldsa_raw::mldsa65::keypair();
-        self.secret_key = fresh_sk;
-    }
+    public_key: pqc_crypto_module::types::MldsaPublicKey,
+    private_key: pqc_crypto_module::types::MldsaPrivateKey,
 }
 
 impl MlDsaSigningProvider {
-    /// Generate a new random ML-DSA-65 keypair.
+    /// Generate a new random ML-DSA-65 keypair via the approved API.
     pub fn generate() -> Self {
-        let (pk, sk) = pqc_crypto_module::legacy::mldsa_raw::mldsa65::keypair();
+        let kp = pqc_crypto_module::mldsa::generate_keypair_raw();
         Self {
-            public_key: pk,
-            secret_key: sk,
+            public_key: kp.public_key,
+            private_key: kp.private_key,
         }
     }
 
     #[allow(dead_code)]
     /// Create a provider from existing key bytes.
     pub fn from_keys(pk_bytes: &[u8], sk_bytes: &[u8]) -> Result<Self, SigningError> {
-        use pqc_crypto_module::legacy::mldsa_raw::PublicKey as PqPk;
-        use pqc_crypto_module::legacy::mldsa_raw::SecretKey as PqSk;
-        let pk = pqc_crypto_module::legacy::mldsa_raw::mldsa65::PublicKey::from_bytes(pk_bytes)
-            .map_err(|e| {
-                SigningError::KeyNotAvailable(format!("invalid ML-DSA-65 public key: {e}"))
-            })?;
-        let sk = pqc_crypto_module::legacy::mldsa_raw::mldsa65::SecretKey::from_bytes(sk_bytes)
-            .map_err(|e| {
-                SigningError::KeyNotAvailable(format!("invalid ML-DSA-65 secret key: {e}"))
-            })?;
+        let pk = pqc_crypto_module::types::MldsaPublicKey::from_bytes(pk_bytes).map_err(|e| {
+            SigningError::KeyNotAvailable(format!("invalid ML-DSA-65 public key: {e}"))
+        })?;
+        let sk = pqc_crypto_module::types::MldsaPrivateKey::from_bytes(sk_bytes).map_err(|e| {
+            SigningError::KeyNotAvailable(format!("invalid ML-DSA-65 secret key: {e}"))
+        })?;
         Ok(Self {
             public_key: pk,
-            secret_key: sk,
+            private_key: sk,
         })
     }
 }
@@ -191,29 +176,19 @@ impl SigningProvider for MlDsaSigningProvider {
     }
 
     fn sign(&self, data: &[u8]) -> Result<Vec<u8>, SigningError> {
-        use pqc_crypto_module::legacy::mldsa_raw::DetachedSignature;
-        let sig =
-            pqc_crypto_module::legacy::mldsa_raw::mldsa65::detached_sign(data, &self.secret_key);
+        let sig = pqc_crypto_module::mldsa::sign_message_raw(&self.private_key, data)
+            .map_err(|e| SigningError::SignFailed(format!("ML-DSA-65 sign: {e}")))?;
         Ok(sig.as_bytes().to_vec())
     }
 
     fn public_key(&self) -> Vec<u8> {
-        use pqc_crypto_module::legacy::mldsa_raw::PublicKey;
         self.public_key.as_bytes().to_vec()
     }
 
     fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, SigningError> {
-        use pqc_crypto_module::legacy::mldsa_raw::DetachedSignature;
-        let signature =
-            pqc_crypto_module::legacy::mldsa_raw::mldsa65::DetachedSignature::from_bytes(sig)
-                .map_err(|e| {
-                    SigningError::VerifyFailed(format!("invalid ML-DSA-65 signature: {e}"))
-                })?;
-        match pqc_crypto_module::legacy::mldsa_raw::mldsa65::verify_detached_signature(
-            &signature,
-            data,
-            &self.public_key,
-        ) {
+        let signature = pqc_crypto_module::types::MldsaSignature::from_bytes(sig)
+            .map_err(|e| SigningError::VerifyFailed(format!("invalid ML-DSA-65 signature: {e}")))?;
+        match pqc_crypto_module::mldsa::verify_signature_raw(&self.public_key, data, &signature) {
             Ok(()) => Ok(true),
             Err(_) => Ok(false),
         }
@@ -501,7 +476,7 @@ mod tests {
 
     #[test]
     fn from_known_key() {
-        let key = ed25519_dalek::SigningKey::from_bytes(&[42u8; 32]);
+        let key = pqc_crypto_module::legacy::ed25519::SigningKey::from_bytes(&[42u8; 32]);
         let provider = SoftwareSigningProvider::from_key(key);
         let sig = provider.sign(b"test").unwrap();
         assert!(provider.verify(b"test", &sig).unwrap());
@@ -570,8 +545,7 @@ mod tests {
     fn mldsa65_from_keys_roundtrip() {
         let provider = MlDsaSigningProvider::generate();
         let pk = provider.public_key();
-        use pqc_crypto_module::legacy::mldsa_raw::SecretKey;
-        let sk = provider.secret_key.as_bytes().to_vec();
+        let sk = provider.private_key.as_bytes().to_vec();
         let restored = MlDsaSigningProvider::from_keys(&pk, &sk).unwrap();
         let sig = restored.sign(b"roundtrip").unwrap();
         assert!(restored.verify(b"roundtrip", &sig).unwrap());

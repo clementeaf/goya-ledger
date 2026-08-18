@@ -70,7 +70,7 @@ fn acvp_keygen_public_key_matches_nist() {
         );
 
         let seed: [u8; 32] = seed_bytes.try_into().unwrap();
-        let kp = generate_keypair_from_seed(&seed);
+        let kp = generate_keypair_from_seed(&seed).unwrap();
 
         assert_eq!(
             kp.public_key.as_bytes(),
@@ -101,7 +101,7 @@ fn acvp_keygen_secret_key_matches_nist() {
         );
 
         let seed: [u8; 32] = seed_bytes.try_into().unwrap();
-        let kp = generate_keypair_from_seed(&seed);
+        let kp = generate_keypair_from_seed(&seed).unwrap();
 
         assert_eq!(
             kp.private_key.as_bytes(),
@@ -123,7 +123,7 @@ fn acvp_derived_key_signs_and_verifies() {
 
     for v in &vf.vectors {
         let seed: [u8; 32] = hex::decode(&v.seed).unwrap().try_into().unwrap();
-        let kp = generate_keypair_from_seed(&seed);
+        let kp = generate_keypair_from_seed(&seed).unwrap();
 
         let sig = api::sign_message(&kp.private_key, b"ACVP cross-check").unwrap();
 
@@ -143,8 +143,8 @@ fn acvp_keygen_is_deterministic() {
     let v = &vf.vectors[0];
     let seed: [u8; 32] = hex::decode(&v.seed).unwrap().try_into().unwrap();
 
-    let kp1 = generate_keypair_from_seed(&seed);
-    let kp2 = generate_keypair_from_seed(&seed);
+    let kp1 = generate_keypair_from_seed(&seed).unwrap();
+    let kp2 = generate_keypair_from_seed(&seed).unwrap();
 
     assert_eq!(kp1.public_key.as_bytes(), kp2.public_key.as_bytes());
     assert_eq!(kp1.private_key.as_bytes(), kp2.private_key.as_bytes());

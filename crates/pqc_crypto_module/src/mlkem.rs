@@ -110,6 +110,8 @@ extern "C" {
 pub fn generate_keypair_derand(coins: &[u8; 64]) -> Result<MlKemKeyPair, CryptoError> {
     let mut pk = vec![0u8; 1184];
     let mut sk = vec![0u8; 2400];
+    // SAFETY: pk (1184 B) and sk (2400 B) pre-allocated to FIPS 203 spec sizes.
+    // coins is a valid 64-byte slice. PQClean writes exactly pk_len + sk_len bytes.
     let ret = unsafe { mlkem768_keypair_derand(pk.as_mut_ptr(), sk.as_mut_ptr(), coins.as_ptr()) };
     if ret != 0 {
         return Err(CryptoError::InvalidKey(
@@ -133,6 +135,9 @@ pub fn encapsulate_derand(
 ) -> Result<(MlKemCiphertext, MlKemSharedSecret), CryptoError> {
     let mut ct = vec![0u8; 1088];
     let mut ss = vec![0u8; 32];
+    // SAFETY: ct (1088 B) and ss (32 B) pre-allocated to FIPS 203 spec sizes.
+    // public_key is validated by caller. coins is a valid 32-byte slice.
+    // PQClean writes exactly ct_len + ss_len bytes.
     let ret = unsafe {
         mlkem768_enc_derand(
             ct.as_mut_ptr(),
