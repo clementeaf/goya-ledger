@@ -72,6 +72,7 @@ mod comprehensive_storage_tests {
             created_at: 1000,
             updated_at: 2000,
             status: "active".to_string(),
+            migrated_from: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -159,6 +160,7 @@ mod comprehensive_storage_tests {
             created_at: 1000,
             updated_at: 2000,
             status: "active".to_string(),
+            migrated_from: None,
         };
         assert!(store.write_identity(&identity).is_ok());
         identity.status = "revoked".to_string();
@@ -536,6 +538,7 @@ mod comprehensive_storage_tests {
             created_at: 1000,
             updated_at: 2000,
             status: "active".to_string(),
+            migrated_from: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -686,6 +689,7 @@ mod comprehensive_storage_tests {
             created_at: 1000,
             updated_at: 2000,
             status: "suspended".to_string(),
+            migrated_from: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -699,6 +703,7 @@ mod comprehensive_storage_tests {
             created_at: 1000,
             updated_at: 2000,
             status: "revoked".to_string(),
+            migrated_from: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }

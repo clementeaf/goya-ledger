@@ -26,6 +26,7 @@ fn identity_then_credential_produces_audit_trail() {
         created_at: 1000,
         updated_at: 1000,
         status: "active".to_string(),
+        migrated_from: None,
     };
     store.write_identity(&identity).unwrap();
     rust_bc::audit::emit_domain_event(

@@ -348,6 +348,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 status: "active".to_string(),
+                migrated_from: None,
             })
             .unwrap();
     }

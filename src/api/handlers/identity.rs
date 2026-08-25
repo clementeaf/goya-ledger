@@ -40,6 +40,7 @@ async fn create_identity(
         created_at: now,
         updated_at: now,
         status: "active".to_string(),
+        migrated_from: None,
     };
     store
         .write_identity(&record)

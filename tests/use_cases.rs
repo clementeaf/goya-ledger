@@ -354,6 +354,7 @@ async fn uc_credential_lifecycle() {
                 created_at: 1700000000,
                 updated_at: 1700000000,
                 status: "active".to_string(),
+                migrated_from: None,
             })
             .unwrap();
     }

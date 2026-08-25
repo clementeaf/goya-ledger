@@ -2,9 +2,12 @@
 //!
 //! Algorithm-agnostic key rotation via `SigningProvider` trait.
 
+use crate::identity::did::did_from_pubkey_hex;
 use crate::identity::signing::{
     MlDsaSigningProvider, SigningAlgorithm, SigningError, SigningProvider, SoftwareSigningProvider,
 };
+use crate::storage::errors::StorageError;
+use crate::storage::traits::{BlockStore, IdentityRecord};
 
 /// Public key information
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +80,15 @@ impl KeyManager {
 
     /// Rotate to a new keypair of the same algorithm.
     pub fn rotate_key(&mut self, timestamp: u64) {
+        self.retire_and_replace(self.provider.algorithm(), timestamp);
+    }
+
+    /// Rotate to a new keypair of a different algorithm (e.g. Ed25519 → ML-DSA-65).
+    pub fn rotate_algorithm(&mut self, new_algorithm: SigningAlgorithm, timestamp: u64) {
+        self.retire_and_replace(new_algorithm, timestamp);
+    }
+
+    fn retire_and_replace(&mut self, algorithm: SigningAlgorithm, timestamp: u64) {
         let retired = PublicKeyInfo {
             public_key: self.provider.public_key(),
             algorithm: self.provider.algorithm(),
@@ -85,8 +97,6 @@ impl KeyManager {
             is_active: false,
         };
         self.retired_keys.push(retired);
-
-        let algorithm = self.provider.algorithm();
         self.provider = new_provider(algorithm);
         self.created_at = timestamp;
     }
@@ -110,6 +120,74 @@ impl KeyManager {
     pub fn retired_key_count(&self) -> usize {
         self.retired_keys.len()
     }
+
+    /// Public key as hex string.
+    pub fn public_key_hex(&self) -> String {
+        hex::encode(self.provider.public_key())
+    }
+
+    /// DID derived from the current public key.
+    pub fn did(&self) -> String {
+        did_from_pubkey_hex(&self.public_key_hex())
+    }
+}
+
+#[derive(Debug)]
+pub struct MigrationResult {
+    pub old_did: String,
+    pub new_did: String,
+    pub new_public_key_hex: String,
+    pub new_algorithm: SigningAlgorithm,
+}
+
+pub fn migrate_identity(
+    store: &dyn BlockStore,
+    old_did: &str,
+    new_algorithm: SigningAlgorithm,
+    timestamp: u64,
+) -> Result<MigrationResult, StorageError> {
+    let old_record = store.read_identity(old_did)?;
+
+    let provider = new_provider(new_algorithm);
+    let new_pk_hex = hex::encode(provider.public_key());
+    let new_did = did_from_pubkey_hex(&new_pk_hex);
+
+    store.write_identity(&IdentityRecord {
+        did: old_did.to_string(),
+        public_key: old_record.public_key,
+        created_at: old_record.created_at,
+        updated_at: timestamp,
+        status: "migrated".to_string(),
+        migrated_from: None,
+    })?;
+
+    store.write_identity(&IdentityRecord {
+        did: new_did.clone(),
+        public_key: new_pk_hex.clone(),
+        created_at: timestamp,
+        updated_at: timestamp,
+        status: "active".to_string(),
+        migrated_from: Some(old_did.to_string()),
+    })?;
+
+    Ok(MigrationResult {
+        old_did: old_did.to_string(),
+        new_did,
+        new_public_key_hex: new_pk_hex,
+        new_algorithm,
+    })
+}
+
+pub fn resolve_identity(store: &dyn BlockStore, did: &str) -> Result<IdentityRecord, StorageError> {
+    let record = store.read_identity(did)?;
+    if record.status == "migrated" {
+        for candidate in store.list_identities()? {
+            if candidate.migrated_from.as_deref() == Some(did) && candidate.status == "active" {
+                return Ok(candidate);
+            }
+        }
+    }
+    Ok(record)
 }
 
 #[cfg(test)]

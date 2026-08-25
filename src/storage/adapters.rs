@@ -2694,6 +2694,7 @@ mod tests {
             created_at: 1_000,
             updated_at: 2_000,
             status: "active".to_string(),
+            migrated_from: None,
         };
         store.write_identity(&identity).unwrap();
         let loaded = store.read_identity("did:goya:123").unwrap();

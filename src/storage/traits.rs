@@ -111,6 +111,8 @@ pub struct IdentityRecord {
     pub created_at: u64,
     pub updated_at: u64,
     pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub migrated_from: Option<String>,
 }
 
 /// Credential structure

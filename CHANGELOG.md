@@ -36,6 +36,13 @@ complete Ed25519 compromise with zero block loss and automatic PQC migration.
 - Forged QC (1 legit + 2 Ed25519-forged votes) → `InvalidSignature` on validation
 - 4-node ML-DSA-65 network decides 2 rounds despite active attacker injection
 
+#### Atomic identity migration (`migrate_identity`, `resolve_identity`)
+- `KeyManager::rotate_algorithm(new_algo, timestamp)` — cross-algorithm key rotation (Ed25519 → ML-DSA-65)
+- `migrate_identity(store, old_did, new_algo, timestamp)` — atomic: marks old DID as "migrated", creates new DID with `migrated_from` link
+- `resolve_identity(store, did)` — follows migration chain, returns the active identity
+- `IdentityRecord.migrated_from: Option<String>` — links new DID to old DID
+- 50-identity batch migration tested with full verification of old→new chain
+
 #### Contract quarantine (`quarantine_classical_contracts`)
 - `ContractState::Quarantined` added to LexChain state machine
 - `quarantine_classical_contracts(store, compromised_algos)` scans and quarantines contracts signed exclusively with compromised algorithms

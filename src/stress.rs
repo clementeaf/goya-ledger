@@ -474,6 +474,7 @@ pub fn stress_identity(ops: u64) -> ModuleStressResult {
             created_at: 1000 + i,
             updated_at: 1000 + i,
             status: "active".into(),
+            migrated_from: None,
         };
 
         if store.write_identity(&record).is_err() {
@@ -525,6 +526,7 @@ pub fn stress_credential(ops: u64) -> ModuleStressResult {
             created_at: 1000,
             updated_at: 1000,
             status: "active".into(),
+            migrated_from: None,
         })
         .unwrap();
 
@@ -756,6 +758,7 @@ mod tests {
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),
+                            migrated_from: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             errors += 1;
@@ -811,6 +814,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 status: "active".into(),
+                migrated_from: None,
             })
             .unwrap();
 
@@ -1063,6 +1067,7 @@ mod tests {
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),
+                            migrated_from: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1473,6 +1478,7 @@ mod tests {
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),
+                            migrated_from: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             errors += 1;
@@ -1514,6 +1520,7 @@ mod tests {
                 created_at: 0,
                 updated_at: 0,
                 status: "active".into(),
+                migrated_from: None,
             })
             .unwrap();
 
@@ -1636,6 +1643,7 @@ mod tests {
                             created_at: i,
                             updated_at: i,
                             status: "active".into(),
+                            migrated_from: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

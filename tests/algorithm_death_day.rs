@@ -5,6 +5,7 @@ use rust_bc::consensus::bft::types::{BftPhase, QcError, QuorumCertificate, VoteM
 use rust_bc::consensus::bft::validator_registry::{RegistryVerifier, ValidatorRegistry};
 use rust_bc::identity::did::did_from_pubkey_hex;
 use rust_bc::identity::dual_signing::{dual_sign, verify_dual, DualVerifyMode};
+use rust_bc::identity::keys::{migrate_identity, resolve_identity};
 use rust_bc::identity::signing::{
     MlDsaSigningProvider, SigningAlgorithm, SigningProvider, SoftwareSigningProvider,
 };
@@ -61,6 +62,7 @@ fn register_did(store: &dyn BlockStore, id: &Identity) {
             created_at: 0,
             updated_at: 0,
             status: "active".to_string(),
+            migrated_from: None,
         })
         .unwrap();
 }
@@ -266,7 +268,7 @@ fn phase2_ed25519_signatures_rejected_post_compromise() {
 #[test]
 fn phase3_identity_migration_ed25519_to_mldsa65() {
     let store = Arc::new(MemoryStore::new());
-    let num_identities = 50;
+    let num_identities: usize = 50;
     let mut ed_identities: Vec<Identity> = Vec::with_capacity(num_identities);
 
     for _ in 0..num_identities {
@@ -275,42 +277,42 @@ fn phase3_identity_migration_ed25519_to_mldsa65() {
         ed_identities.push(id);
     }
 
-    for id in &ed_identities {
-        let record = store.read_identity(&id.did).unwrap();
-        assert_eq!(record.public_key, id.pubkey_hex);
-    }
-
     let migration_start = Instant::now();
-    let mut migrated_count = 0;
+    let mut results = Vec::new();
 
     for old_id in &ed_identities {
-        let new_id = make_identity(SigningAlgorithm::MlDsa65);
+        let result =
+            migrate_identity(store.as_ref(), &old_id.did, SigningAlgorithm::MlDsa65, 1000).unwrap();
 
-        store
-            .write_identity(&IdentityRecord {
-                did: old_id.did.clone(),
-                public_key: new_id.pubkey_hex.clone(),
-                created_at: 0,
-                updated_at: 1,
-                status: "active".to_string(),
-            })
-            .unwrap();
+        assert_ne!(result.old_did, result.new_did);
+        assert_eq!(result.new_algorithm, SigningAlgorithm::MlDsa65);
+        assert_eq!(result.new_public_key_hex.len(), 1952 * 2);
 
-        let updated = store.read_identity(&old_id.did).unwrap();
-        assert_eq!(updated.public_key, new_id.pubkey_hex);
-        assert_eq!(updated.public_key.len(), 1952 * 2);
+        let old_record = store.read_identity(&result.old_did).unwrap();
+        assert_eq!(old_record.status, "migrated");
 
-        migrated_count += 1;
+        let new_record = store.read_identity(&result.new_did).unwrap();
+        assert_eq!(new_record.status, "active");
+        assert_eq!(
+            new_record.migrated_from.as_deref(),
+            Some(result.old_did.as_str())
+        );
+
+        let resolved = resolve_identity(store.as_ref(), &old_id.did).unwrap();
+        assert_eq!(resolved.did, result.new_did);
+        assert_eq!(resolved.status, "active");
+
+        results.push(result);
     }
 
     let migration_duration = migration_start.elapsed();
 
-    assert_eq!(migrated_count, num_identities);
+    assert_eq!(results.len(), num_identities);
     eprintln!(
         "  MIGRATION: {} identities migrated in {:?} ({:.1} ids/ms)",
-        migrated_count,
+        results.len(),
         migration_duration,
-        migrated_count as f64 / migration_duration.as_secs_f64() / 1000.0
+        results.len() as f64 / migration_duration.as_secs_f64() / 1000.0
     );
 }
 
