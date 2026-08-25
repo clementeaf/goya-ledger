@@ -45,6 +45,37 @@ Machine-checked proofs in `formal/` — Lean 4.33 + Mathlib.
 - CMA-to-NMA reduction axiomatized (the gap found and fixed in CRYPTO 2023)
 - PQC and classical algorithm sets are disjoint
 
+### Added — Quantum Threat Simulator (`tests/quantum_threat_sim.rs`)
+
+Unified attack harness — 10 tests across 6 attack vectors:
+
+#### 1. Side-channel timing analysis
+- ML-DSA-65 sign/verify coefficient of variation measured
+- Ed25519 vs ML-DSA-65 performance ratio benchmarked
+- Rejection sampling variance accounted for (Fiat-Shamir with aborts)
+
+#### 2. Fault injection vs FIPS state machine
+- Error state blocks ALL crypto operations (keygen, sign, verify, hash, KEM)
+- Uninitialized state blocks keygen
+- Recovery after reinitialization verified
+
+#### 3. Lattice parameter security
+- ML-DSA-65: BKZ-β=625, 192-bit classical, 143-bit quantum → INFEASIBLE
+- ML-KEM-768: BKZ-β=630, 192-bit classical, 143-bit quantum → INFEASIBLE
+
+#### 4. Grover effective security
+- SHA3-256: 128-bit post-quantum (SECURE)
+- AES-256-GCM: 128-bit post-quantum (SECURE)
+- SLH-DSA-128s: 64-bit post-quantum (REDUCED but viable)
+- Output sizes verified against live code
+
+#### 5. Cross-algorithm forgery resistance
+- Ed25519 signature rejected by ML-DSA-65 verifier and vice versa
+- Size mismatch verified (64B vs 3309B)
+
+#### 6. Unified report
+- All vectors aggregated in single pass with verdict
+
 ### Added — Quantum Cost Specification
 
 Exact qubit bounds for attacking every cryptographic primitive in goya-ledger
