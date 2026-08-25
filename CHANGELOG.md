@@ -8,7 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added — Algorithm Death Day test suite
 
-Quantum threat simulation: 18 integration tests proving goya-ledger survives
+Quantum threat simulation: 22 integration tests proving goya-ledger survives
 complete Ed25519 compromise with zero block loss and automatic PQC migration.
 
 #### Phase 1 — Detection
@@ -42,6 +42,12 @@ complete Ed25519 compromise with zero block loss and automatic PQC migration.
 - Malicious leader forging votes from other validators → cannot reach quorum (invalid signatures)
 - Network recovers after malicious leader timeout, continues deciding subsequent rounds
 
+#### Phase 7 — Network partition during migration
+- 2v2 partition: neither side reaches quorum (need 3/4), both stall
+- Partition heals: all 4 nodes rejoin, consensus resumes immediately
+- Migration during partition: isolated nodes migrate identity while offline, rejoin and decide
+- 3v1 partition: majority side (3 nodes) reaches quorum and decides, isolated node stays behind
+
 #### Atomic identity migration (`migrate_identity`, `resolve_identity`)
 - `KeyManager::rotate_algorithm(new_algo, timestamp)` — cross-algorithm key rotation (Ed25519 → ML-DSA-65)
 - `migrate_identity(store, old_did, new_algo, timestamp)` — atomic: marks old DID as "migrated", creates new DID with `migrated_from` link
@@ -65,7 +71,7 @@ complete Ed25519 compromise with zero block loss and automatic PQC migration.
 - `tls_pqc_env_toggle_works` and `tls_pqc_flag_controls_provider_selection` asserted PQC KEM disabled by default — contradicted implementation where `TLS_PQC_KEM` defaults to `true` (PQC enabled)
 
 ### Stats
-- 2722 lib tests, 150 PQC tests, 80 integration tests — 0 failures
+- 2722 lib tests, 150 PQC tests, 84 integration tests — 0 failures
 - fmt + clippy clean
 
 ---

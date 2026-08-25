@@ -780,6 +780,86 @@ fn build_bft_network() -> (
     (validators, managers, verifier)
 }
 
+fn run_round_with_partition(
+    validators: &[BftValidator],
+    managers: &mut HashMap<String, RoundManager<RegistryVerifier>>,
+    round: u64,
+    partitioned: &[&str],
+) -> usize {
+    let bh = round_block_hash(round);
+    let leader_idx = (round as usize) % validators.len();
+    let leader_id = validators[leader_idx].id.clone();
+    let ids: Vec<String> = managers.keys().cloned().collect();
+
+    for id in &ids {
+        if partitioned.contains(&id.as_str()) {
+            continue;
+        }
+        managers.get_mut(id).unwrap().start_round(round);
+    }
+
+    if !partitioned.contains(&leader_id.as_str()) {
+        let high_qc = managers
+            .get(&leader_id)
+            .unwrap()
+            .safety()
+            .high_qc()
+            .cloned();
+        managers
+            .get_mut(&leader_id)
+            .unwrap()
+            .process_event(RoundEvent::StartAsLeader { block_hash: bh });
+
+        let leader_vote = validators[leader_idx].sign_vote(BftPhase::Prepare, &bh, round);
+        managers
+            .get_mut(&leader_id)
+            .unwrap()
+            .process_event(RoundEvent::Vote(leader_vote.clone()));
+
+        for id in &ids {
+            if *id == leader_id || partitioned.contains(&id.as_str()) {
+                continue;
+            }
+            managers
+                .get_mut(id)
+                .unwrap()
+                .process_event(RoundEvent::Proposal {
+                    block_hash: bh,
+                    leader_id: leader_id.clone(),
+                    justify_qc: high_qc.clone(),
+                });
+            managers
+                .get_mut(id)
+                .unwrap()
+                .process_event(RoundEvent::Vote(leader_vote.clone()));
+        }
+    }
+
+    for phase in [BftPhase::Prepare, BftPhase::PreCommit, BftPhase::Commit] {
+        let votes: Vec<VoteMessage> = validators
+            .iter()
+            .filter(|v| !partitioned.contains(&v.id.as_str()))
+            .map(|v| v.sign_vote(phase, &bh, round))
+            .collect();
+        for vote in &votes {
+            for id in &ids {
+                if partitioned.contains(&id.as_str()) {
+                    continue;
+                }
+                managers
+                    .get_mut(id)
+                    .unwrap()
+                    .process_event(RoundEvent::Vote(vote.clone()));
+            }
+        }
+    }
+
+    ids.iter()
+        .filter(|id| !partitioned.contains(&id.as_str()))
+        .filter(|id| managers[id.as_str()].round_state() == Some(RoundState::Decided))
+        .count()
+}
+
 fn run_honest_round(
     validators: &[BftValidator],
     managers: &mut HashMap<String, RoundManager<RegistryVerifier>>,
@@ -1193,5 +1273,154 @@ fn phase6_network_recovers_after_malicious_leader_round() {
     assert!(
         commits.windows(2).all(|w| w[0] == w[1]),
         "all honest nodes must agree on the same block after recovery"
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 7 — NETWORK PARTITION DURING MIGRATION
+// Network splits while some nodes have migrated. Neither partition can
+// decide alone (need 3/4 for quorum). After heal, all nodes rejoin and
+// consensus resumes.
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn phase7_partition_stalls_both_sides() {
+    let (validators, mut managers, _) = build_bft_network();
+
+    let decided = run_honest_round(&validators, &mut managers, 0);
+    assert_eq!(decided, 4);
+
+    // Partition: {A, B} vs {C, D} — neither has quorum (need 3)
+    let side_cd = &["node-a", "node-b"];
+    let side_ab = &["node-c", "node-d"];
+
+    let decided_ab = run_round_with_partition(&validators, &mut managers, 1, side_ab);
+    assert_eq!(decided_ab, 0, "2-node partition cannot reach quorum");
+
+    let decided_cd = run_round_with_partition(&validators, &mut managers, 1, side_cd);
+    assert_eq!(decided_cd, 0, "2-node partition cannot reach quorum");
+}
+
+#[test]
+fn phase7_partition_heals_consensus_resumes() {
+    let (validators, mut managers, _) = build_bft_network();
+
+    let decided_r0 = run_honest_round(&validators, &mut managers, 0);
+    assert_eq!(decided_r0, 4);
+
+    // Partition stalls round 1
+    let partitioned = &["node-c", "node-d"];
+    let decided_r1 = run_round_with_partition(&validators, &mut managers, 1, partitioned);
+    assert_eq!(decided_r1, 0);
+
+    // Timeout all nodes to advance round
+    let ids: Vec<String> = managers.keys().cloned().collect();
+    for id in &ids {
+        managers.get_mut(id).unwrap().on_timeout();
+    }
+
+    // Heal: all 4 nodes participate in round 2
+    let decided_r2 = run_honest_round(&validators, &mut managers, 2);
+    assert_eq!(decided_r2, 4, "consensus resumes after partition heals");
+}
+
+#[test]
+fn phase7_migration_during_partition_then_rejoin() {
+    let store = Arc::new(MemoryStore::new());
+    let (validators, mut managers, _) = build_bft_network();
+
+    // Register identities for all 4 validators
+    for v in &validators {
+        store
+            .write_identity(&IdentityRecord {
+                did: format!("did:goya:{}", &v.id),
+                public_key: hex::encode(&v.pk),
+                created_at: 0,
+                updated_at: 0,
+                status: "active".to_string(),
+                migrated_from: None,
+            })
+            .unwrap();
+    }
+
+    // Round 0: all healthy
+    let decided_r0 = run_honest_round(&validators, &mut managers, 0);
+    assert_eq!(decided_r0, 4);
+
+    // Partition: C and D go offline
+    let partitioned = &["node-c", "node-d"];
+
+    // Round 1 stalls (only A, B online — no quorum)
+    let decided_r1 = run_round_with_partition(&validators, &mut managers, 1, partitioned);
+    assert_eq!(decided_r1, 0);
+
+    // While partitioned, migrate C and D's identities to ML-DSA-65
+    for v_id in partitioned {
+        let old_did = format!("did:goya:{v_id}");
+        let result =
+            migrate_identity(store.as_ref(), &old_did, SigningAlgorithm::MlDsa65, 1000).unwrap();
+
+        let old_rec = store.read_identity(&old_did).unwrap();
+        assert_eq!(old_rec.status, "migrated");
+
+        let new_rec = store.read_identity(&result.new_did).unwrap();
+        assert_eq!(new_rec.status, "active");
+        assert_eq!(new_rec.migrated_from.as_deref(), Some(old_did.as_str()));
+
+        let resolved = resolve_identity(store.as_ref(), &old_did).unwrap();
+        assert_eq!(resolved.did, result.new_did);
+    }
+
+    // Timeout to advance past stalled round
+    let ids: Vec<String> = managers.keys().cloned().collect();
+    for id in &ids {
+        managers.get_mut(id).unwrap().on_timeout();
+    }
+
+    // Heal partition: all 4 rejoin — BFT consensus uses original signing keys
+    // (identity migration is at the storage layer, not the consensus signing layer)
+    let decided_r2 = run_honest_round(&validators, &mut managers, 2);
+    assert_eq!(
+        decided_r2, 4,
+        "all nodes decide after partition heals + migration"
+    );
+
+    // Verify safety: all nodes agree
+    let mut commits = Vec::new();
+    for m in managers.values() {
+        if let Some(qc) = m.highest_commit_qc() {
+            commits.push(qc.block_hash);
+        }
+    }
+    assert_eq!(commits.len(), 4);
+    assert!(commits.windows(2).all(|w| w[0] == w[1]));
+
+    // Verify migration persisted correctly for both partitioned nodes
+    for v_id in partitioned {
+        let old_did = format!("did:goya:{v_id}");
+        let resolved = resolve_identity(store.as_ref(), &old_did).unwrap();
+        assert_eq!(resolved.status, "active");
+        assert_eq!(resolved.migrated_from.as_deref(), Some(old_did.as_str()));
+    }
+}
+
+#[test]
+fn phase7_three_node_partition_has_quorum() {
+    let (validators, mut managers, _) = build_bft_network();
+
+    let decided_r0 = run_honest_round(&validators, &mut managers, 0);
+    assert_eq!(decided_r0, 4);
+
+    // Partition: {A, B, C} vs {D} — 3 nodes have quorum (3 >= 2*1+1)
+    let isolated = &["node-d"];
+    let decided_r1 = run_round_with_partition(&validators, &mut managers, 1, isolated);
+    assert_eq!(decided_r1, 3, "3-node partition reaches quorum and decides");
+
+    // D never entered round 1 — its highest commit is still round 0
+    let d_commit_round = managers["node-d"].highest_commit_qc().map(|qc| qc.round);
+    assert_eq!(
+        d_commit_round,
+        Some(0),
+        "isolated node must not advance past round 0"
     );
 }
