@@ -30,6 +30,12 @@ complete Ed25519 compromise with zero block loss and automatic PQC migration.
 - PQC contract signatures remain valid indefinitely
 - Full end-to-end scenario: 20 blocks, 2 contracts, 0 blocks lost, 0 consensus interruption
 
+### Fixed — Block signing payload mismatch
+
+- `MiningService::mine_block()` signed an ad-hoc format string (`height:parent:merkle:txids`), but `verify_block_secondary_signature()` verified against `block_hash_for_signing()` (`sha256(height||parent||merkle)`) — signatures always failed verification
+- `mine_block()` now builds the block first, then signs `block_hash_for_signing(&block)` — same canonical hash used by all ordering/verification functions
+- Algorithm Death Day tests now use `verify_block_secondary_signature` directly instead of workaround
+
 ### Fixed — PQC TLS default assertion in integration tests
 
 - `tls_pqc_env_toggle_works` and `tls_pqc_flag_controls_provider_selection` asserted PQC KEM disabled by default — contradicted implementation where `TLS_PQC_KEM` defaults to `true` (PQC enabled)

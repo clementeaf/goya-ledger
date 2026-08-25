@@ -7,6 +7,7 @@ use rust_bc::lexchain::engine::{deploy, sign};
 use rust_bc::lexchain::store::LexChainStore;
 use rust_bc::lexchain::types::{ContractDefinition, ContractState, PartyDefinition, SignRequest};
 use rust_bc::mining::{MiningConfig, MiningService};
+use rust_bc::ordering::verify_block_secondary_signature;
 use rust_bc::signature::{verify_signature, SignatureLevel};
 use rust_bc::storage::traits::{BlockStore, IdentityRecord, Transaction};
 use rust_bc::storage::MemoryStore;
@@ -104,13 +105,6 @@ fn phase1_dual_sign_detects_forged_ed25519() {
     assert!(!dual_check);
 }
 
-fn block_signing_payload(block: &rust_bc::storage::traits::Block) -> String {
-    format!(
-        "{}:{:?}:{:?}:{:?}",
-        block.height, block.parent_hash, block.merkle_root, block.transactions
-    )
-}
-
 #[test]
 fn phase1_secondary_signature_catches_tampered_block() {
     let store: Arc<dyn BlockStore> = Arc::new(MemoryStore::new());
@@ -131,19 +125,13 @@ fn phase1_secondary_signature_catches_tampered_block() {
         Some(SigningAlgorithm::MlDsa65)
     );
 
-    let payload = block_signing_payload(&block);
-    let sec_sig = block.secondary_signature.as_ref().unwrap();
-    let legit = pqc_signer.verify(payload.as_bytes(), sec_sig).unwrap();
-    assert!(legit);
+    let legit = verify_block_secondary_signature(&block, pqc_signer.as_ref()).unwrap();
+    assert_eq!(legit, Some(true));
 
-    let tampered_payload = format!(
-        "{}:{:?}:{:?}:{:?}",
-        block.height, block.parent_hash, [0xFFu8; 32], block.transactions
-    );
-    let tampered_check = pqc_signer
-        .verify(tampered_payload.as_bytes(), sec_sig)
-        .unwrap();
-    assert!(!tampered_check);
+    let mut tampered = block.clone();
+    tampered.merkle_root = [0xFF; 32];
+    let tampered_check = verify_block_secondary_signature(&tampered, pqc_signer.as_ref()).unwrap();
+    assert_eq!(tampered_check, Some(false));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -452,12 +440,8 @@ fn phase4_dual_signed_blocks_survive_ed25519_death() {
     let mut verified_count = 0;
     for h in 0..num_blocks {
         let block = store.read_block(h).unwrap();
-        let payload = block_signing_payload(&block);
-        let sec_sig = block.secondary_signature.as_ref().unwrap();
-        assert!(
-            pqc_signer.verify(payload.as_bytes(), sec_sig).unwrap(),
-            "block {h} PQC signature must be valid"
-        );
+        let result = verify_block_secondary_signature(&block, pqc_signer.as_ref()).unwrap();
+        assert_eq!(result, Some(true), "block {h} PQC signature must be valid");
         verified_count += 1;
     }
 
@@ -639,9 +623,8 @@ fn algorithm_death_day_full_scenario() {
     let mut blocks_verified = 0;
     for h in 0..pre_blocks {
         let block = store.read_block(h).unwrap();
-        let payload = block_signing_payload(&block);
-        let sec_sig = block.secondary_signature.as_ref().unwrap();
-        assert!(pqc_miner.verify(payload.as_bytes(), sec_sig).unwrap());
+        let r = verify_block_secondary_signature(&block, pqc_miner.as_ref()).unwrap();
+        assert_eq!(r, Some(true));
         blocks_verified += 1;
     }
     assert_eq!(blocks_verified, pre_blocks);

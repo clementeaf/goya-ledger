@@ -5,6 +5,7 @@
 
 use crate::crypto::hasher::{hash, HashAlgorithm};
 use crate::identity::signing::{SigningAlgorithm, SigningProvider};
+use crate::ordering::block_hash_for_signing;
 use crate::storage::traits::{Block, BlockStore, Transaction};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -108,39 +109,39 @@ impl MiningService {
         let merkle_data: String = all_tx_ids.join(",");
         let merkle_root = hash(merkle_data.as_bytes());
 
-        // Sign block hash with node's signing provider
-        let block_data = format!(
-            "{}:{:?}:{:?}:{:?}",
-            new_height, parent_hash, merkle_root, all_tx_ids
-        );
-        let (signature, sig_algorithm) = if let Some(ref signer) = self.signer {
-            let sig = signer.sign(block_data.as_bytes()).unwrap_or_default();
-            (sig, signer.algorithm())
-        } else {
-            (Vec::new(), SigningAlgorithm::default())
-        };
-
-        // Create block
-        let block = Block {
+        let mut block = Block {
             height: new_height,
             timestamp: now(),
             parent_hash,
             merkle_root,
             transactions: all_tx_ids,
             proposer: miner_address.to_string(),
-            signature,
-            signature_algorithm: sig_algorithm,
+            signature: Vec::new(),
+            signature_algorithm: SigningAlgorithm::default(),
             endorsements: Vec::new(),
-            secondary_signature: self
-                .secondary_signer
-                .as_ref()
-                .and_then(|s| s.sign(block_data.as_bytes()).ok()),
-            secondary_signature_algorithm: self.secondary_signer.as_ref().map(|s| s.algorithm()),
+            secondary_signature: None,
+            secondary_signature_algorithm: None,
             hash_algorithm: HashAlgorithm::default(),
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
         };
+
+        let signing_hash = block_hash_for_signing(&block);
+
+        if let Some(ref signer) = self.signer {
+            if let Ok(sig) = signer.sign(&signing_hash) {
+                block.signature = sig;
+                block.signature_algorithm = signer.algorithm();
+            }
+        }
+
+        if let Some(ref secondary) = self.secondary_signer {
+            if let Ok(sig) = secondary.sign(&signing_hash) {
+                block.secondary_signature = Some(sig);
+                block.secondary_signature_algorithm = Some(secondary.algorithm());
+            }
+        }
 
         // Write block and transactions
         self.store
