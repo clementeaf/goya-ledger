@@ -4,3 +4,8 @@ defaultTargets = ["Formal"]
 
 [[lean_lib]]
 name = "Formal"
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+version = "git#master"
