@@ -6,13 +6,36 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [0.13.1] — 2026-08-25
 
+### Added — Algorithm Death Day test suite
+
+Quantum threat simulation: 10 integration tests proving goya-ledger survives
+complete Ed25519 compromise with zero block loss and automatic PQC migration.
+
+#### Phase 1 — Detection
+- Dual signing (Ed25519 + ML-DSA-65) detects forged Ed25519 signatures
+- Secondary PQC signature catches tampered blocks
+
+#### Phase 2 — Containment
+- Contracts signed only with Ed25519 are quarantined
+- Contracts with at least one PQC signature survive
+- Classical algorithm detection via `SigningAlgorithm::is_classical()`
+
+#### Phase 3 — Migration
+- 50 identities migrated Ed25519 → ML-DSA-65 in-place
+- Mining continues uninterrupted after algorithm switch
+- LexChain operates under PQC-only signing
+
+#### Phase 4 — Post-mortem verification
+- All dual-signed pre-compromise blocks verified via PQC secondary signature
+- PQC contract signatures remain valid indefinitely
+- Full end-to-end scenario: 20 blocks, 2 contracts, 0 blocks lost, 0 consensus interruption
+
 ### Fixed — PQC TLS default assertion in integration tests
 
 - `tls_pqc_env_toggle_works` and `tls_pqc_flag_controls_provider_selection` asserted PQC KEM disabled by default — contradicted implementation where `TLS_PQC_KEM` defaults to `true` (PQC enabled)
-- Both tests now correctly assert `pqc_kem_enabled() == true` when env var is unset
 
 ### Stats
-- 2721 lib tests, 150 PQC tests, 62 integration tests — 0 failures
+- 2721 lib tests, 150 PQC tests, 72 integration tests — 0 failures
 - fmt + clippy clean
 
 ---
