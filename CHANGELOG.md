@@ -45,6 +45,17 @@ Machine-checked proofs in `formal/` — Lean 4.33 + Mathlib.
 - CMA-to-NMA reduction axiomatized (the gap found and fixed in CRYPTO 2023)
 - PQC and classical algorithm sets are disjoint
 
+### Added — Algorithm Death Day E2E (`scripts/algorithm-death-day-e2e.sh`)
+
+End-to-end smoke test against a live goya-ledger node via HTTP API:
+- 14 assertions, 0 failures
+- Creates 4 identities (2 Ed25519 32B, 2 PQC 1952B) via `POST /store/identities`
+- Deploys 2 contracts (Ed25519-only NDA + PQC service agreement) via `POST /lexchain/deploy`
+- Retrieves contracts by ID, verifies party count and state
+- Verifies identity persistence and PQC key sizes (3904 hex chars = 1952B)
+- Health check before and after scenario
+- Works against local node or remote (pass URL as arg)
+
 ### Added — Quantum Threat Simulator (`tests/quantum_threat_sim.rs`)
 
 Unified attack harness — 10 tests across 6 attack vectors:
