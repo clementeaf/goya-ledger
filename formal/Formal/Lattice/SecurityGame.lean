@@ -134,10 +134,6 @@ paper (Kiltz-Lyubashevsky-Schaffner 2018), fixed by Barbosa et al.
 in the CMA-to-NMA hybrid argument.
 -/
 
-axiom rejectionSamplingIndependence :
-  ∀ (s1 : MlDsaSecretVec),
-    True
-
 theorem simulator_correctness
     (pk : MlDsaPublicKey) (z : MlDsaSecretVec) (c : Rq) (tr msg : ByteArray)
     (h_oracle : hashToChallenge tr (simulateSignature pk z c).w msg = c) :
