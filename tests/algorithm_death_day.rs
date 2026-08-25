@@ -1,9 +1,14 @@
+use rust_bc::consensus::bft::quorum::QuorumValidator;
+use rust_bc::consensus::bft::round::{RoundEvent, RoundState};
+use rust_bc::consensus::bft::round_manager::{RoundManager, RoundManagerConfig};
+use rust_bc::consensus::bft::types::{BftPhase, QcError, QuorumCertificate, VoteMessage};
+use rust_bc::consensus::bft::validator_registry::{RegistryVerifier, ValidatorRegistry};
 use rust_bc::identity::did::did_from_pubkey_hex;
 use rust_bc::identity::dual_signing::{dual_sign, verify_dual, DualVerifyMode};
 use rust_bc::identity::signing::{
     MlDsaSigningProvider, SigningAlgorithm, SigningProvider, SoftwareSigningProvider,
 };
-use rust_bc::lexchain::engine::{deploy, sign};
+use rust_bc::lexchain::engine::{deploy, quarantine_classical_contracts, sign};
 use rust_bc::lexchain::store::LexChainStore;
 use rust_bc::lexchain::types::{ContractDefinition, ContractState, PartyDefinition, SignRequest};
 use rust_bc::mining::{MiningConfig, MiningService};
@@ -11,6 +16,7 @@ use rust_bc::ordering::verify_block_secondary_signature;
 use rust_bc::signature::{verify_signature, SignatureLevel};
 use rust_bc::storage::traits::{BlockStore, IdentityRecord, Transaction};
 use rust_bc::storage::MemoryStore;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -215,29 +221,23 @@ fn phase2_ed25519_only_contracts_quarantined() {
     assert_eq!(pqc_signed.state, ContractState::FullySigned);
 
     // === ALGORITHM DEATH DAY: Ed25519 compromised ===
-    let all_contracts = lex.list();
-    let mut quarantined = Vec::new();
-    let mut safe = Vec::new();
-
-    for contract in &all_contracts {
-        let uses_only_classical = contract.parties.iter().all(|p| {
-            p.envelope
-                .as_ref()
-                .map(|e| e.signature_algorithm.is_classical())
-                .unwrap_or(true)
-        });
-
-        if uses_only_classical && contract.state == ContractState::FullySigned {
-            quarantined.push(contract.id.clone());
-        } else {
-            safe.push(contract.id.clone());
-        }
-    }
+    let compromised = [
+        SigningAlgorithm::Ed25519,
+        SigningAlgorithm::Rsa,
+        SigningAlgorithm::EcdsaP256,
+    ];
+    let quarantined = quarantine_classical_contracts(&lex, &compromised);
 
     assert_eq!(quarantined.len(), 1);
-    assert_eq!(safe.len(), 1);
     assert!(quarantined.contains(&ed_only_contract.id));
-    assert!(safe.contains(&pqc_contract.id));
+    assert_eq!(
+        lex.get(&ed_only_contract.id).unwrap().state,
+        ContractState::Quarantined
+    );
+    assert_eq!(
+        lex.get(&pqc_contract.id).unwrap().state,
+        ContractState::FullySigned
+    );
 }
 
 #[test]
@@ -594,30 +594,24 @@ fn algorithm_death_day_full_scenario() {
 
     let death_instant = Instant::now();
 
-    // ── Triage contracts ──────────────────────────────────────────────
-    let all_contracts = lex.list();
-    let mut quarantined = Vec::new();
-    let mut has_pqc_sig = Vec::new();
-
-    for c in &all_contracts {
-        let any_pqc = c.parties.iter().any(|p| {
-            p.envelope
-                .as_ref()
-                .map(|e| e.signature_algorithm.is_post_quantum())
-                .unwrap_or(false)
-        });
-
-        if any_pqc {
-            has_pqc_sig.push(c.id.clone());
-        } else {
-            quarantined.push(c.id.clone());
-        }
-    }
+    // ── Quarantine contracts signed only with compromised algorithms ──
+    let compromised = [
+        SigningAlgorithm::Ed25519,
+        SigningAlgorithm::Rsa,
+        SigningAlgorithm::EcdsaP256,
+    ];
+    let quarantined = quarantine_classical_contracts(&lex, &compromised);
 
     assert_eq!(quarantined.len(), 1);
     assert!(quarantined.contains(&ed_only_contract.id));
-    assert_eq!(has_pqc_sig.len(), 1);
-    assert!(has_pqc_sig.contains(&mixed_contract.id));
+    assert_eq!(
+        lex.get(&ed_only_contract.id).unwrap().state,
+        ContractState::Quarantined
+    );
+    assert_eq!(
+        lex.get(&mixed_contract.id).unwrap().state,
+        ContractState::FullySigned
+    );
 
     // ── Verify all pre-compromise blocks via PQC secondary sig ────────
     let mut blocks_verified = 0;
@@ -702,9 +696,10 @@ fn algorithm_death_day_full_scenario() {
         "  ║  Contracts quarantined       {:>8}          ║",
         quarantined.len()
     );
+    let surviving = lex.list().len() - quarantined.len();
     eprintln!(
-        "  ║  Contracts with PQC sig      {:>8}          ║",
-        has_pqc_sig.len()
+        "  ║  Contracts surviving         {:>8}          ║",
+        surviving
     );
     eprintln!(
         "  ║  Chain height                {:>8}          ║",
@@ -713,4 +708,266 @@ fn algorithm_death_day_full_scenario() {
     eprintln!("  ║  Consensus interrupted             NO          ║");
     eprintln!("  ╚══════════════════════════════════════════════════════╝");
     eprintln!();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 5 — ADVERSARIAL BFT
+// Attacker with compromised Ed25519 keys tries to subvert consensus.
+// 4-node ML-DSA-65 network rejects all forged votes.
+// ═══════════════════════════════════════════════════════════════════════════
+
+struct BftValidator {
+    id: String,
+    pk: Vec<u8>,
+    signer: MlDsaSigningProvider,
+}
+
+impl BftValidator {
+    fn generate(id: &str) -> Self {
+        let signer = MlDsaSigningProvider::generate();
+        let pk = signer.public_key();
+        Self {
+            id: id.to_string(),
+            pk,
+            signer,
+        }
+    }
+
+    fn sign_vote(&self, phase: BftPhase, block_hash: &[u8; 32], round: u64) -> VoteMessage {
+        let payload = VoteMessage::signing_payload_v2(phase, block_hash, round, &self.id);
+        let sig = self.signer.sign(&payload).unwrap();
+        VoteMessage {
+            block_hash: *block_hash,
+            round,
+            phase,
+            voter_id: self.id.clone(),
+            signature: sig,
+        }
+    }
+}
+
+fn build_bft_network() -> (
+    Vec<BftValidator>,
+    HashMap<String, RoundManager<RegistryVerifier>>,
+    RegistryVerifier,
+) {
+    let validators: Vec<BftValidator> = ["node-a", "node-b", "node-c", "node-d"]
+        .iter()
+        .map(|id| BftValidator::generate(id))
+        .collect();
+
+    let reg_map: HashMap<String, Vec<u8>> = validators
+        .iter()
+        .map(|v| (v.id.clone(), v.pk.clone()))
+        .collect();
+    let registry = Arc::new(ValidatorRegistry::from_map(reg_map));
+    let verifier = RegistryVerifier::new(registry.clone());
+
+    let ids: Vec<String> = validators.iter().map(|v| v.id.clone()).collect();
+    let config = RoundManagerConfig {
+        base_timeout_ms: 100,
+        max_timeout_ms: 1000,
+    };
+
+    let mut managers = HashMap::new();
+    for v in &validators {
+        let m = RoundManager::new(v.id.clone(), ids.clone(), verifier.clone(), config.clone());
+        managers.insert(v.id.clone(), m);
+    }
+
+    (validators, managers, verifier)
+}
+
+fn run_honest_round(
+    validators: &[BftValidator],
+    managers: &mut HashMap<String, RoundManager<RegistryVerifier>>,
+    round: u64,
+) -> usize {
+    let bh = round_block_hash(round);
+    let leader_idx = (round as usize) % validators.len();
+    let leader_id = validators[leader_idx].id.clone();
+    let ids: Vec<String> = managers.keys().cloned().collect();
+
+    for id in &ids {
+        managers.get_mut(id).unwrap().start_round(round);
+    }
+
+    let high_qc = managers
+        .get(&leader_id)
+        .unwrap()
+        .safety()
+        .high_qc()
+        .cloned();
+    managers
+        .get_mut(&leader_id)
+        .unwrap()
+        .process_event(RoundEvent::StartAsLeader { block_hash: bh });
+
+    let leader_vote = validators[leader_idx].sign_vote(BftPhase::Prepare, &bh, round);
+    managers
+        .get_mut(&leader_id)
+        .unwrap()
+        .process_event(RoundEvent::Vote(leader_vote.clone()));
+
+    for id in &ids {
+        if *id == leader_id {
+            continue;
+        }
+        managers
+            .get_mut(id)
+            .unwrap()
+            .process_event(RoundEvent::Proposal {
+                block_hash: bh,
+                leader_id: leader_id.clone(),
+                justify_qc: high_qc.clone(),
+            });
+        managers
+            .get_mut(id)
+            .unwrap()
+            .process_event(RoundEvent::Vote(leader_vote.clone()));
+    }
+
+    for phase in [BftPhase::Prepare, BftPhase::PreCommit, BftPhase::Commit] {
+        let votes: Vec<VoteMessage> = validators
+            .iter()
+            .map(|v| v.sign_vote(phase, &bh, round))
+            .collect();
+        for vote in &votes {
+            for id in &ids {
+                managers
+                    .get_mut(id)
+                    .unwrap()
+                    .process_event(RoundEvent::Vote(vote.clone()));
+            }
+        }
+    }
+
+    ids.iter()
+        .filter(|id| managers[id.as_str()].round_state() == Some(RoundState::Decided))
+        .count()
+}
+
+fn round_block_hash(round: u64) -> [u8; 32] {
+    let mut h = [0u8; 32];
+    h[..8].copy_from_slice(&round.to_le_bytes());
+    h
+}
+
+#[test]
+fn phase5_ed25519_forged_vote_rejected_by_pqc_validator() {
+    let (validators, _, verifier) = build_bft_network();
+
+    let attacker_ed = SoftwareSigningProvider::generate();
+
+    let bh = round_block_hash(0);
+    let forged_vote = VoteMessage {
+        block_hash: bh,
+        round: 0,
+        phase: BftPhase::Prepare,
+        voter_id: validators[0].id.clone(),
+        signature: attacker_ed
+            .sign(&VoteMessage::signing_payload_v2(
+                BftPhase::Prepare,
+                &bh,
+                0,
+                &validators[0].id,
+            ))
+            .unwrap(),
+    };
+
+    let qv = QuorumValidator::new(validators.iter().map(|v| v.id.clone()).collect(), verifier);
+    let result = qv.validate_vote(&forged_vote);
+    assert!(matches!(result, Err(QcError::InvalidSignature(_))));
+}
+
+#[test]
+fn phase5_unknown_attacker_vote_rejected() {
+    let (validators, _, verifier) = build_bft_network();
+
+    let rogue = MlDsaSigningProvider::generate();
+    let bh = round_block_hash(0);
+    let payload = VoteMessage::signing_payload_v2(BftPhase::Prepare, &bh, 0, "rogue-node");
+    let sig = rogue.sign(&payload).unwrap();
+
+    let rogue_vote = VoteMessage {
+        block_hash: bh,
+        round: 0,
+        phase: BftPhase::Prepare,
+        voter_id: "rogue-node".to_string(),
+        signature: sig,
+    };
+
+    let qv = QuorumValidator::new(validators.iter().map(|v| v.id.clone()).collect(), verifier);
+    let result = qv.validate_vote(&rogue_vote);
+    assert!(matches!(result, Err(QcError::UnknownVoter(_))));
+}
+
+#[test]
+fn phase5_forged_qc_fails_validation() {
+    let (validators, _, verifier) = build_bft_network();
+
+    let bh = round_block_hash(0);
+    let mut votes = Vec::new();
+
+    let legit_vote = validators[0].sign_vote(BftPhase::Prepare, &bh, 0);
+    votes.push(legit_vote);
+
+    for v in &validators[1..3] {
+        let attacker = SoftwareSigningProvider::generate();
+        let payload = VoteMessage::signing_payload_v2(BftPhase::Prepare, &bh, 0, &v.id);
+        votes.push(VoteMessage {
+            block_hash: bh,
+            round: 0,
+            phase: BftPhase::Prepare,
+            voter_id: v.id.clone(),
+            signature: attacker.sign(&payload).unwrap(),
+        });
+    }
+
+    let qc = QuorumCertificate::new(BftPhase::Prepare, bh, 0, votes).unwrap();
+
+    let qv = QuorumValidator::new(validators.iter().map(|v| v.id.clone()).collect(), verifier);
+    let result = qv.validate_qc(&qc);
+    assert!(matches!(result, Err(QcError::InvalidSignature(_))));
+}
+
+#[test]
+fn phase5_consensus_proceeds_despite_attacker_injection() {
+    let (validators, mut managers, verifier) = build_bft_network();
+
+    let decided = run_honest_round(&validators, &mut managers, 0);
+    assert_eq!(decided, 4);
+
+    let attacker_ed = SoftwareSigningProvider::generate();
+    let bh = round_block_hash(1);
+
+    let forged_vote = VoteMessage {
+        block_hash: bh,
+        round: 1,
+        phase: BftPhase::Prepare,
+        voter_id: validators[0].id.clone(),
+        signature: attacker_ed
+            .sign(&VoteMessage::signing_payload_v2(
+                BftPhase::Prepare,
+                &bh,
+                1,
+                &validators[0].id,
+            ))
+            .unwrap(),
+    };
+
+    let qv = QuorumValidator::new(validators.iter().map(|v| v.id.clone()).collect(), verifier);
+    assert!(qv.validate_vote(&forged_vote).is_err());
+
+    let decided = run_honest_round(&validators, &mut managers, 1);
+    assert_eq!(decided, 4);
+
+    let mut commits = Vec::new();
+    for m in managers.values() {
+        if let Some(qc) = m.highest_commit_qc() {
+            commits.push(qc.block_hash);
+        }
+    }
+    assert!(commits.len() >= 2);
+    assert!(commits.windows(2).all(|w| w[0] == w[1]));
 }

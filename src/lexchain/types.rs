@@ -33,6 +33,7 @@ pub enum ContractState {
     Notarized,
     Archived,
     Expired,
+    Quarantined,
 }
 
 impl std::fmt::Display for ContractState {
@@ -43,6 +44,7 @@ impl std::fmt::Display for ContractState {
             Self::Notarized => write!(f, "notarized"),
             Self::Archived => write!(f, "archived"),
             Self::Expired => write!(f, "expired"),
+            Self::Quarantined => write!(f, "quarantined"),
         }
     }
 }

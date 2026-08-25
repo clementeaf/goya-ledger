@@ -8,7 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added — Algorithm Death Day test suite
 
-Quantum threat simulation: 10 integration tests proving goya-ledger survives
+Quantum threat simulation: 14 integration tests proving goya-ledger survives
 complete Ed25519 compromise with zero block loss and automatic PQC migration.
 
 #### Phase 1 — Detection
@@ -30,6 +30,17 @@ complete Ed25519 compromise with zero block loss and automatic PQC migration.
 - PQC contract signatures remain valid indefinitely
 - Full end-to-end scenario: 20 blocks, 2 contracts, 0 blocks lost, 0 consensus interruption
 
+#### Phase 5 — Adversarial BFT consensus
+- Forged Ed25519 vote impersonating a validator → `InvalidSignature` rejection
+- Unknown attacker with valid ML-DSA-65 key → `UnknownVoter` rejection
+- Forged QC (1 legit + 2 Ed25519-forged votes) → `InvalidSignature` on validation
+- 4-node ML-DSA-65 network decides 2 rounds despite active attacker injection
+
+#### Contract quarantine (`quarantine_classical_contracts`)
+- `ContractState::Quarantined` added to LexChain state machine
+- `quarantine_classical_contracts(store, compromised_algos)` scans and quarantines contracts signed exclusively with compromised algorithms
+- Contracts with at least one PQC signature are preserved
+
 ### Fixed — Block signing payload mismatch
 
 - `MiningService::mine_block()` signed an ad-hoc format string (`height:parent:merkle:txids`), but `verify_block_secondary_signature()` verified against `block_hash_for_signing()` (`sha256(height||parent||merkle)`) — signatures always failed verification
@@ -41,7 +52,7 @@ complete Ed25519 compromise with zero block loss and automatic PQC migration.
 - `tls_pqc_env_toggle_works` and `tls_pqc_flag_controls_provider_selection` asserted PQC KEM disabled by default — contradicted implementation where `TLS_PQC_KEM` defaults to `true` (PQC enabled)
 
 ### Stats
-- 2721 lib tests, 150 PQC tests, 72 integration tests — 0 failures
+- 2722 lib tests, 150 PQC tests, 76 integration tests — 0 failures
 - fmt + clippy clean
 
 ---

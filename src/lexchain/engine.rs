@@ -300,6 +300,32 @@ pub fn expire_pending(store: &LexChainStore) -> Vec<String> {
     expired
 }
 
+pub fn quarantine_classical_contracts(
+    store: &LexChainStore,
+    compromised: &[crate::identity::signing::SigningAlgorithm],
+) -> Vec<String> {
+    let mut quarantined = Vec::new();
+    for mut contract in store.list() {
+        if contract.state != ContractState::FullySigned
+            && contract.state != ContractState::Notarized
+        {
+            continue;
+        }
+        let all_compromised = contract.parties.iter().all(|p| {
+            p.envelope
+                .as_ref()
+                .map(|e| compromised.contains(&e.signature_algorithm))
+                .unwrap_or(true)
+        });
+        if all_compromised {
+            contract.state = ContractState::Quarantined;
+            store.save(contract.clone());
+            quarantined.push(contract.id);
+        }
+    }
+    quarantined
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -839,5 +865,61 @@ mod tests {
         )
         .unwrap();
         assert_eq!(contract.definition.contract_type, "residential_lease");
+    }
+
+    #[test]
+    fn quarantine_classical_only_contracts() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        register_did(&store, "did:goya:bob");
+
+        let ed_contract = deploy(&store, fes_definition()).unwrap();
+        let req = sign_as(&ed_contract, &SoftwareSigningProvider::generate());
+        sign(&store, &ed_contract.id, &req).unwrap();
+
+        let pqc_def = ContractDefinition {
+            contract_type: "nda".into(),
+            parties: vec![PartyDefinition {
+                role: "signer".into(),
+                did: "did:goya:bob".into(),
+                signature_level: SignatureLevel::Simple,
+            }],
+            payload: serde_json::json!({"scope": "pqc"}),
+            require_notarization: false,
+            deadline_secs: None,
+            webhook_url: None,
+        };
+        let pqc_contract = deploy(&store, pqc_def).unwrap();
+        let pqc_signer = MlDsaSigningProvider::generate();
+        let pk_hex = hex::encode(pqc_signer.public_key());
+        let payload = format!("fes:did:goya:bob:{}", pqc_contract.content_hash);
+        let sig = pqc_signer.sign(payload.as_bytes()).unwrap();
+        let pqc_req = SignRequest {
+            did: "did:goya:bob".into(),
+            signature: hex::encode(&sig),
+            public_key: pk_hex,
+            biometric_evidence: vec![],
+        };
+        sign(&store, &pqc_contract.id, &pqc_req).unwrap();
+
+        let quarantined = quarantine_classical_contracts(
+            &store,
+            &[
+                SigningAlgorithm::Ed25519,
+                SigningAlgorithm::Rsa,
+                SigningAlgorithm::EcdsaP256,
+            ],
+        );
+
+        assert_eq!(quarantined.len(), 1);
+        assert!(quarantined.contains(&ed_contract.id));
+        assert_eq!(
+            store.get(&ed_contract.id).unwrap().state,
+            ContractState::Quarantined
+        );
+        assert_eq!(
+            store.get(&pqc_contract.id).unwrap().state,
+            ContractState::FullySigned
+        );
     }
 }
