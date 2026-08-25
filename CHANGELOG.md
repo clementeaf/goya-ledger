@@ -6,6 +6,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [0.13.1] — 2026-08-25
 
+### Added — Quantum Cost Specification
+
+Exact qubit bounds for attacking every cryptographic primitive in goya-ledger
+(`tests/quantum_cost_spec.rs`).
+
+| Primitive | Quantum Security | Logical Qubits | Gate Ops | Wall-clock (1 GHz) |
+|---|---|---|---|---|
+| Ed25519 | **0 bits** (Shor) | 2,330 | 2^37 | 4.4 days |
+| SLH-DSA-128s | 64 bits (Grover) | 6,400 | 2^64 | 585 years |
+| ML-DSA-65 | **143 bits** (BKZ) | 16,000 | 2^143 | 3.5×10^25 years |
+| ML-KEM-768 | **143 bits** (BKZ) | 15,000 | 2^143 | 3.5×10^25 years |
+| SHA3-256 | 128 bits (Grover) | 7,680 | 2^128 | 1.1×10^22 years |
+| AES-256-GCM | 128 bits (Grover) | 6,681 | 2^128 | 1.1×10^22 years |
+
+- Parameter sizes verified against live code (Ed25519 32/64B, ML-DSA 1952/3309B, SLH-DSA 32/7856B, ML-KEM 1184/1088/32B)
+- Composition analysis: primary system security 143-bit quantum (lattice), backup 64-bit (hash-based, independent assumption)
+- Hardware projection: IBM 2035 roadmap ~100 logical qubits — Ed25519 needs 2330, ML-DSA-65 needs 16000
+
 ### Added — Algorithm Death Day test suite
 
 Quantum threat simulation: 22 integration tests proving goya-ledger survives
