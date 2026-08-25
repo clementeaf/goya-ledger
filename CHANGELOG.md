@@ -8,7 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added — Formal Verification (Lean 4)
 
-Machine-checked proofs in `formal/` — Lean 4.33, no external dependencies.
+Machine-checked proofs in `formal/` — Lean 4.33 + Mathlib.
 
 #### FIPS 140-3 State Machine (`Formal.FipsStateMachine`)
 - Error is terminal (no outgoing transitions)
@@ -24,6 +24,25 @@ Machine-checked proofs in `formal/` — Lean 4.33, no external dependencies.
 #### Quarantine Correctness (`Formal.QuarantineCorrectness`)
 - PQC signature prevents quarantine (ML-DSA-65 not in classical list)
 - Ed25519-only contracts ARE quarantined
+- PQC and classical algorithm sets are disjoint
+
+#### Lattice Algebra (`Formal.Lattice.*`) — Mathlib-powered
+- `Zq`: Z/8380417Z defined via `ZMod`, q proven prime by `native_decide`
+- `Rq`: R_q = Z_q[X]/(X^512+1) as `AdjoinRoot`, `CommRing` instance
+- `ModuleLWE`: Module-LWE types (public matrix A ∈ R_q^{6×5}, secret/public vectors) + hardness axiom
+
+#### ML-DSA-65 Scheme (`Formal.Lattice.MlDsa`)
+- **KeyGen**: t = A·s₁ + s₂; `keygen_public_key_is_mlwe` proves pk is a Module-LWE instance
+- **Sign**: z = y + c·s₁; `sign_response_structure` proves response form
+- **Verify**: check A·z - c·t = w'; `verify_correctness` proves Az - ct = Ay - cs₂
+- Hash oracles axiomatized (expandA, hashToChallenge, sampleSecret, sampleMaskingVec)
+
+#### EUF-CMA Security Reduction (`Formal.Lattice.SecurityGame`)
+- EUF-CMA game: adversary with signing oracle produces forgery
+- SelfTargetMSIS problem formalized (following Barbosa et al., CRYPTO 2023)
+- **`eufcma_implies_stmsis`**: any valid forgery IS a SelfTargetMSIS solution
+- Reduction chain: EUF-CMA → NMA → SelfTargetMSIS + MLWE
+- CMA-to-NMA reduction axiomatized (the gap found and fixed in CRYPTO 2023)
 - PQC and classical algorithm sets are disjoint
 
 ### Added — Quantum Cost Specification
