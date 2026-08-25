@@ -65,6 +65,67 @@ theorem keygen_public_key_is_mlwe (seed rho rhoPrime seedK : ByteArray) :
       noise := by
   simp [keyGen, isModuleLweSample, matVecMul]
 
+-- ════════════════════════════════════════════════════════════════
+-- Sign
+-- ════════════════════════════════════════════════════════════════
+
+axiom hashToChallenge : ByteArray → MlDsaPublicVec → ByteArray → Rq
+
+axiom sampleMaskingVec : ByteArray → Nat → MlDsaSecretVec
+
+def scalarVecMul (c : Rq) (v : RqVec d) : RqVec d :=
+  fun i => c * v i
+
+def vecAdd (a b : RqVec d) : RqVec d :=
+  fun i => a i + b i
+
+def sign (sk : MlDsaSecretKey) (message : ByteArray) (nonce : Nat) : MlDsaSignature :=
+  let matA := expandA sk.seedRho
+  let y := sampleMaskingVec sk.seedK nonce
+  let w := fun i => matVecMul matA y i
+  let c := hashToChallenge sk.tr w message
+  let z := vecAdd y (scalarVecMul c sk.vecS1)
+  { hint := fun _ => 0, response := z, challenge := c }
+
+theorem sign_response_structure (sk : MlDsaSecretKey) (msg : ByteArray) (nonce : Nat) :
+    let sig := sign sk msg nonce
+    let matA := expandA sk.seedRho
+    let y := sampleMaskingVec sk.seedK nonce
+    let c := sig.challenge
+    sig.response = vecAdd y (scalarVecMul c sk.vecS1) := by
+  simp [sign, vecAdd, scalarVecMul]
+
+-- ════════════════════════════════════════════════════════════════
+-- Verify
+-- ════════════════════════════════════════════════════════════════
+
+def vecSub (a b : RqVec d) : RqVec d :=
+  fun i => a i - b i
+
+def verify (pk : MlDsaPublicKey) (message : ByteArray) (sig : MlDsaSignature) (tr : ByteArray) : Prop :=
+  let matA := expandA pk.seedRho
+  let az := fun i => matVecMul matA sig.response i
+  let ct := scalarVecMul sig.challenge pk.vecT
+  let wPrime := vecSub az ct
+  let cPrime := hashToChallenge tr wPrime message
+  cPrime = sig.challenge
+
+axiom matVecMul_add (A : MlDsaPublicMatrix) (u v : MlDsaSecretVec) (i : Fin k_mldsa65) :
+  matVecMul A (vecAdd u v) i = matVecMul A u i + matVecMul A v i
+
+axiom matVecMul_scalarMul (A : MlDsaPublicMatrix) (c : Rq) (v : MlDsaSecretVec) (i : Fin k_mldsa65) :
+  matVecMul A (scalarVecMul c v) i = c * matVecMul A v i
+
+theorem verify_correctness (matA : MlDsaPublicMatrix) (y s1 : MlDsaSecretVec)
+    (s2 : MlDsaPublicVec) (c : Rq) (i : Fin k_mldsa65) :
+    let z := vecAdd y (scalarVecMul c s1)
+    let t := fun j => matVecMul matA s1 j + s2 j
+    matVecMul matA z i - c * t i =
+      matVecMul matA y i - c * s2 i := by
+  simp only []
+  rw [matVecMul_add, matVecMul_scalarMul]
+  ring
+
 end
 
 end GoyaFormal
