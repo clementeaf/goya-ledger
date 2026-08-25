@@ -6,6 +6,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [0.13.1] — 2026-08-25
 
+### Added — Formal Verification (Lean 4)
+
+Machine-checked proofs in `formal/` — Lean 4.33, no external dependencies.
+
+#### FIPS 140-3 State Machine (`Formal.FipsStateMachine`)
+- Error is terminal (no outgoing transitions)
+- Approved only reachable through SelfTesting
+- Crypto requires Approved state
+- Unique initialization path: Uninitialized → SelfTesting → Approved
+- Approved is absorbing (no degradation)
+
+#### BFT Consensus Safety (`Formal.BftSafety`)
+- **`no_fork`**: two quorums of ≥ 2f+1 from 3f+1 validators overlap by ≥ f+1 — at least one honest node in common, making conflicting decisions impossible
+- Proven for general f, instantiated for n=4 (goya default) and n=7
+
+#### Quarantine Correctness (`Formal.QuarantineCorrectness`)
+- PQC signature prevents quarantine (ML-DSA-65 not in classical list)
+- Ed25519-only contracts ARE quarantined
+- PQC and classical algorithm sets are disjoint
+
 ### Added — Quantum Cost Specification
 
 Exact qubit bounds for attacking every cryptographic primitive in goya-ledger
