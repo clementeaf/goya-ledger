@@ -110,11 +110,17 @@ def verify (pk : MlDsaPublicKey) (message : ByteArray) (sig : MlDsaSignature) (t
   let cPrime := hashToChallenge tr wPrime message
   cPrime = sig.challenge
 
-axiom matVecMul_add (A : MlDsaPublicMatrix) (u v : MlDsaSecretVec) (i : Fin k_mldsa65) :
-  matVecMul A (vecAdd u v) i = matVecMul A u i + matVecMul A v i
+theorem matVecMul_add (A : MlDsaPublicMatrix) (u v : MlDsaSecretVec) (i : Fin k_mldsa65) :
+    matVecMul A (vecAdd u v) i = matVecMul A u i + matVecMul A v i := by
+  simp only [matVecMul, vecAdd]
+  rw [← Finset.sum_add_distrib]
+  congr 1; ext j; ring
 
-axiom matVecMul_scalarMul (A : MlDsaPublicMatrix) (c : Rq) (v : MlDsaSecretVec) (i : Fin k_mldsa65) :
-  matVecMul A (scalarVecMul c v) i = c * matVecMul A v i
+theorem matVecMul_scalarMul (A : MlDsaPublicMatrix) (c : Rq) (v : MlDsaSecretVec) (i : Fin k_mldsa65) :
+    matVecMul A (scalarVecMul c v) i = c * matVecMul A v i := by
+  simp only [matVecMul, scalarVecMul]
+  rw [Finset.mul_sum]
+  congr 1; ext j; ring
 
 theorem verify_correctness (matA : MlDsaPublicMatrix) (y s1 : MlDsaSecretVec)
     (s2 : MlDsaPublicVec) (c : Rq) (i : Fin k_mldsa65) :
