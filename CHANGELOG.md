@@ -8,7 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ### Added — Algorithm Death Day test suite
 
-Quantum threat simulation: 14 integration tests proving goya-ledger survives
+Quantum threat simulation: 18 integration tests proving goya-ledger survives
 complete Ed25519 compromise with zero block loss and automatic PQC migration.
 
 #### Phase 1 — Detection
@@ -36,6 +36,12 @@ complete Ed25519 compromise with zero block loss and automatic PQC migration.
 - Forged QC (1 legit + 2 Ed25519-forged votes) → `InvalidSignature` on validation
 - 4-node ML-DSA-65 network decides 2 rounds despite active attacker injection
 
+#### Phase 6 — Block injection attacks
+- Proposal from non-leader node → silently ignored by all honest nodes
+- Proposal with forged `justify_qc` (Ed25519-signed votes) → rejected by `validate_received_qc`
+- Malicious leader forging votes from other validators → cannot reach quorum (invalid signatures)
+- Network recovers after malicious leader timeout, continues deciding subsequent rounds
+
 #### Atomic identity migration (`migrate_identity`, `resolve_identity`)
 - `KeyManager::rotate_algorithm(new_algo, timestamp)` — cross-algorithm key rotation (Ed25519 → ML-DSA-65)
 - `migrate_identity(store, old_did, new_algo, timestamp)` — atomic: marks old DID as "migrated", creates new DID with `migrated_from` link
@@ -59,7 +65,7 @@ complete Ed25519 compromise with zero block loss and automatic PQC migration.
 - `tls_pqc_env_toggle_works` and `tls_pqc_flag_controls_provider_selection` asserted PQC KEM disabled by default — contradicted implementation where `TLS_PQC_KEM` defaults to `true` (PQC enabled)
 
 ### Stats
-- 2722 lib tests, 150 PQC tests, 76 integration tests — 0 failures
+- 2722 lib tests, 150 PQC tests, 80 integration tests — 0 failures
 - fmt + clippy clean
 
 ---

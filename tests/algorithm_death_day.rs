@@ -973,3 +973,225 @@ fn phase5_consensus_proceeds_despite_attacker_injection() {
     assert!(commits.len() >= 2);
     assert!(commits.windows(2).all(|w| w[0] == w[1]));
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PHASE 6 — BLOCK INJECTION
+// Attacker impersonates leader or injects proposals with forged justify_qc.
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn phase6_proposal_from_non_leader_ignored() {
+    let (validators, mut managers, _) = build_bft_network();
+    let ids: Vec<String> = managers.keys().cloned().collect();
+
+    let round = 0u64;
+    let leader_idx = (round as usize) % validators.len();
+    let attacker_id = &validators[(leader_idx + 1) % validators.len()].id;
+
+    for id in &ids {
+        managers.get_mut(id).unwrap().start_round(round);
+    }
+
+    let malicious_block = [0xDE; 32];
+
+    for id in &ids {
+        if id == attacker_id {
+            continue;
+        }
+        let action = managers
+            .get_mut(id)
+            .unwrap()
+            .process_event(RoundEvent::Proposal {
+                block_hash: malicious_block,
+                leader_id: attacker_id.clone(),
+                justify_qc: None,
+            });
+        assert!(
+            matches!(
+                action,
+                rust_bc::consensus::bft::round_manager::ManagerAction::Round(
+                    rust_bc::consensus::bft::round::RoundAction::None
+                ) | rust_bc::consensus::bft::round_manager::ManagerAction::None
+            ),
+            "honest node must reject proposal from non-leader"
+        );
+    }
+
+    for id in &ids {
+        let state = managers[id.as_str()].round_state();
+        assert_ne!(
+            state,
+            Some(RoundState::Decided),
+            "no node should decide on attacker's block"
+        );
+    }
+
+    let decided = run_honest_round(&validators, &mut managers, round);
+    assert!(
+        decided > 0,
+        "honest round still works after rejected injection"
+    );
+}
+
+#[test]
+fn phase6_proposal_with_forged_justify_qc_rejected() {
+    let (validators, mut managers, _) = build_bft_network();
+    let ids: Vec<String> = managers.keys().cloned().collect();
+
+    let decided_r0 = run_honest_round(&validators, &mut managers, 0);
+    assert_eq!(decided_r0, 4);
+
+    let round = 1u64;
+    let leader_idx = (round as usize) % validators.len();
+    let leader_id = validators[leader_idx].id.clone();
+
+    for id in &ids {
+        managers.get_mut(id).unwrap().start_round(round);
+    }
+
+    let attacker_ed = SoftwareSigningProvider::generate();
+    let fake_bh = [0xAA; 32];
+    let mut forged_votes = Vec::new();
+    for v in &validators[..3] {
+        let payload = VoteMessage::signing_payload_v2(BftPhase::Prepare, &fake_bh, 0, &v.id);
+        forged_votes.push(VoteMessage {
+            block_hash: fake_bh,
+            round: 0,
+            phase: BftPhase::Prepare,
+            voter_id: v.id.clone(),
+            signature: attacker_ed.sign(&payload).unwrap(),
+        });
+    }
+    let forged_qc = QuorumCertificate::new(BftPhase::Prepare, fake_bh, 0, forged_votes).unwrap();
+
+    let malicious_block = [0xBB; 32];
+    let mut rejected_count = 0;
+    for id in &ids {
+        if *id == leader_id {
+            continue;
+        }
+        let action = managers
+            .get_mut(id)
+            .unwrap()
+            .process_event(RoundEvent::Proposal {
+                block_hash: malicious_block,
+                leader_id: leader_id.clone(),
+                justify_qc: Some(forged_qc.clone()),
+            });
+        if matches!(
+            action,
+            rust_bc::consensus::bft::round_manager::ManagerAction::Round(
+                rust_bc::consensus::bft::round::RoundAction::None
+            )
+        ) {
+            rejected_count += 1;
+        }
+    }
+    assert_eq!(
+        rejected_count, 3,
+        "all followers must reject forged justify_qc"
+    );
+}
+
+#[test]
+fn phase6_attacker_leader_round_cannot_decide_without_honest_votes() {
+    let (validators, mut managers, verifier) = build_bft_network();
+    let ids: Vec<String> = managers.keys().cloned().collect();
+
+    let round = 0u64;
+    let leader_idx = (round as usize) % validators.len();
+    let attacker_idx = leader_idx;
+    let attacker_id = validators[attacker_idx].id.clone();
+
+    for id in &ids {
+        managers.get_mut(id).unwrap().start_round(round);
+    }
+
+    let malicious_bh = [0xEE; 32];
+    managers
+        .get_mut(&attacker_id)
+        .unwrap()
+        .process_event(RoundEvent::StartAsLeader {
+            block_hash: malicious_bh,
+        });
+
+    let attacker_ed = SoftwareSigningProvider::generate();
+
+    for phase in [BftPhase::Prepare, BftPhase::PreCommit, BftPhase::Commit] {
+        let mut forged_votes = Vec::new();
+        for v in &validators {
+            if v.id == attacker_id {
+                forged_votes.push(v.sign_vote(phase, &malicious_bh, round));
+            } else {
+                let payload = VoteMessage::signing_payload_v2(phase, &malicious_bh, round, &v.id);
+                forged_votes.push(VoteMessage {
+                    block_hash: malicious_bh,
+                    round,
+                    phase,
+                    voter_id: v.id.clone(),
+                    signature: attacker_ed.sign(&payload).unwrap(),
+                });
+            }
+        }
+
+        let qv = QuorumValidator::new(
+            validators.iter().map(|v| v.id.clone()).collect(),
+            verifier.clone(),
+        );
+        for vote in &forged_votes[1..] {
+            assert!(
+                qv.validate_vote(vote).is_err(),
+                "forged vote from {} must be rejected",
+                vote.voter_id
+            );
+        }
+
+        for vote in &forged_votes {
+            managers
+                .get_mut(&attacker_id)
+                .unwrap()
+                .process_event(RoundEvent::Vote(vote.clone()));
+        }
+    }
+
+    let attacker_state = managers[&attacker_id].round_state();
+    assert_ne!(
+        attacker_state,
+        Some(RoundState::Decided),
+        "attacker cannot decide with forged votes — vote collector rejects invalid sigs"
+    );
+}
+
+#[test]
+fn phase6_network_recovers_after_malicious_leader_round() {
+    let (validators, mut managers, _) = build_bft_network();
+
+    let decided_r0 = run_honest_round(&validators, &mut managers, 0);
+    assert_eq!(decided_r0, 4);
+
+    let ids: Vec<String> = managers.keys().cloned().collect();
+    for id in &ids {
+        managers.get_mut(id).unwrap().start_round(1);
+    }
+    for id in &ids {
+        managers.get_mut(id).unwrap().on_timeout();
+    }
+
+    let decided_r2 = run_honest_round(&validators, &mut managers, 2);
+    assert_eq!(decided_r2, 4);
+
+    let decided_r3 = run_honest_round(&validators, &mut managers, 3);
+    assert_eq!(decided_r3, 4);
+
+    let mut commits: Vec<[u8; 32]> = Vec::new();
+    for m in managers.values() {
+        if let Some(qc) = m.highest_commit_qc() {
+            commits.push(qc.block_hash);
+        }
+    }
+    assert!(commits.len() >= 2);
+    assert!(
+        commits.windows(2).all(|w| w[0] == w[1]),
+        "all honest nodes must agree on the same block after recovery"
+    );
+}
