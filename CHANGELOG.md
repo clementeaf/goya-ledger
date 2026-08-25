@@ -45,6 +45,18 @@ Machine-checked proofs in `formal/` — Lean 4.33 + Mathlib.
 - CMA-to-NMA reduction axiomatized (the gap found and fixed in CRYPTO 2023)
 - PQC and classical algorithm sets are disjoint
 
+### Added — Cryptographic Agility Protocol (`AlgorithmPolicy`)
+
+First-class algorithm lifecycle management — deprecation with deadlines.
+
+- `AlgorithmPolicy::new(node_algo)` — node announces supported algorithms
+- `deprecate(algo, time, reject_after, reason)` — mark algorithm for sunset with deadline
+- `is_accepted(algo, time)` / `is_rejected(algo, time)` — policy enforcement
+- `active_algorithms(time)` — list non-rejected algorithms at a given time
+- `status_map(time)` — full status: active, accepted, deprecated, rejected
+- Guards: cannot deprecate node's active algorithm, no double deprecation, deadline must be future
+- 7 unit tests covering all policy states and transitions
+
 ### Added — Algorithm Death Day E2E (`scripts/algorithm-death-day-e2e.sh`)
 
 End-to-end smoke test against a live goya-ledger node via HTTP API:
