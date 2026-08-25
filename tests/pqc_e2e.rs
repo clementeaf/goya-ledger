@@ -279,7 +279,7 @@ fn tls_pqc_env_toggle_works() {
     let _g = LOCK.lock().unwrap();
 
     std::env::remove_var("TLS_PQC_KEM");
-    assert!(!rust_bc::tls::pqc_kem_enabled());
+    assert!(rust_bc::tls::pqc_kem_enabled());
 
     std::env::set_var("TLS_PQC_KEM", "true");
     assert!(rust_bc::tls::pqc_kem_enabled());

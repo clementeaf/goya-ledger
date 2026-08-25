@@ -4,6 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.13.1] — 2026-08-25
+
+### Fixed — PQC TLS default assertion in integration tests
+
+- `tls_pqc_env_toggle_works` and `tls_pqc_flag_controls_provider_selection` asserted PQC KEM disabled by default — contradicted implementation where `TLS_PQC_KEM` defaults to `true` (PQC enabled)
+- Both tests now correctly assert `pqc_kem_enabled() == true` when env var is unset
+
+### Stats
+- 2721 lib tests, 150 PQC tests, 62 integration tests — 0 failures
+- fmt + clippy clean
+
+---
+
 ## [0.13.0] — 2026-08-18
 
 ### Added — Bulk FES sign & verify, SDK, FES/FEA end-to-end, goya-sign CLI

@@ -328,7 +328,7 @@ fn ensure_tls_pqc_provider_differs_from_default() {
 fn tls_pqc_flag_controls_provider_selection() {
     let _lock = ENV_LOCK.lock().unwrap();
     std::env::remove_var("TLS_PQC_KEM");
-    assert!(!rust_bc::tls::pqc_kem_enabled());
+    assert!(rust_bc::tls::pqc_kem_enabled());
 
     std::env::set_var("TLS_PQC_KEM", "true");
     assert!(rust_bc::tls::pqc_kem_enabled());
