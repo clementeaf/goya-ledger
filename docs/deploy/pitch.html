@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goya Ledger — Postulación Startup Chile Build</title>
+<style>
+:root {
+  --bg: #F8F7F4;
+  --bg-card: #FFFFFF;
+  --fg: #1A1A1A;
+  --fg-secondary: #4A4A4A;
+  --fg-muted: #7A7A7A;
+  --accent: #2D5A3D;
+  --accent-light: #E8F0EB;
+  --accent-dark: #1E3D29;
+  --border: #D8D4CC;
+  --border-light: #ECEAE4;
+  --highlight: #C4A35A;
+  --highlight-bg: #FDF8ED;
+  --danger: #8B3A3A;
+  --danger-bg: #F9EDED;
+  --score-bar: #2D5A3D;
+  --score-track: #E8F0EB;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413;
+    --bg-card: #1E1E1C;
+    --fg: #E8E6E1;
+    --fg-secondary: #B8B5AD;
+    --fg-muted: #807D75;
+    --accent: #5BA67A;
+    --accent-light: #1E2E24;
+    --accent-dark: #8DD4A5;
+    --border: #333330;
+    --border-light: #252523;
+    --highlight: #D4B46A;
+    --highlight-bg: #2A2618;
+    --danger: #C46A6A;
+    --danger-bg: #2A1C1C;
+    --score-bar: #5BA67A;
+    --score-track: #1E2E24;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141413;
+  --bg-card: #1E1E1C;
+  --fg: #E8E6E1;
+  --fg-secondary: #B8B5AD;
+  --fg-muted: #807D75;
+  --accent: #5BA67A;
+  --accent-light: #1E2E24;
+  --accent-dark: #8DD4A5;
+  --border: #333330;
+  --border-light: #252523;
+  --highlight: #D4B46A;
+  --highlight-bg: #2A2618;
+  --danger: #C46A6A;
+  --danger-bg: #2A1C1C;
+  --score-bar: #5BA67A;
+  --score-track: #1E2E24;
+}
+:root[data-theme="light"] {
+  --bg: #F8F7F4;
+  --bg-card: #FFFFFF;
+  --fg: #1A1A1A;
+  --fg-secondary: #4A4A4A;
+  --fg-muted: #7A7A7A;
+  --accent: #2D5A3D;
+  --accent-light: #E8F0EB;
+  --accent-dark: #1E3D29;
+  --border: #D8D4CC;
+  --border-light: #ECEAE4;
+  --highlight: #C4A35A;
+  --highlight-bg: #FDF8ED;
+  --danger: #8B3A3A;
+  --danger-bg: #F9EDED;
+  --score-bar: #2D5A3D;
+  --score-track: #E8F0EB;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.65;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 3rem 2rem 4rem;
+}
+
+.cover {
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 2.5rem;
+  margin-bottom: 3rem;
+}
+
+.cover-eyebrow {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+
+.cover h1 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--fg);
+  margin-bottom: 0.5rem;
+  text-wrap: balance;
+}
+
+.cover-sub {
+  font-size: 1.1rem;
+  color: var(--fg-secondary);
+  line-height: 1.5;
+  max-width: 620px;
+}
+
+.cover-meta {
+  display: flex;
+  gap: 2rem;
+  margin-top: 1.5rem;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+  letter-spacing: 0.02em;
+}
+
+.toc {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 1.5rem 2rem;
+  margin-bottom: 3rem;
+}
+
+.toc-title {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 1rem;
+}
+
+.toc ol {
+  list-style: none;
+  counter-reset: toc-counter;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 2rem;
+}
+
+.toc li {
+  counter-increment: toc-counter;
+  font-size: 0.88rem;
+  color: var(--fg-secondary);
+}
+
+.toc li::before {
+  content: counter(toc-counter) ".";
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.72rem;
+  color: var(--accent);
+  margin-right: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.section {
+  margin-bottom: 3rem;
+}
+
+.section-label {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+
+.section-weight {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.65rem;
+  color: var(--fg-muted);
+  float: right;
+  margin-top: 0.15rem;
+}
+
+.section h2 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--fg);
+  margin-bottom: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border-light);
+  text-wrap: balance;
+}
+
+.section h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--fg);
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.section p {
+  margin-bottom: 0.85rem;
+  color: var(--fg-secondary);
+}
+
+.section p strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.score-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.score-bar-track {
+  flex: 1;
+  height: 6px;
+  background: var(--score-track);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.score-bar-fill {
+  height: 100%;
+  background: var(--score-bar);
+  border-radius: 3px;
+}
+
+.score-bar-label {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  min-width: 3rem;
+  text-align: right;
+}
+
+.callout {
+  background: var(--accent-light);
+  border-left: 3px solid var(--accent);
+  padding: 1rem 1.25rem;
+  margin: 1.25rem 0;
+  border-radius: 0 4px 4px 0;
+  font-size: 0.92rem;
+  color: var(--fg-secondary);
+}
+
+.callout strong { color: var(--fg); }
+
+.callout-warn {
+  background: var(--highlight-bg);
+  border-left-color: var(--highlight);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+
+.metric-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  text-align: center;
+}
+
+.metric-value {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1.1;
+}
+
+.metric-label {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-top: 0.35rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.88rem;
+}
+
+th {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 2px solid var(--border);
+  font-weight: 500;
+}
+
+td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--fg-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+td:first-child {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+tr:last-child td { border-bottom: none; }
+
+.overflow-x { overflow-x: auto; }
+
+ul, ol {
+  padding-left: 1.25rem;
+  margin-bottom: 0.85rem;
+}
+
+li {
+  margin-bottom: 0.35rem;
+  color: var(--fg-secondary);
+}
+
+li strong { color: var(--fg); }
+
+.timeline {
+  position: relative;
+  padding-left: 1.5rem;
+  margin: 1.25rem 0;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 2px;
+  background: var(--border);
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 1.25rem;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -1.65rem;
+  top: 0.45rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+}
+
+.timeline-month {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.68rem;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  margin-bottom: 0.15rem;
+}
+
+.timeline-text {
+  font-size: 0.9rem;
+  color: var(--fg-secondary);
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 2.5rem 0;
+}
+
+.footer-note {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 0.65rem;
+  color: var(--fg-muted);
+  text-align: center;
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border-light);
+  letter-spacing: 0.03em;
+}
+
+@media (max-width: 600px) {
+  .page { padding: 2rem 1.25rem; }
+  .cover h1 { font-size: 1.8rem; }
+  .metrics-grid { grid-template-columns: 1fr; }
+  .toc ol { grid-template-columns: 1fr; }
+  .cover-meta { flex-direction: column; gap: 0.5rem; }
+}
+</style>
+</head>
+<body>
+
+<div style="background:var(--accent-light);padding:0.5rem 0;text-align:center;font-family:'SF Mono','Menlo','Consolas',monospace;font-size:0.65rem;letter-spacing:0.08em;border-bottom:1px solid var(--border-light);">
+  <a href="/" style="color:var(--accent);text-decoration:none;">&larr; Ver landing de producto</a>
+</div>
+
+<div class="page">
+
+  <div class="cover">
+    <div class="cover-eyebrow">Postulación Startup Chile — Programa Build</div>
+    <h1>Goya Ledger</h1>
+    <p class="cover-sub">Firma electrónica con validez legal para pymes chilenas. 10 veces más barata que los proveedores actuales, con seguridad de próxima generación.</p>
+    <div class="cover-meta">
+      <span>Agosto 2026</span>
+      <span>SpA constituida en Chile</span>
+      <span>3+ cofounders</span>
+      <span>Pre-revenue</span>
+    </div>
+  </div>
+
+  <div class="toc">
+    <div class="toc-title">Contenido — alineado a rúbrica de evaluación</div>
+    <ol>
+      <li>El Problema en Chile</li>
+      <li>Nuestra Solución</li>
+      <li>Producto / Servicio (25%)</li>
+      <li>Mercado y Competencia (25%)</li>
+      <li>Equipo (15%)</li>
+      <li>Competencia y Liderazgo (25%)</li>
+      <li>Impacto en Chile (10%)</li>
+      <li>Plan de Uso del Fondo</li>
+      <li>Roadmap 4 Meses</li>
+      <li>Guión Video Pitch</li>
+    </ol>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- PROBLEMA -->
+  <!-- ============================================ -->
+  <div class="section">
+    <h2>El Problema en Chile</h2>
+
+    <p>Chile tiene una ley de firma electrónica desde 2002 (Ley 19.799). Pero 22 años después, <strong>la inmensa mayoría de las pymes chilenas sigue firmando contratos en papel</strong> o con PDFs escaneados sin validez legal. ¿Por qué? Porque los proveedores actuales cobran entre $5.000 y $50.000 CLP por firma.</p>
+
+    <p>Para una pyme que firma 20 contratos al mes — un estudio jurídico pequeño, una constructora, una consultora — eso puede ser más de $1.000.000 CLP mensuales solo en firmas. La mayoría simplemente no firma electrónicamente.</p>
+
+    <p>El resultado es un mercado donde:</p>
+
+    <ul>
+      <li><strong>Las pymes quedan fuera.</strong> 250.000+ pymes en Chile no pueden acceder a firma electrónica avanzada (FEA) por costo. Firman en papel, lo que las deja expuestas a disputas, fraude y demoras.</li>
+      <li><strong>Los contratos no viajan.</strong> Una empresa chilena que exporta servicios a Perú o Colombia no puede ofrecer un contrato digitalmente vinculante que sea verificable en destino. El papel cruza fronteras, la firma electrónica chilena no.</li>
+      <li><strong>La seguridad está obsoleta.</strong> Los proveedores actuales usan tecnología criptográfica de los años 90. La próxima generación de computadores ya puede comprometer esos algoritmos — y los documentos firmados hoy quedan expuestos mañana.</li>
+    </ul>
+
+    <div class="callout">
+      La Ley 21.663 de Ciberseguridad (2024) ya exige estándares criptográficos actualizados a instituciones públicas y operadores de servicios esenciales. Los proveedores de firma actuales no cumplen con la nueva exigencia.
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- SOLUCIÓN -->
+  <!-- ============================================ -->
+  <div class="section">
+    <h2>Nuestra Solución</h2>
+
+    <p><strong>Goya Ledger es firma electrónica con validez legal a $99/mes con firmas ilimitadas.</strong> Una pyme se registra, sube un contrato, y las partes lo firman desde el navegador. El contrato queda sellado, fechado, y verificable por cualquier tercero — todo cumpliendo Ley 19.799.</p>
+
+    <p>¿Por qué podemos cobrar 10x menos? Porque construimos nuestra propia infraestructura criptográfica en vez de revender la de un tercero. No pagamos licencias por firma. El costo marginal de cada firma adicional es prácticamente cero.</p>
+
+    <h3>Qué hace el producto</h3>
+    <ul>
+      <li><strong>Firma Electrónica Simple (FES):</strong> Cualquier persona firma un documento con validez legal. Sin costo por firma, sin hardware especial.</li>
+      <li><strong>Firma Electrónica Avanzada (FEA):</strong> Para contratos que requieren mayor nivel de seguridad — verificación de identidad biométrica incluida, con la criptografía más avanzada disponible.</li>
+      <li><strong>Contratos inteligentes legales:</strong> Los contratos se definen como flujos digitales. Automáticamente controlan quién debe firmar, en qué orden, con qué nivel de seguridad, y notarizan el resultado.</li>
+      <li><strong>Verificación instantánea:</strong> Cualquier persona autorizada puede verificar la autenticidad de un documento firmado en segundos, desde cualquier dispositivo.</li>
+    </ul>
+
+    <h3>Cómo se ve para el cliente</h3>
+    <p>Una notaría crea su cuenta. Sube una plantilla de contrato (NDA, compraventa, poder). Asigna las partes con su RUT y correo. Las partes reciben un link, firman, y el contrato queda sellado con estampa de tiempo y respaldo criptográfico. La notaría tiene un panel donde ve todos sus contratos, estados, y puede emitir verificaciones.</p>
+
+    <div class="callout">
+      <strong>El producto está construido y funcional.</strong> No es un mockup ni un pitch deck. Tiene una app web (<a href="https://goya-explorer.fly.dev" style="color:var(--accent);">goya-explorer.fly.dev</a>), una API con 280 funcionalidades, una app de escritorio, y un SDK para desarrolladores. Lo que falta no es tecnología — es llegar a los primeros clientes.
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- PRODUCTO / SERVICIO (25%) -->
+  <!-- ============================================ -->
+  <div class="section">
+    <div class="section-label">Criterio de evaluación</div>
+    <span class="section-weight">Peso: 25%</span>
+    <h2>Producto / Servicio</h2>
+
+    <div class="score-bar-container">
+      <div class="score-bar-track"><div class="score-bar-fill" style="width:90%"></div></div>
+      <span class="score-bar-label">Prototipo funcional</span>
+    </div>
+
+    <h3>Estado del producto</h3>
+    <p>Goya Ledger es un producto funcional completo, no un prototipo temprano. Lleva 13 versiones publicadas desde junio 2026 y está desplegado en <a href="https://goya-explorer.fly.dev" style="color:var(--accent);font-weight:600;">goya-explorer.fly.dev</a> (app web) y <a href="https://goya-node.fly.dev/api/v1/health" style="color:var(--accent);">goya-node.fly.dev</a> (API).</p>
+
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-value">$99</div>
+        <div class="metric-label">Precio mensual target</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">Ilimitadas</div>
+        <div class="metric-label">Firmas incluidas</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">v0.13</div>
+        <div class="metric-label">13 releases en 2 meses</div>
+      </div>
+    </div>
+
+    <h3>Visión global, ejecución desde Chile</h3>
+    <p>El producto incluye app web con login (Google/Microsoft), dashboard de contratos, verificación pública de documentos, y panel de identidad digital. Cumple Ley 19.799 y está preparado para regulaciones internacionales — <strong>un cliente chileno que exporte servicios puede usar la misma plataforma en destino.</strong></p>
+
+    <h3>Modelo de negocio</h3>
+    <div class="overflow-x">
+    <table>
+      <tr><th>Plan</th><th>Precio</th><th>Para quién</th></tr>
+      <tr><td>Starter</td><td>$99/mes</td><td>Pymes, profesionales independientes — hasta 500 firmas/mes</td></tr>
+      <tr><td>Profesional</td><td>$299/mes</td><td>Estudios jurídicos, consultoras — firmas ilimitadas + soporte</td></tr>
+      <tr><td>Institucional</td><td>Cotización</td><td>Notarías, gobierno, empresas grandes — deploy dedicado + SLA</td></tr>
+    </table>
+    </div>
+
+    <h3>Potencial de inversión</h3>
+    <p>La criptografía de próxima generación es una megatendencia. Los gobiernos de las principales economías ya mandataron que toda infraestructura digital migre a estos nuevos estándares antes de 2030. Goya es la primera plataforma de firma electrónica en Latinoamérica que ya los implementa — eso es una ventana de tiempo donde no hay competencia directa.</p>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- MERCADO (25%) -->
+  <!-- ============================================ -->
+  <div class="section">
+    <div class="section-label">Criterio de evaluación</div>
+    <span class="section-weight">Peso: 25%</span>
+    <h2>Mercado y Posición Competitiva</h2>
+
+    <div class="score-bar-container">
+      <div class="score-bar-track"><div class="score-bar-fill" style="width:85%"></div></div>
+      <span class="score-bar-label">Mercado validado</span>
+    </div>
+
+    <h3>El mercado en Chile</h3>
+    <p>La firma electrónica en Chile es un mercado de USD $120M que crece ~25% anual. Pero está concentrado: tres o cuatro proveedores (E-certchile, TOC, Acepta) capturan el segmento corporativo y gobierno. <strong>Las 250.000+ pymes quedan fuera por precio.</strong></p>
+
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-value">$120M</div>
+        <div class="metric-label">Mercado firma-e Chile</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">250K+</div>
+        <div class="metric-label">Pymes sin acceso</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-value">10x</div>
+        <div class="metric-label">Diferencia de precio</div>
+      </div>
+    </div>
+
+    <h3>Nuestro cliente</h3>
+    <ul>
+      <li><strong>Notarías</strong> — procesan miles de documentos al mes. Necesitan FEA con validez legal y trazabilidad. Hoy pagan por cada firma individual.</li>
+      <li><strong>Estudios jurídicos</strong> — gestionan NDAs, contratos de servicios, poderes. Quieren un flujo digital de principio a fin.</li>
+      <li><strong>Pymes que exportan servicios</strong> — necesitan contratos verificables que funcionen en Chile y en destino.</li>
+      <li><strong>Sector público</strong> — la Ley 21.663 los obliga a modernizar su infraestructura de seguridad digital.</li>
+    </ul>
+
+    <h3>Competidores en Chile</h3>
+    <div class="overflow-x">
+    <table>
+      <tr><th>Competidor</th><th>Problema</th><th>Nuestra ventaja</th></tr>
+      <tr><td>E-certchile / Acepta</td><td>Caro ($5K-50K por firma), tecnología anticuada</td><td>$99/mes ilimitado, seguridad de próxima generación</td></tr>
+      <tr><td>TOC</td><td>Solo firma simple, sin contratos</td><td>FES + FEA + contratos inteligentes legales</td></tr>
+      <tr><td>DocuSign</td><td>No cumple Ley 19.799, servidores fuera de Chile</td><td>Cumplimiento nativo, datos en Chile</td></tr>
+    </table>
+    </div>
+
+    <h3>Expansión desde Chile</h3>
+    <p>Chile tiene tratados de libre comercio con 65 países. La plataforma está diseñada para cumplir regulaciones de múltiples países, lo que permite a un cliente chileno usar la misma herramienta cuando opera en el extranjero. La expansión natural es Perú, Colombia y México — mercados similares con los mismos problemas de costo y acceso.</p>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- EQUIPO (15%) -->
+  <!-- ============================================ -->
+  <div class="section">
+    <div class="section-label">Criterio de evaluación</div>
+    <span class="section-weight">Peso: 15%</span>
+    <h2>Equipo</h2>
+
+    <div class="score-bar-container">
+      <div class="score-bar-track"><div class="score-bar-fill" style="width:80%"></div></div>
+      <span class="score-bar-label">Mín. requerido: 3.0/5</span>
+    </div>
+
+    <div class="callout-warn callout">
+      <strong>Completar con datos reales.</strong> Este criterio tiene piso mínimo de 3.0/5 — debajo de ese puntaje la postulación se rechaza. Incluir: nombre, rol, experiencia, logros, y LinkedIn de cada cofundador.
+    </div>
+
+    <h3>Cofundador 1 — [Nombre] — CTO</h3>
+    <p><strong>Rol:</strong> Diseño del producto, arquitectura, desarrollo.</p>
+    <p><strong>Background:</strong> Ingeniería en Computación. [Completar: años de experiencia, empresas, proyectos, educación].</p>
+    <p><strong>Evidencia:</strong> 13 releases del producto en 2 meses. Producto funcional construido de cero.</p>
+
+    <h3>Cofundador 2 — [Nombre] — [Rol]</h3>
+    <p>[Completar: background, qué aporta, experiencia relevante para el mercado legal/notarial]</p>
+
+    <h3>Cofundador 3 — [Nombre] — [Rol]</h3>
+    <p>[Completar: background, qué aporta, experiencia comercial o de dominio]</p>
+
+    <h3>Por qué este equipo</h3>
+    <p>[Completar: qué combinación de habilidades hace que este equipo sea el indicado para resolver este problema. Ej: "combina experiencia técnica profunda con conocimiento del mercado legal chileno y capacidad comercial para llegar a los primeros clientes."]</p>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- COMPETENCIA Y LIDERAZGO (25%) -->
+  <!-- ============================================ -->
+  <div class="section">
+    <div class="section-label">Criterio de evaluación</div>
+    <span class="section-weight">Peso: 25%</span>
+    <h2>Competencia y Liderazgo</h2>
+
+    <div class="score-bar-container">
+      <div class="score-bar-track"><div class="score-bar-fill" style="width:75%"></div></div>
+      <span class="score-bar-label">Liderazgo</span>
+    </div>
+
+    <div class="callout-warn callout">
+      <strong>Completar con evidencia concreta.</strong> Evalúa: capacidad de decisión, participación en comunidades, impacto en el ecosistema.
+    </div>
+
+    <h3>Decisiones que demuestran criterio</h3>
+    <ul>
+      <li><strong>Apostar por seguridad de próxima generación antes que el mercado:</strong> Decidimos construir con los nuevos estándares de seguridad publicados por NIST en 2024, antes de que cualquier competidor en Chile los adoptara. Esto nos da una ventana de 3-5 años sin competencia directa.</li>
+      <li><strong>Construir infraestructura propia en vez de revender:</strong> Los proveedores actuales revenden licencias de terceros y cobran por firma. Nosotros construimos la infraestructura desde cero — eso nos permite cobrar 10x menos y controlar la experiencia completa.</li>
+      <li><strong>Cumplimiento regulatorio desde el diseño:</strong> En vez de adaptar un producto extranjero a la ley chilena, construimos con Ley 19.799 y DS 181 como requisitos de diseño. Eso reduce el camino a la certificación PSC.</li>
+    </ul>
+
+    <h3>Participación en el ecosistema</h3>
+    <p>[Completar: comunidades tech en Chile, eventos, mentorías, contribuciones, publicaciones, presencia en startup ecosystem]</p>
+
+    <h3>Visión</h3>
+    <p>Que firmar un contrato con validez legal en Chile cueste lo mismo que enviar un correo. Que las pymes chilenas tengan acceso a la misma seguridad criptográfica que hoy solo tienen los bancos. Y que Chile sea el primer país en LATAM con infraestructura de firma electrónica preparada para la próxima generación de amenazas.</p>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- IMPACTO EN CHILE (10%) -->
+  <!-- ============================================ -->
+  <div class="section">
+    <div class="section-label">Criterio de evaluación</div>
+    <span class="section-weight">Peso: 10%</span>
+    <h2>Impacto en Chile</h2>
+
+    <div class="score-bar-container">
+      <div class="score-bar-track"><div class="score-bar-fill" style="width:95%"></div></div>
+      <span class="score-bar-label">Alto alineamiento</span>
+    </div>
+
+    <h3>Problema chileno, solución chilena</h3>
+    <ul>
+      <li><strong>Acceso:</strong> 250.000+ pymes que hoy no pueden firmar electrónicamente por costo. Goya reduce la barrera de $50.000/firma a $99/mes ilimitado.</li>
+      <li><strong>Ciberseguridad:</strong> Cumplimiento directo con Ley 21.663 que exige estándares criptográficos actualizados.</li>
+      <li><strong>Transformación digital:</strong> Alineado con la agenda Chile Digital 2035 en identidad digital y documentos verificables.</li>
+      <li><strong>Soberanía tecnológica:</strong> Infraestructura criptográfica desarrollada en Chile, sin dependencia de proveedores extranjeros.</li>
+    </ul>
+
+    <h3>Empresa y empleo en Chile</h3>
+    <ul>
+      <li>SpA constituida en Chile. Todo el desarrollo hecho desde Chile.</li>
+      <li>Plan de contratar 2-3 ingenieros chilenos durante el programa.</li>
+      <li>Certificación PSC se tramita ante la Subsecretaría de Economía de Chile.</li>
+      <li>Primeros clientes: notarías y estudios jurídicos en Santiago.</li>
+    </ul>
+
+    <h3>Chile como plataforma de exportación</h3>
+    <p>Los 65 tratados de libre comercio de Chile son la mejor plataforma para exportar servicios digitales a LATAM. Un producto de firma electrónica certificado en Chile tiene credibilidad regulatoria en Perú, Colombia y México — mercados con los mismos problemas y sin soluciones locales.</p>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ============================================ -->
+  <!-- PLAN DE USO DEL FONDO -->
+  <!-- ============================================ -->
+  <div class="section">
+    <h2>Plan de Uso del Fondo ($15M CLP)</h2>
+
+    <p>El producto ya está construido. El fondo se destina 100% a <strong>llegar al mercado</strong>: certificación, primeros clientes, y validación comercial.</p>
+
+    <div class="overflow-x">
+    <table>
+      <tr><th>Destino</th><th>Monto</th><th>%</th><th>Para qué</th></tr>
+      <tr><td>Certificación PSC</td><td>$5.000.000</td><td>33%</td><td>Consultor regulatorio + auditoría para tramitar certificación ante Subsecretaría de Economía</td></tr>
+      <tr><td>Pilotos con clientes</td><td>$4.000.000</td><td>27%</td><td>Integración con 5 notarías/estudios piloto. Soporte dedicado, iteración de producto</td></tr>
+      <tr><td>Infraestructura</td><td>$2.500.000</td><td>17%</td><td>Servidores de producción en Chile, dominio .cl, monitoreo</td></tr>
+      <tr><td>Legal</td><td>$1.500.000</td><td>10%</td><td>Asesoría para cumplimiento DS 181 y contratos piloto</td></tr>
+      <tr><td>Go-to-market</td><td>$2.000.000</td><td>13%</td><td>Sitio web, material comercial, eventos del gremio notarial</td></tr>
+    </table>
+    </div>
+
+    <div class="callout">
+      <strong>Co-financiamiento:</strong> CORFO financia hasta 90% ($13.5M). El equipo aporta el 10% restante ($1.5M CLP) en tiempo de desarrollo y recursos propios.
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <!-- ROADMAP -->
+  <!-- ============================================ -->
+  <div class="section">
+    <h2>Roadmap 4 Meses (Programa Build)</h2>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-month">Mes 1 — Certificación y primeros contactos</div>
+        <div class="timeline-text">Iniciar proceso de certificación PSC. Contactar 10 notarías en Santiago. Contratar asesor regulatorio. Ajustar producto según feedback de primeras demos.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-month">Mes 2 — Primeros pilotos</div>
+        <div class="timeline-text">3 notarías o estudios firmando contratos reales con Goya. Panel de administración para clientes. Medir tiempo de firma, tasa de error, satisfacción.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-month">Mes 3 — Validación comercial</div>
+        <div class="timeline-text">Pricing validado con pilotos reales. Sitio web de producto. Primeros ingresos (pilotos a precio reducido). Métricas de retención.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-month">Mes 4 — Demo Day y siguiente paso</div>
+        <div class="timeline-text">5 clientes activos. Pitch para levantamiento pre-seed. Postulación a Ignite para fase de escalamiento.</div>
+      </div>
+    </div>
+
+    <h3>KPIs al término del programa</h3>
+    <div class="overflow-x">
+    <table>
+      <tr><th>KPI</th><th>Meta</th></tr>
+      <tr><td>Clientes piloto activos</td><td>5</td></tr>
+      <tr><td>Contratos firmados en la plataforma</td><td>50+</td></tr>
+      <tr><td>Revenue mensual</td><td>$500K CLP</td></tr>
+      <tr><td>Certificación PSC</td><td>En trámite</td></tr>
+      <tr><td>NPS de pilotos</td><td>>7</td></tr>
+    </table>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ============================================ -->
+  <!-- VIDEO PITCH -->
+  <!-- ============================================ -->
+  <div class="section">
+    <h2>Guión — Video Pitch (90 segundos)</h2>
+
+    <p><em>Estructura para el video requerido por el formulario:</em></p>
+
+    <div class="overflow-x">
+    <table>
+      <tr><th>Seg.</th><th>Qué decir</th></tr>
+      <tr><td>0–15</td><td><strong>Problema:</strong> "Firmar un contrato con validez legal en Chile cuesta hasta $50.000 por firma. Para una pyme que firma 20 contratos al mes, es más de un millón de pesos. La mayoría simplemente no firma — y queda expuesta."</td></tr>
+      <tr><td>15–35</td><td><strong>Solución:</strong> "Goya Ledger es firma electrónica a $99 al mes con firmas ilimitadas. Simple y Avanzada. Con la seguridad criptográfica más moderna del mundo — la misma que están adoptando los gobiernos del G7."</td></tr>
+      <tr><td>35–50</td><td><strong>Producto:</strong> "El producto ya existe. No es un slide deck. Tiene 13 versiones publicadas, una app de escritorio, y ya procesó contratos de prueba. Lo que necesitamos es llegar a los primeros clientes."</td></tr>
+      <tr><td>50–65</td><td><strong>Equipo:</strong> [Cada cofundador se presenta en 5 segundos: nombre, rol, un logro]. </td></tr>
+      <tr><td>65–80</td><td><strong>Mercado:</strong> "El mercado de firma electrónica en Chile es de 120 millones de dólares. Tres proveedores controlan el segmento corporativo. Las 250 mil pymes quedan fuera. Nosotros vamos por ellas."</td></tr>
+      <tr><td>80–90</td><td><strong>Ask:</strong> "Build nos da lo que nos falta: certificarnos como PSC ante la Subsecretaría de Economía y validar con nuestros primeros 5 clientes. Goya Ledger — firma electrónica accesible, hecha en Chile."</td></tr>
+    </table>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    Documento de trabajo — Postulación Startup Chile Build — Goya Ledger SpA — Agosto 2026<br>
+    Secciones marcadas con [Completar] requieren datos del equipo fundador
+  </div>
+
+</div>
+
+</body>
+</html>

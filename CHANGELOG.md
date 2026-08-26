@@ -4,6 +4,45 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.13.2] — 2026-08-26
+
+### Added — Startup Chile & investor documentation site
+
+Commercial landing, Startup Chile Build pitch, and investor brief deployed to `goya-docs.fly.dev`.
+
+#### Landing page (`index.html`)
+- Commercial product page targeting Chilean SMEs
+- Hero with $99/month pricing, feature grid, 4-step flow, competitor comparison table
+- Compliance tags (Ley 19.799, DS 181, Ley 21.663)
+- CTA links to `goya-explorer.fly.dev/signup`
+- Nav links to app and investor brief
+- Dark/light theme via `prefers-color-scheme`
+
+#### Startup Chile Build pitch (`pitch.html`)
+- 10 sections aligned to CORFO Build evaluation rubric (5 weighted criteria)
+- Problem/solution framed for Chilean market (250K SMEs, 10x price reduction)
+- Fund allocation: $15M CLP (33% PSC certification, 27% pilots, 17% infra, 10% legal, 13% GTM)
+- 4-month roadmap with KPIs (5 pilots, 50 contracts, $500K CLP MRR)
+- 90-second video pitch script
+- Links to live app and API
+
+#### Investor brief (`investors.html`)
+- ES/EN toggle (client-side, no page reload)
+- 10 slides: thesis, why now, market, product, business model, competition, GTM, team, the ask, contact
+- Unit economics: LTV $2.4K–$54K, CAC $200–$500, >85% gross margins
+- Timeline: 5 pilots Q4 2026, PSC cert Q1 2027, 50 customers Q2–Q3 2027, LATAM Q4 2027
+- Projections: 50 customers month 12, $500K ARR month 18
+
+#### Infrastructure
+- Dockerfile updated: serves 3 HTML files via nginx:alpine
+- All pages cross-linked: landing ↔ app ↔ investors ↔ pitch
+
+### Stats
+- 3 new HTML files, 1 updated Dockerfile
+- Site live at `goya-docs.fly.dev`
+
+---
+
 ## [0.13.1] — 2026-08-25
 
 ### Added — Formal Verification (Lean 4)

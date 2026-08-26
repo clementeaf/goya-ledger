@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goya Ledger — Investor Brief</title>
+<meta name="description" content="Goya Ledger: firma electrónica post-cuántica para LATAM. Pre-seed opportunity.">
+<style>
+:root {
+  --bg: #FAFAF8;
+  --bg-alt: #FFFFFF;
+  --fg: #18181A;
+  --fg-mid: #3D3D42;
+  --fg-soft: #6B6B73;
+  --accent: #1A5C2E;
+  --accent-hover: #14461F;
+  --accent-bg: #E6F2EA;
+  --accent-subtle: #F0F7F2;
+  --border: #E2E1DC;
+  --border-soft: #EEEEE9;
+  --gold: #9E7C2B;
+  --gold-bg: #FBF6EC;
+  --red: #8B3A3A;
+  --red-bg: #F9EDED;
+  --mono: 'SF Mono', 'Menlo', 'Consolas', 'Liberation Mono', monospace;
+  --sans: 'Avenir Next', 'Avenir', 'Helvetica Neue', 'Segoe UI', system-ui, sans-serif;
+  --serif: Georgia, 'Times New Roman', serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111110; --bg-alt: #1A1A18; --fg: #E8E7E3; --fg-mid: #B5B4AF;
+    --fg-soft: #7D7C77; --accent: #4DB66A; --accent-hover: #5DC97A;
+    --accent-bg: #162118; --accent-subtle: #131C15; --border: #2A2A27;
+    --border-soft: #222220; --gold: #D4A84B; --gold-bg: #1F1B12;
+    --red: #C46A6A; --red-bg: #2A1C1C;
+  }
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--sans); background: var(--bg); color: var(--fg); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 880px; margin: 0 auto; padding: 0 2rem; }
+nav { padding: 1rem 0; border-bottom: 1px solid var(--border-soft); }
+nav .wrap { display: flex; justify-content: space-between; align-items: center; }
+.logo { font-family: var(--serif); font-size: 1.3rem; font-weight: 700; letter-spacing: -0.02em; }
+.logo span { color: var(--accent); }
+.nav-links { display: flex; gap: 1.5rem; font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.nav-links a { color: var(--fg-soft); text-decoration: none; }
+.nav-links a:hover { color: var(--accent); }
+
+.lang-toggle { display: flex; justify-content: flex-end; padding: 1rem 0 0; }
+.lang-btn { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; padding: 0.3rem 0.7rem; border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--fg-soft); cursor: pointer; text-transform: uppercase; }
+.lang-btn.active { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }
+
+.slide { padding: 4rem 0; border-bottom: 1px solid var(--border-soft); }
+.slide:last-of-type { border-bottom: none; }
+.slide-num { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-soft); margin-bottom: 0.5rem; }
+.slide h2 { font-family: var(--serif); font-size: 2rem; font-weight: 700; line-height: 1.15; margin-bottom: 1.25rem; text-wrap: balance; letter-spacing: -0.01em; max-width: 700px; }
+.slide p { color: var(--fg-mid); margin-bottom: 0.85rem; max-width: 640px; font-size: 1.02rem; }
+.slide p strong { color: var(--fg); }
+
+.stat-row { display: flex; gap: 2.5rem; flex-wrap: wrap; margin: 1.5rem 0; }
+.stat { display: flex; flex-direction: column; }
+.stat-val { font-family: var(--serif); font-size: 2.2rem; font-weight: 700; color: var(--accent); line-height: 1; }
+.stat-label { font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-soft); margin-top: 0.25rem; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin: 1.5rem 0; }
+.card { background: var(--bg-alt); border: 1px solid var(--border-soft); border-radius: 8px; padding: 1.25rem 1.5rem; }
+.card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.3rem; }
+.card p { font-size: 0.85rem; color: var(--fg-soft); margin: 0; }
+
+.callout { background: var(--accent-bg); border-left: 3px solid var(--accent); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 4px 4px 0; font-size: 0.92rem; color: var(--fg-mid); }
+.callout strong { color: var(--fg); }
+.callout.warn { background: var(--gold-bg); border-left-color: var(--gold); }
+.callout.danger { background: var(--red-bg); border-left-color: var(--red); }
+
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+th { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-soft); text-align: left; padding: 0.6rem 0.75rem; border-bottom: 2px solid var(--border); font-weight: 500; }
+td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-soft); color: var(--fg-mid); }
+td:first-child { color: var(--fg); font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+.overflow-x { overflow-x: auto; }
+
+.timeline { position: relative; padding-left: 1.5rem; margin: 1.5rem 0; }
+.timeline::before { content: ''; position: absolute; left: 0; top: 0.4rem; bottom: 0.4rem; width: 2px; background: var(--border); }
+.tl-item { position: relative; margin-bottom: 1.25rem; }
+.tl-item::before { content: ''; position: absolute; left: -1.65rem; top: 0.45rem; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+.tl-date { font-family: var(--mono); font-size: 0.62rem; color: var(--accent); letter-spacing: 0.04em; }
+.tl-text { font-size: 0.9rem; color: var(--fg-mid); }
+
+footer { padding: 2rem 0; text-align: center; border-top: 1px solid var(--border-soft); }
+footer p { font-family: var(--mono); font-size: 0.58rem; color: var(--fg-soft); }
+
+.hidden { display: none; }
+
+@media (max-width: 700px) {
+  .slide h2 { font-size: 1.6rem; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .stat-row { gap: 1.5rem; }
+  .wrap { padding: 0 1.25rem; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="logo">Goya<span>.</span></div>
+    <div class="nav-links">
+      <a href="/">Producto</a>
+      <a href="/pitch.html">Startup Chile</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <div class="lang-toggle">
+    <button class="lang-btn active" onclick="switchLang('es')">ES</button>
+    <button class="lang-btn" onclick="switchLang('en')" style="margin-left:0.35rem;">EN</button>
+  </div>
+
+  <!-- ==================== ESPAÑOL ==================== -->
+  <div id="lang-es">
+
+  <div class="slide">
+    <div class="slide-num">Tesis</div>
+    <h2>Los documentos firmados hoy ser&aacute;n falsificables en 5 a&ntilde;os. Nosotros los protegemos por d&eacute;cadas.</h2>
+    <p>Los gobiernos del G7 ya mandataron que toda infraestructura criptogr&aacute;fica migre a est&aacute;ndares post-cu&aacute;nticos antes de 2030. Los proveedores de firma electr&oacute;nica en Latinoam&eacute;rica siguen usando algoritmos de los a&ntilde;os 90.</p>
+    <p><strong>Goya Ledger es la primera plataforma de firma electr&oacute;nica en LATAM con criptograf&iacute;a post-cu&aacute;ntica.</strong> Cumplimos la regulaci&oacute;n chilena (Ley 19.799) y estamos preparados para regulaciones internacionales. El producto est&aacute; construido y desplegado.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Por qu&eacute; ahora</div>
+    <h2>La ventana es 2026&ndash;2030. Despu&eacute;s hay competencia.</h2>
+    <p>NIST public&oacute; los est&aacute;ndares finales de criptograf&iacute;a post-cu&aacute;ntica en agosto 2024. Los gobiernos de EE.UU., Canad&aacute;, Australia y la UE ya tienen mandatos de migraci&oacute;n. La industria de firma electr&oacute;nica todav&iacute;a no se ha movido &mdash; especialmente en LATAM.</p>
+    <div class="callout danger">
+      <strong>El reloj corre.</strong> Un computador cu&aacute;ntico con ~4.000 qubits l&oacute;gicos rompe RSA-2048 en horas. IBM proyecta esa capacidad para 2029&ndash;2033. Los contratos firmados hoy con RSA ser&aacute;n falsificables retroactivamente.
+    </div>
+    <p>Quien construya la infraestructura post-cu&aacute;ntica primero en LATAM captura el mercado antes de que los incumbentes reaccionen. Goya ya est&aacute; construido.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Mercado</div>
+    <h2>$120M en Chile. $2.1B en LATAM. Un oligopolio vulnerable.</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">$120M</div><div class="stat-label">Firma-e Chile 2027</div></div>
+      <div class="stat"><div class="stat-val">$2.1B</div><div class="stat-label">Legaltech LATAM 2028</div></div>
+      <div class="stat"><div class="stat-val">$17B</div><div class="stat-label">PQC security global 2032</div></div>
+      <div class="stat"><div class="stat-val">25%</div><div class="stat-label">Crecimiento anual</div></div>
+    </div>
+    <p>En Chile, 3&ndash;4 proveedores (E-certchile, Acepta, TOC) controlan el segmento corporativo y gobierno. Cobran $5.000&ndash;$50.000 CLP por firma. Las 250.000+ pymes quedan fuera.</p>
+    <p><strong>Entry point:</strong> pymes chilenas a $99/mes. <strong>Expansion:</strong> enterprise + gobierno + LATAM cuando tengamos certificaci&oacute;n PSC.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Producto</div>
+    <h2>No es un deck. Es c&oacute;digo corriendo.</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">v0.13</div><div class="stat-label">13 releases en 2 meses</div></div>
+      <div class="stat"><div class="stat-val">280</div><div class="stat-label">Funcionalidades API</div></div>
+      <div class="stat"><div class="stat-val">2.722</div><div class="stat-label">Tests autom&aacute;ticos</div></div>
+      <div class="stat"><div class="stat-val">0</div><div class="stat-label">Failures</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Firma Simple y Avanzada</h3>
+        <p>FES y FEA cumpliendo Ley 19.799. Firma desde el navegador. Verificaci&oacute;n instant&aacute;nea por cualquier tercero.</p>
+      </div>
+      <div class="card">
+        <h3>Motor de contratos legales</h3>
+        <p>Contratos definidos como flujos digitales. Control de firmantes, orden, nivel de seguridad. Notarizaci&oacute;n autom&aacute;tica.</p>
+      </div>
+      <div class="card">
+        <h3>Seguridad post-cu&aacute;ntica</h3>
+        <p>Los 3 est&aacute;ndares NIST implementados. Verificaci&oacute;n formal matem&aacute;tica. 41.8M ejecuciones de fuzzing, 0 crashes.</p>
+      </div>
+      <div class="card">
+        <h3>Multi-plataforma</h3>
+        <p>API REST, app desktop (Mac + Windows), SDK TypeScript. Listo para integrarse en cualquier flujo existente.</p>
+      </div>
+    </div>
+    <div class="callout">
+      <strong>Live:</strong> App en <a href="https://goya-explorer.fly.dev" style="color:var(--accent);">goya-explorer.fly.dev</a> &middot; API en <a href="https://goya-node.fly.dev/api/v1/health" style="color:var(--accent);">goya-node.fly.dev</a> &mdash; producto funcional, no demo.
+    </div>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Modelo de negocio</div>
+    <h2>SaaS por suscripci&oacute;n. Costo marginal por firma: ~$0.</h2>
+    <div class="overflow-x">
+    <table>
+      <tr><th>Plan</th><th>Precio</th><th>Cliente</th><th>LTV estimado</th></tr>
+      <tr><td>Starter</td><td>$99/mes</td><td>Pymes, independientes</td><td>$2.400 (24 meses)</td></tr>
+      <tr><td>Profesional</td><td>$299/mes</td><td>Estudios jur&iacute;dicos</td><td>$10.800 (36 meses)</td></tr>
+      <tr><td>Institucional</td><td>Desde $1.500/mes</td><td>Notar&iacute;as, gobierno</td><td>$54.000 (36 meses)</td></tr>
+    </table>
+    </div>
+    <p>Infraestructura propia &mdash; no revendemos licencias de terceros. Cada firma adicional cuesta compute, no licencia. Eso permite m&aacute;rgenes brutos &gt;85%.</p>
+    <p><strong>CAC target:</strong> $200&ndash;$500 por cliente (eventos gremiales, contenido, referidos). <strong>Payback:</strong> 2&ndash;5 meses en Starter, &lt;1 mes en Institucional.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Competencia</div>
+    <h2>Incumbentes lentos + producto extranjero que no cumple la ley local.</h2>
+    <div class="overflow-x">
+    <table>
+      <tr><th></th><th>Goya</th><th>E-certchile</th><th>TOC</th><th>DocuSign</th></tr>
+      <tr><td>Modelo</td><td><strong>$99/mes flat</strong></td><td>Por firma</td><td>Variable</td><td>USD $25+/mes</td></tr>
+      <tr><td>FEA</td><td><strong>S&iacute;</strong></td><td>S&iacute;</td><td>No</td><td>No</td></tr>
+      <tr><td>Ley 19.799</td><td><strong>S&iacute;</strong></td><td>S&iacute;</td><td>Parcial</td><td>No</td></tr>
+      <tr><td>Post-cu&aacute;ntica</td><td><strong>S&iacute;</strong></td><td>No</td><td>No</td><td>No</td></tr>
+      <tr><td>Contratos inteligentes</td><td><strong>S&iacute;</strong></td><td>No</td><td>No</td><td>No</td></tr>
+      <tr><td>Datos en Chile</td><td><strong>S&iacute;</strong></td><td>S&iacute;</td><td>S&iacute;</td><td>No</td></tr>
+    </table>
+    </div>
+    <p><strong>Moat:</strong> Infraestructura criptogr&aacute;fica propia (no wrapper de librer&iacute;a), cumplimiento regulatorio nativo, 3&ndash;5 a&ntilde;os de ventaja en PQC sobre cualquier competidor LATAM.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Go-to-market</div>
+    <h2>Notar&iacute;as primero. Luego pymes. Luego gobierno.</h2>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-date">Ahora &mdash; Q4 2026</div>
+        <div class="tl-text"><strong>5 pilotos</strong> con notar&iacute;as y estudios jur&iacute;dicos en Santiago. Validaci&oacute;n de producto, pricing, y UX con contratos reales.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-date">Q1 2027</div>
+        <div class="tl-text"><strong>Certificaci&oacute;n PSC</strong> ante Subsecretar&iacute;a de Econom&iacute;a. Esto desbloquea el mercado de FEA con validez legal plena.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-date">Q2&ndash;Q3 2027</div>
+        <div class="tl-text"><strong>50 clientes</strong> en Chile. Equipo comercial. Integraciones con software de gesti&oacute;n legal existente.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-date">Q4 2027</div>
+        <div class="tl-text"><strong>Expansi&oacute;n LATAM</strong> &mdash; Per&uacute;, Colombia. Misma plataforma, adaptaci&oacute;n regulatoria local. Levantamiento seed.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Equipo</div>
+    <h2>[Completar con datos reales de cada cofundador]</h2>
+    <div class="callout warn">
+      <strong>Nota:</strong> Completar con nombre, foto, background, logros, y LinkedIn de cada cofundador. Los VCs invierten en equipos &mdash; esta secci&oacute;n es cr&iacute;tica.
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Cofundador 1 &mdash; CTO</h3>
+        <p>[Background, experiencia, por qu&eacute; esta persona construye esto]</p>
+      </div>
+      <div class="card">
+        <h3>Cofundador 2 &mdash; [Rol]</h3>
+        <p>[Background, experiencia, qu&eacute; aporta]</p>
+      </div>
+    </div>
+    <p><strong>Evidencia de ejecuci&oacute;n:</strong> 13 releases en 2 meses. Producto funcional con 2.700+ tests. Esto no es un equipo que planifica &mdash; es un equipo que ejecuta.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">El ask</div>
+    <h2>Pre-seed para ir de producto a mercado.</h2>
+    <p>El producto est&aacute; construido. La ronda financia: certificaci&oacute;n regulatoria, primeros 50 clientes, y equipo comercial.</p>
+    <div class="overflow-x">
+    <table>
+      <tr><th>Destino</th><th>%</th><th>Para qu&eacute;</th></tr>
+      <tr><td>Certificaci&oacute;n PSC</td><td>25%</td><td>Auditor&iacute;a + consultor regulatorio para FEA con validez legal plena</td></tr>
+      <tr><td>Equipo comercial</td><td>30%</td><td>2 personas &mdash; ventas a notar&iacute;as/estudios + customer success</td></tr>
+      <tr><td>Infraestructura</td><td>15%</td><td>Servidores de producci&oacute;n, HSM, CI/CD, monitoreo</td></tr>
+      <tr><td>Producto</td><td>20%</td><td>Dashboard de administraci&oacute;n, integraciones, UX de firma</td></tr>
+      <tr><td>Legal + operaciones</td><td>10%</td><td>Contratos, propiedad intelectual, contabilidad</td></tr>
+    </table>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">18 meses</div><div class="stat-label">Runway target</div></div>
+      <div class="stat"><div class="stat-val">50</div><div class="stat-label">Clientes al mes 12</div></div>
+      <div class="stat"><div class="stat-val">$500K</div><div class="stat-label">ARR proyectado mes 18</div></div>
+    </div>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Contacto</div>
+    <h2>Hablemos.</h2>
+    <p><strong>Email:</strong> carriagadafalcone@gmail.com</p>
+    <p><strong>App:</strong> <a href="https://goya-explorer.fly.dev" style="color:var(--accent);">goya-explorer.fly.dev</a></p>
+    <p><strong>API:</strong> <a href="https://goya-node.fly.dev/api/v1/health" style="color:var(--accent);">goya-node.fly.dev</a></p>
+    <p><strong>Landing:</strong> <a href="https://goya-docs.fly.dev" style="color:var(--accent);">goya-docs.fly.dev</a></p>
+    <p style="margin-top:1.5rem;font-family:var(--serif);font-style:italic;color:var(--fg-soft);">Goya Ledger &mdash; firma electr&oacute;nica post-cu&aacute;ntica, hecha en Chile.</p>
+  </div>
+
+  </div><!-- /lang-es -->
+
+  <!-- ==================== ENGLISH ==================== -->
+  <div id="lang-en" class="hidden">
+
+  <div class="slide">
+    <div class="slide-num">Thesis</div>
+    <h2>Documents signed today will be forgeable in 5 years. We protect them for decades.</h2>
+    <p>G7 governments have mandated that all cryptographic infrastructure migrate to post-quantum standards by 2030. E-signature providers in Latin America still use 1990s algorithms.</p>
+    <p><strong>Goya Ledger is the first e-signature platform in LATAM with post-quantum cryptography.</strong> We comply with Chilean regulation (Law 19.799) and are ready for international regulations. The product is built and deployed.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Why now</div>
+    <h2>The window is 2026&ndash;2030. After that, there&rsquo;s competition.</h2>
+    <p>NIST published the final post-quantum cryptography standards in August 2024. The US, Canada, Australia, and the EU already have migration mandates. The e-signature industry hasn&rsquo;t moved yet &mdash; especially in LATAM.</p>
+    <div class="callout danger">
+      <strong>The clock is ticking.</strong> A quantum computer with ~4,000 logical qubits breaks RSA-2048 in hours. IBM projects that capacity for 2029&ndash;2033. Contracts signed today with RSA will be retroactively forgeable.
+    </div>
+    <p>Whoever builds post-quantum infrastructure first in LATAM captures the market before incumbents react. Goya is already built.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Market</div>
+    <h2>$120M in Chile. $2.1B in LATAM. A vulnerable oligopoly.</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">$120M</div><div class="stat-label">Chile e-signature 2027</div></div>
+      <div class="stat"><div class="stat-val">$2.1B</div><div class="stat-label">LATAM legaltech 2028</div></div>
+      <div class="stat"><div class="stat-val">$17B</div><div class="stat-label">Global PQC security 2032</div></div>
+      <div class="stat"><div class="stat-val">25%</div><div class="stat-label">Annual growth</div></div>
+    </div>
+    <p>In Chile, 3&ndash;4 providers (E-certchile, Acepta, TOC) control the corporate and government segment. They charge $5&ndash;$50 USD per signature. 250,000+ SMEs are priced out.</p>
+    <p><strong>Entry point:</strong> Chilean SMEs at $99/month. <strong>Expansion:</strong> enterprise + government + LATAM once we have PSC certification.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Product</div>
+    <h2>Not a deck. It&rsquo;s code running.</h2>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">v0.13</div><div class="stat-label">13 releases in 2 months</div></div>
+      <div class="stat"><div class="stat-val">280</div><div class="stat-label">API endpoints</div></div>
+      <div class="stat"><div class="stat-val">2,722</div><div class="stat-label">Automated tests</div></div>
+      <div class="stat"><div class="stat-val">0</div><div class="stat-label">Failures</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Simple &amp; Advanced e-signatures</h3>
+        <p>Compliant with Chilean Law 19.799. Sign from the browser. Instant verification by any third party.</p>
+      </div>
+      <div class="card">
+        <h3>Legal contract engine</h3>
+        <p>Contracts defined as digital flows. Controls who signs, in what order, with what security level. Auto-notarization.</p>
+      </div>
+      <div class="card">
+        <h3>Post-quantum security</h3>
+        <p>All 3 NIST standards implemented. Formal mathematical verification. 41.8M fuzz executions, 0 crashes.</p>
+      </div>
+      <div class="card">
+        <h3>Multi-platform</h3>
+        <p>REST API, desktop app (Mac + Windows), TypeScript SDK. Ready to integrate into any existing workflow.</p>
+      </div>
+    </div>
+    <div class="callout">
+      <strong>Live:</strong> API at <code>goya-node.fly.dev</code> &mdash; functional product, not a demo.
+    </div>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Business model</div>
+    <h2>SaaS subscription. Marginal cost per signature: ~$0.</h2>
+    <div class="overflow-x">
+    <table>
+      <tr><th>Plan</th><th>Price</th><th>Customer</th><th>Est. LTV</th></tr>
+      <tr><td>Starter</td><td>$99/mo</td><td>SMEs, independents</td><td>$2,400 (24 mo)</td></tr>
+      <tr><td>Professional</td><td>$299/mo</td><td>Law firms</td><td>$10,800 (36 mo)</td></tr>
+      <tr><td>Institutional</td><td>From $1,500/mo</td><td>Notaries, government</td><td>$54,000 (36 mo)</td></tr>
+    </table>
+    </div>
+    <p>We built our own crypto infrastructure &mdash; no third-party license fees per signature. Gross margins &gt;85%.</p>
+    <p><strong>Target CAC:</strong> $200&ndash;$500 per customer (industry events, content, referrals). <strong>Payback:</strong> 2&ndash;5 months on Starter, &lt;1 month on Institutional.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Competition</div>
+    <h2>Slow incumbents + foreign products that don&rsquo;t comply with local law.</h2>
+    <div class="overflow-x">
+    <table>
+      <tr><th></th><th>Goya</th><th>E-certchile</th><th>TOC</th><th>DocuSign</th></tr>
+      <tr><td>Model</td><td><strong>$99/mo flat</strong></td><td>Per-signature</td><td>Variable</td><td>$25+/mo</td></tr>
+      <tr><td>Advanced sig.</td><td><strong>Yes</strong></td><td>Yes</td><td>No</td><td>No</td></tr>
+      <tr><td>Local law</td><td><strong>Yes</strong></td><td>Yes</td><td>Partial</td><td>No</td></tr>
+      <tr><td>Post-quantum</td><td><strong>Yes</strong></td><td>No</td><td>No</td><td>No</td></tr>
+      <tr><td>Smart contracts</td><td><strong>Yes</strong></td><td>No</td><td>No</td><td>No</td></tr>
+      <tr><td>Data in Chile</td><td><strong>Yes</strong></td><td>Yes</td><td>Yes</td><td>No</td></tr>
+    </table>
+    </div>
+    <p><strong>Moat:</strong> Proprietary cryptographic infrastructure (not a library wrapper), native regulatory compliance, 3&ndash;5 year PQC advantage over any LATAM competitor.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Go-to-market</div>
+    <h2>Notaries first. Then SMEs. Then government.</h2>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-date">Now &mdash; Q4 2026</div>
+        <div class="tl-text"><strong>5 pilots</strong> with notaries and law firms in Santiago. Product, pricing, and UX validation with real contracts.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-date">Q1 2027</div>
+        <div class="tl-text"><strong>PSC Certification</strong> from the Chilean Ministry of Economy. Unlocks legally binding advanced e-signatures.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-date">Q2&ndash;Q3 2027</div>
+        <div class="tl-text"><strong>50 customers</strong> in Chile. Sales team. Integrations with existing legal management software.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-date">Q4 2027</div>
+        <div class="tl-text"><strong>LATAM expansion</strong> &mdash; Peru, Colombia. Same platform, local regulatory adaptation. Seed round.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Team</div>
+    <h2>[Fill with real founder data]</h2>
+    <div class="callout warn">
+      <strong>Note:</strong> Fill with name, photo, background, achievements, and LinkedIn for each co-founder. VCs invest in teams &mdash; this section is critical.
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Co-founder 1 &mdash; CTO</h3>
+        <p>[Background, experience, why this person builds this]</p>
+      </div>
+      <div class="card">
+        <h3>Co-founder 2 &mdash; [Role]</h3>
+        <p>[Background, experience, what they bring]</p>
+      </div>
+    </div>
+    <p><strong>Execution proof:</strong> 13 releases in 2 months. Functional product with 2,700+ tests. This is not a team that plans &mdash; it&rsquo;s a team that ships.</p>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">The ask</div>
+    <h2>Pre-seed to go from product to market.</h2>
+    <p>The product is built. This round funds: regulatory certification, first 50 customers, and sales team.</p>
+    <div class="overflow-x">
+    <table>
+      <tr><th>Use</th><th>%</th><th>What for</th></tr>
+      <tr><td>PSC Certification</td><td>25%</td><td>Audit + regulatory consultant for legally binding advanced signatures</td></tr>
+      <tr><td>Sales team</td><td>30%</td><td>2 people &mdash; notary/law firm sales + customer success</td></tr>
+      <tr><td>Infrastructure</td><td>15%</td><td>Production servers, HSM, CI/CD, monitoring</td></tr>
+      <tr><td>Product</td><td>20%</td><td>Admin dashboard, integrations, signing UX</td></tr>
+      <tr><td>Legal + ops</td><td>10%</td><td>Contracts, IP, accounting</td></tr>
+    </table>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val">18 mo</div><div class="stat-label">Target runway</div></div>
+      <div class="stat"><div class="stat-val">50</div><div class="stat-label">Customers at month 12</div></div>
+      <div class="stat"><div class="stat-val">$500K</div><div class="stat-label">Projected ARR month 18</div></div>
+    </div>
+  </div>
+
+  <div class="slide">
+    <div class="slide-num">Contact</div>
+    <h2>Let&rsquo;s talk.</h2>
+    <p><strong>Email:</strong> carriagadafalcone@gmail.com</p>
+    <p><strong>App:</strong> <a href="https://goya-explorer.fly.dev" style="color:var(--accent);">goya-explorer.fly.dev</a></p>
+    <p><strong>API:</strong> <a href="https://goya-node.fly.dev/api/v1/health" style="color:var(--accent);">goya-node.fly.dev</a></p>
+    <p><strong>Landing:</strong> <a href="https://goya-docs.fly.dev" style="color:var(--accent);">goya-docs.fly.dev</a></p>
+    <p style="margin-top:1.5rem;font-family:var(--serif);font-style:italic;color:var(--fg-soft);">Goya Ledger &mdash; post-quantum e-signatures, built in Chile.</p>
+  </div>
+
+  </div><!-- /lang-en -->
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <p>Goya Ledger SpA &mdash; Santiago, Chile &mdash; 2026 &mdash; Confidential</p>
+  </div>
+</footer>
+
+<script>
+function switchLang(lang) {
+  document.getElementById('lang-es').className = lang === 'es' ? '' : 'hidden';
+  document.getElementById('lang-en').className = lang === 'en' ? '' : 'hidden';
+  document.querySelectorAll('.lang-btn').forEach(function(btn) {
+    btn.className = 'lang-btn' + (btn.textContent.trim().toLowerCase() === lang ? ' active' : '');
+  });
+}
+</script>
+
+</body>
+</html>
