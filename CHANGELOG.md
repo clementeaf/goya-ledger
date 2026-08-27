@@ -4,6 +4,49 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.13.3] — 2026-08-27
+
+### Changed — Startup Chile Build pitch rewrite (data-verified)
+
+Complete rewrite of `pitch.html` based on advisor pushback and market research.
+
+#### Claims removed (debunked)
+- ~~"$5K-50K CLP por firma"~~ — FEA costs $15K-$45K CLP/year with unlimited signatures
+- ~~"USD $120M mercado firma electrónica Chile"~~ — no public source; nearest is DTM Chile $124.4M (Grand View Research) which includes workflow, payments, docs
+- ~~"10x más barata"~~ — misleading price comparison
+- ~~"250.000 pymes sin acceso a firma electrónica"~~ — no study quantifies FEA adoption in Chilean SMEs
+- ~~"más de $1.000.000 CLP mensuales en firmas"~~ — false arithmetic based on wrong per-signature cost
+
+#### New thesis
+- Core: "En el mundo digital no distingues real de falso. Goya agrega la prueba matemática que viaja con el documento."
+- Verification independence (no PSC online dependency, no Adobe dependency, no certificate expiry dependency)
+- Counterparty signs via link without owning FEA
+
+#### Verified data now in pitch
+- 1,154 OIV designated by ANCI (Res. 87/2025 + Res. 187/2026) — Ley 21.663
+- 468 notarías must digitalize by Oct 2026 — Ley 21.772
+- 42 fintechs registered, 37 authorized by CMF — Ley 21.521
+- 10 PSC acreditados, none with PQC — Entidad Acreditadora
+- FEA real costs: $15K-$45K CLP/year, single-use $2.5K-$4.5K — ChileAtiende, Acepta, E-certchile
+- Fines up to 40,000 UTM (~$2,640M CLP) for OIV — Ley 21.663
+- PSC certification: "en trámite" (honest)
+
+#### Competitor table reframed
+- E-certchile/Acepta: "servicio probado, años de trayectoria" (respectful) + "verificación depende del PSC, criptografía clásica"
+- DocuSign: "no cumple Ley 19.799 como FEA, $10-$45 USD por sobre"
+- TOC: "solo FES, sin verificación independiente"
+
+#### Video pitch script rewritten
+- Opens with "en el mundo digital no distingues real de falso" (advisor's 2D/3D framing)
+- Market section cites 1,154 OIV + 468 notarías + 42 fintechs (regulatory demand, not speculative)
+- Closes with "certificarnos como PSC y validar con 5 pilotos"
+
+### Stats
+- 1 file changed, 118 insertions, 156 deletions
+- Site live at `goya-docs.fly.dev/pitch.html`
+
+---
+
 ## [0.13.2] — 2026-08-26
 
 ### Added — Startup Chile & investor documentation site
