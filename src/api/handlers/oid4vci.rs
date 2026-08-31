@@ -265,6 +265,86 @@ fn verify_wia(
     Ok(payload)
 }
 
+// ── Wallet Trust Evidence (ARF v2.0 Topic 38) ───────────────────────────
+
+/// Validate a Wallet Trust Evidence (WTE) JWT.
+/// WTE attests the wallet unit's trust level and security posture.
+/// Issued by the wallet provider, binds to a device key, and includes
+/// trust_level, certification status, and key attestation.
+fn verify_wte(
+    wte_jwt: &str,
+    registry: Option<&WalletProviderRegistry>,
+) -> Result<serde_json::Value, String> {
+    let parts: Vec<&str> = wte_jwt.split('.').collect();
+    if parts.len() != 3 {
+        return Err("WTE JWT must have 3 parts".into());
+    }
+
+    let header: serde_json::Value =
+        serde_json::from_slice(&base64url_decode(parts[0])?).map_err(|e| e.to_string())?;
+    let payload: serde_json::Value =
+        serde_json::from_slice(&base64url_decode(parts[1])?).map_err(|e| e.to_string())?;
+
+    let typ = header.get("typ").and_then(|v| v.as_str()).unwrap_or("");
+    if typ != "wte+jwt" {
+        return Err("WTE typ must be wte+jwt".into());
+    }
+
+    let alg_str = header.get("alg").and_then(|v| v.as_str()).unwrap_or("");
+
+    for field in &["iss", "sub", "cnf"] {
+        let missing = match *field {
+            "cnf" => payload.get("cnf").is_none(),
+            _ => payload
+                .get(*field)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty(),
+        };
+        if missing {
+            return Err(format!("WTE missing {field}"));
+        }
+    }
+
+    let now = now_secs();
+    if let Some(exp) = payload.get("exp").and_then(|v| v.as_u64()) {
+        if now > exp {
+            return Err("WTE expired".into());
+        }
+    }
+
+    if let Some(iat) = payload.get("iat").and_then(|v| v.as_u64()) {
+        if iat > now + 300 {
+            return Err("WTE iat is in the future".into());
+        }
+    }
+
+    let iss = payload["iss"].as_str().unwrap_or("");
+    if let Some(reg) = registry {
+        if let Some(pubkey_hex) = reg.resolve(iss) {
+            let algorithm = match alg_str {
+                "EdDSA" => crate::identity::signing::SigningAlgorithm::Ed25519,
+                "RS256" => crate::identity::signing::SigningAlgorithm::Rsa,
+                "ES256" => crate::identity::signing::SigningAlgorithm::EcdsaP256,
+                other => return Err(format!("unsupported WTE alg: {other}")),
+            };
+            let sig_bytes = base64url_decode(parts[2])?;
+            let signing_input = format!("{}.{}", parts[0], parts[1]);
+            let sig_hex = hex::encode(&sig_bytes);
+            if !crate::signature::verify_signature(
+                algorithm,
+                &pubkey_hex,
+                signing_input.as_bytes(),
+                &sig_hex,
+            ) {
+                return Err("WTE signature verification failed".into());
+            }
+        }
+    }
+
+    Ok(payload)
+}
+
 // ── JWT VC Issuer Metadata (SD-JWT VC verification) ──────────────────────
 
 /// Serves the issuer's public key as JWKS for SD-JWT VC signature verification.
@@ -601,6 +681,8 @@ pub struct TokenRequest {
     #[serde(default)]
     pub wallet_instance_attestation: Option<String>,
     #[serde(default)]
+    pub wallet_trust_evidence: Option<String>,
+    #[serde(default)]
     pub authorization_details: Option<String>,
 }
 
@@ -683,6 +765,17 @@ pub async fn token_endpoint(
         if let Err(e) = verify_wia(wia, reg_ref) {
             return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
                 err_dto("invalid_wallet_attestation", &e),
+                400,
+            )));
+        }
+    }
+
+    // Validate WTE if present (ARF v2.0 Topic 38)
+    if let Some(wte) = &body.wallet_trust_evidence {
+        let reg_ref = wia_registry.as_ref().map(|r| r.get_ref());
+        if let Err(e) = verify_wte(wte, reg_ref) {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("invalid_wallet_trust_evidence", &e),
                 400,
             )));
         }
@@ -1464,6 +1557,7 @@ mod tests {
             code_verifier: None,
             redirect_uri: None,
             wallet_instance_attestation: None,
+            wallet_trust_evidence: None,
             authorization_details: None,
         }
     }
@@ -1587,6 +1681,7 @@ mod tests {
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: Some(wia),
+                wallet_trust_evidence: None,
                 authorization_details: None,
             })
             .to_request();
@@ -1610,6 +1705,7 @@ mod tests {
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: Some(wia),
+                wallet_trust_evidence: None,
                 authorization_details: None,
             })
             .to_request();
@@ -1632,6 +1728,7 @@ mod tests {
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: None,
+                wallet_trust_evidence: None,
                 authorization_details: None,
             })
             .to_request();
@@ -2023,6 +2120,87 @@ mod tests {
         assert_eq!(reg.resolve("provider-1"), Some("deadbeef".to_string()));
     }
 
+    // ── WTE (Wallet Trust Evidence, ARF v2.0 Topic 38) ─────────────
+
+    fn make_wte_jwt(iss: &str, sub: &str, exp: u64) -> String {
+        let header = serde_json::json!({ "typ": "wte+jwt", "alg": "EdDSA" });
+        let payload = serde_json::json!({
+            "iss": iss,
+            "sub": sub,
+            "iat": now_secs(),
+            "exp": exp,
+            "cnf": { "jwk": { "kty": "OKP", "crv": "Ed25519", "x": "fake-device-key" } },
+            "trust_level": "high",
+            "wscd_certified": true,
+        });
+        let h = base64url_encode(&serde_json::to_vec(&header).unwrap());
+        let p = base64url_encode(&serde_json::to_vec(&payload).unwrap());
+        let sig = base64url_encode(b"fake-sig");
+        format!("{h}.{p}.{sig}")
+    }
+
+    #[actix_web::test]
+    async fn wte_valid() {
+        let wte = make_wte_jwt("provider", "device", now_secs() + 3600);
+        assert!(verify_wte(&wte, None).is_ok());
+    }
+
+    #[actix_web::test]
+    async fn wte_expired() {
+        let wte = make_wte_jwt("provider", "device", 1000);
+        assert!(verify_wte(&wte, None).is_err());
+    }
+
+    #[actix_web::test]
+    async fn wte_wrong_typ() {
+        let header = serde_json::json!({ "typ": "wia+jwt", "alg": "EdDSA" });
+        let payload = serde_json::json!({
+            "iss": "p", "sub": "d", "iat": now_secs(), "exp": now_secs() + 3600,
+            "cnf": { "jwk": {} },
+        });
+        let h = base64url_encode(&serde_json::to_vec(&header).unwrap());
+        let p = base64url_encode(&serde_json::to_vec(&payload).unwrap());
+        let wte = format!("{h}.{p}.{}", base64url_encode(b"sig"));
+        assert!(verify_wte(&wte, None).is_err());
+    }
+
+    #[actix_web::test]
+    async fn wte_missing_cnf() {
+        let header = serde_json::json!({ "typ": "wte+jwt", "alg": "EdDSA" });
+        let payload = serde_json::json!({
+            "iss": "p", "sub": "d", "iat": now_secs(), "exp": now_secs() + 3600,
+        });
+        let h = base64url_encode(&serde_json::to_vec(&header).unwrap());
+        let p = base64url_encode(&serde_json::to_vec(&payload).unwrap());
+        let wte = format!("{h}.{p}.{}", base64url_encode(b"sig"));
+        assert!(verify_wte(&wte, None).is_err());
+    }
+
+    #[actix_web::test]
+    async fn wte_sig_verified_with_registry() {
+        use crate::identity::signing::{SigningProvider, SoftwareSigningProvider};
+        let provider = SoftwareSigningProvider::generate();
+        let pk_hex = hex::encode(provider.public_key());
+
+        let header = serde_json::json!({"typ":"wte+jwt","alg":"EdDSA"});
+        let payload = serde_json::json!({
+            "iss": "wallet-provider-wte",
+            "sub": "device-wte",
+            "iat": now_secs(),
+            "exp": now_secs() + 3600,
+            "cnf": { "jwk": { "kty": "OKP", "crv": "Ed25519", "x": "key" } },
+        });
+        let h = base64url_encode(&serde_json::to_vec(&header).unwrap());
+        let p = base64url_encode(&serde_json::to_vec(&payload).unwrap());
+        let signing_input = format!("{h}.{p}");
+        let sig = provider.sign(signing_input.as_bytes()).unwrap();
+        let wte = format!("{signing_input}.{}", base64url_encode(&sig));
+
+        let reg = WalletProviderRegistry::new();
+        reg.register("wallet-provider-wte", &pk_hex);
+        assert!(verify_wte(&wte, Some(&reg)).is_ok());
+    }
+
     // ── Authorization code + PKCE + Credential Offer tests ─────────
 
     #[actix_web::test]
@@ -2040,6 +2218,7 @@ mod tests {
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: None,
+                wallet_trust_evidence: None,
                 authorization_details: None,
             })
             .to_request();
@@ -2071,6 +2250,7 @@ mod tests {
                 code_verifier: None,
                 redirect_uri: None,
                 wallet_instance_attestation: None,
+                wallet_trust_evidence: None,
                 authorization_details: None,
             })
             .to_request();

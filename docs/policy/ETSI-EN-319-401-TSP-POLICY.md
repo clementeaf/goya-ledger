@@ -5,12 +5,12 @@
 | Field | Value |
 |-------|-------|
 | **Document ID** | GOYA-TSP-POL-001 |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Status** | Draft |
-| **Date** | 2026-08-13 |
+| **Date** | 2026-08-31 |
 | **Owner** | Security Officer |
 | **Classification** | Public |
-| **Normative basis** | ETSI EN 319 401 V2.3.1 (2021-05) |
+| **Normative basis** | ETSI EN 319 401 V3.2.1 (2026-01), NIS2 (EU 2022/2555), CIR 2025/2160 |
 
 > **Disclaimer:** This document is a self-assessment mapping Goya Ledger's technical and organizational controls to ETSI EN 319 401 requirements. It is not a certification, conformity assessment, or audit result. No conformity assessment body (CAB) has validated these claims. Organizations seeking qualified trust service status must engage an accredited CAB under Regulation (EU) No 910/2014, Article 20.
 

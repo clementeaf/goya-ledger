@@ -9,10 +9,12 @@ use actix_web::web;
 /// Also registers OID4VCI/VP endpoints at the root level (EUDI Wallet expects
 /// /.well-known/openid-credential-issuer, /token, /nonce, /credential at root).
 pub fn config_routes(cfg: &mut web::ServiceConfig) {
-    use crate::api::handlers::{oid4vci, oid4vp};
+    use crate::api::handlers::{oid4vci, oid4vp, security_txt};
 
     let scope = crate::api::routes::ApiRoutes::register(web::scope("/api/v1"));
     cfg.service(scope);
+
+    cfg.service(security_txt::security_txt);
 
     // OID4VCI endpoints at root (EUDI wallet standard paths)
     cfg.service(oid4vci::issuer_metadata)

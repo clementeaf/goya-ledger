@@ -51,6 +51,7 @@ RUN useradd -m -u 1000 rustbc && \
 WORKDIR /app
 
 COPY --from=builder /usr/local/bin/rust-bc /usr/local/bin/rust-bc
+COPY --chown=rustbc:rustbc sbom.cdx.json /app/sbom.cdx.json
 COPY --chown=rustbc:rustbc scripts/docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod +x /app/docker-entrypoint.sh
 

@@ -31,6 +31,7 @@ pub enum ContractState {
     PendingSignatures,
     FullySigned,
     Notarized,
+    Delivered,
     Archived,
     Expired,
     Quarantined,
@@ -42,6 +43,7 @@ impl std::fmt::Display for ContractState {
             Self::PendingSignatures => write!(f, "pending_signatures"),
             Self::FullySigned => write!(f, "fully_signed"),
             Self::Notarized => write!(f, "notarized"),
+            Self::Delivered => write!(f, "delivered"),
             Self::Archived => write!(f, "archived"),
             Self::Expired => write!(f, "expired"),
             Self::Quarantined => write!(f, "quarantined"),
@@ -71,6 +73,17 @@ impl PartyState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeliveryReceipt {
+    pub recipient_did: String,
+    pub sent_at: u64,
+    pub received_at: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub send_tsa_token: Option<crate::tsa::TimeStampToken>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt_tsa_token: Option<crate::tsa::TimeStampToken>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LexContract {
     pub id: String,
     pub definition: ContractDefinition,
@@ -82,6 +95,10 @@ pub struct LexContract {
     pub tsa_token: Option<crate::tsa::TimeStampToken>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub block_height: Option<u64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delivery_receipts: Vec<DeliveryReceipt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub preservation_records: Vec<PreservationRecord>,
 }
 
 impl LexContract {
@@ -137,6 +154,18 @@ pub enum DeployRequest {
         #[serde(default)]
         payload: serde_json::Value,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreservationRecord {
+    pub preserved_at: u64,
+    pub original_algorithm: crate::identity::signing::SigningAlgorithm,
+    pub new_algorithm: crate::identity::signing::SigningAlgorithm,
+    pub new_signature: String,
+    pub new_public_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tsa_token: Option<crate::tsa::TimeStampToken>,
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

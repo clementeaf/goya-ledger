@@ -4,6 +4,82 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.14.0] — 2026-08-31
+
+### Added — EU Compliance Gaps 1-9
+
+Systematic closure of 9 out of 11 eIDAS 2.0 / NIS2 / CRA compliance gaps.
+Remaining gaps 10-11 (QSCD hardware + QTSP certification) are process/procurement.
+
+#### Gap 1 — CRA Vulnerability Disclosure (EU 2024/2847 Art. 11)
+- `SECURITY.md` expanded: vulnerability reporting email, PGP key, response SLA (72h initial, 24h for actively exploited), ENISA notification procedure
+- `GET /.well-known/security.txt` endpoint per RFC 9116 (`src/api/handlers/security_txt.rs`)
+- Registered in root-level router (`src/api_legacy.rs`)
+
+#### Gap 2 — Formal SBOM (NIS2 Art. 21, CRA Art. 13)
+- `scripts/generate-sbom.sh` — CycloneDX 1.5 SBOM generation via `cargo-cyclonedx`
+- `sbom.cdx.json` — 921 components with versions and licenses
+- Dockerfile updated: copies SBOM into `/app/` for distribution
+
+#### Gap 3 — Relying Party Registration (CIR 2025/848)
+- `RelyingParty` struct + `VpRequestStore.relying_parties` registry
+- `POST /api/v1/oid4vp/rp` — register a relying party
+- `GET /api/v1/oid4vp/rp` — list registered RPs
+- `POST /api/v1/oid4vp/request` returns 403 `UNREGISTERED_RP` for unknown RPs
+- RP metadata (`client_name`, `purpose`, `data_requested`) disclosed in presentation requests
+- 5 new tests
+
+#### Gap 4 — Wallet Trust Evidence (ARF v2.0 Topic 38)
+- `verify_wte()` — validates `typ=wte+jwt`, `cnf` binding, expiry, iat freshness, signature
+- `wallet_trust_evidence` field on `TokenRequest`
+- Token endpoint validates WTE alongside existing WIA
+- `WalletProviderRegistry` shared for WIA + WTE signature verification
+
+#### Gap 5 — External Identity Verification (eIDAS Art. 26(b))
+- `IdentityVerificationProvider` trait — pluggable external IdP (`src/identity/ra.rs`)
+- `SimulatedIdentityVerifier` for testing (approves valid national IDs)
+- `RaStore::submit_and_verify()` — calls external IdP and links verified identity to DID
+- `VerificationResult` with `verified`, `provider_name`, `loa`, `external_reference`
+- Multi-jurisdiction: Chile (RUT), UAE (Emirates ID), EU (national ID)
+- 8 new tests
+- `ELECTRONIC-SIGNATURE-COMPLIANCE.md` Art. 26(b) updated
+
+#### Gap 6 — NIS2 Security Management (NIS2 Art. 21)
+- `docs/compliance/NIS2-MAPPING.md` — maps all 10 Art. 21(2) categories to Goya controls
+- 39 requirements assessed, 35 covered (90%), 4 organizational gaps documented
+- `INCIDENT-RESPONSE-PLAN.md` updated with NIS2 Art. 23 notification SLAs (24h/72h)
+- EN 319 401 v3.2.1 clause references per category
+
+#### Gap 7 — Qualified Electronic Ledger (eIDAS 2.0 Art. 45i)
+- `docs/compliance/CIR-2025-2531-MAPPING.md` — maps all 8 Art. 45i dimensions
+- Sequential ordering, time stamping, tamper evidence, data origin authentication, unique identifiers, immutability, consensus, auditability — all covered with file paths and evidence
+- Zero technical gaps; qualified status blocked only by QTSP certification
+
+#### Gap 8 — QERDS (eIDAS Art. 44, EN 319 521/522)
+- `DeliveryReceipt` struct with `send_tsa_token` + `receipt_tsa_token`
+- `ContractState::Delivered` — new state after `FullySigned`/`Notarized`
+- `deliver()` — creates TSA-timestamped proof of sending per party
+- `acknowledge_delivery()` — creates TSA-timestamped proof of receipt
+- State transitions: all parties delivered → `Delivered`; `archive()` accepts `Delivered`
+- 8 new tests including full ERDS lifecycle
+
+#### Gap 9 — Qualified Archiving (eIDAS 2.0 Art. 45g)
+- `PreservationRecord` struct with original/new algorithm, signature, TSA token
+- `preserve_contract()` — re-signs with non-deprecated algorithm + TSA timestamp
+- `preserve_expiring()` — sweeps contracts approaching `AlgorithmPolicy` deprecation deadlines
+- Idempotent: skips already-preserved contracts
+- 5 new tests
+
+#### Tracking document
+- `docs/compliance/EU-COMPLIANCE-GAPS.md` — master gap tracker with 11 gaps, execution order, effort estimates
+
+### Stats
+- 2755 library tests pass (13 new in LexChain ERDS/archival)
+- 7 new files, 16 modified files
+- Clippy clean (`cargo clippy -- -D warnings`)
+
+---
+
 ## [0.13.3] — 2026-08-27
 
 ### Changed — Startup Chile Build pitch rewrite (data-verified)

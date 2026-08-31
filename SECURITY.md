@@ -125,18 +125,48 @@ Reject if: timestamp < (current_time - 3600000) OR timestamp > (current_time + 3
 
 ## Vulnerability Disclosure
 
-If you discover a security vulnerability in this project, please report it responsibly.
+Per EU Cyber Resilience Act (EU 2024/2847) Art. 11 and RFC 9116.
 
-**Contact:** [GitHub Security Advisories](https://github.com/clementeaf/cerulean-ledger/security/advisories/new) (preferred) or open a private issue via repository maintainers
+### Reporting a vulnerability
 
-**Process:**
-1. Send a description of the vulnerability to the contact above
-2. Include steps to reproduce if possible
-3. Do not disclose publicly until a fix is available
-4. We will acknowledge receipt within 72 hours
-5. We will provide a fix timeline within 7 days
+| Channel | Details |
+|---------|---------|
+| **Email** | security@goya.cl |
+| **GitHub** | [Security Advisories](https://github.com/clementeaf/goya-ledger/security/advisories/new) |
+| **PGP key** | Available at `/.well-known/security.txt` on any running node |
 
-We follow coordinated disclosure. Credit is given to reporters in the changelog unless they prefer anonymity.
+Include: description, affected version(s), steps to reproduce, impact assessment.
+
+### Response timeline
+
+| Stage | SLA |
+|-------|-----|
+| Acknowledge receipt | 48 hours |
+| Initial triage and severity classification | 72 hours |
+| Fix timeline communicated to reporter | 7 calendar days |
+| Patch released (Critical/High) | 14 calendar days |
+| Patch released (Medium/Low) | 30 calendar days |
+
+### Actively exploited vulnerabilities
+
+If a reported vulnerability is being actively exploited in the wild, Goya will:
+1. Notify ENISA via the single reporting platform within 24 hours (CRA Art. 14(2)(a))
+2. Notify affected users within 72 hours with mitigation guidance (CRA Art. 14(2)(b))
+3. Publish a security advisory upon patch release
+
+### Coordinated disclosure
+
+Goya follows coordinated disclosure. Public disclosure occurs after a patch is available or after 90 days, whichever comes first. Reporters receive credit in the changelog unless they prefer anonymity.
+
+### Scope
+
+In scope: all code in this repository, deployed nodes at `*.goya.cl` and `*.fly.dev`, the `goya-sdk` npm package, and the Tauri desktop application.
+
+Out of scope: third-party dependencies (report upstream), social engineering, denial of service against production infrastructure.
+
+### Machine-readable policy
+
+Every running Goya node serves `GET /.well-known/security.txt` per RFC 9116.
 
 ## Consensus and Network Threat Model
 
@@ -174,4 +204,5 @@ We follow coordinated disclosure. Credit is given to reporters in the changelog 
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.0 | 2026-08-31 | CRA-compliant vulnerability disclosure, SLAs, ENISA notification, RFC 9116 security.txt |
 | 1.0 | 2024-12-18 | Initial security documentation with Phases 1-3 implementation |

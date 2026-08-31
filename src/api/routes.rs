@@ -291,7 +291,9 @@ impl ApiRoutes {
             .service(oid4vci::credential_offer_endpoint)
             .service(oid4vci::status_list_endpoint);
         // OpenID4VP (EUDI Wallet credential presentation)
-        cfg.service(oid4vp::create_request)
+        cfg.service(oid4vp::register_rp)
+            .service(oid4vp::list_rps)
+            .service(oid4vp::create_request)
             .service(oid4vp::get_request)
             .service(oid4vp::submit_response);
         // Invitations (governance proposal invitations via alias)

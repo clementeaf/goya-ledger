@@ -120,9 +120,29 @@ Covers all incidents affecting:
 - DS 181/2002 — Reglamento
 - Decreto 24/2019 — Norma Técnica FEA
 - ISO 27001:2022 Annex A.16 — Information security incident management
+- NIS2 Directive (EU 2022/2555) Art. 23 — Incident notification
+- CIR 2025/2160 — Risk management for trust service providers
 
-## 9. Document Control
+## 9. NIS2 Incident Notification (Art. 23)
+
+Trust service providers classified as essential entities under NIS2 must notify:
+
+| Stage | Deadline | Recipient | Content |
+|---|---|---|---|
+| Early warning | 24 hours from awareness | National CSIRT + ENISA | Whether incident is suspected malicious or cross-border |
+| Incident notification | 72 hours from awareness | National CSIRT + ENISA | Severity, impact, IoCs, initial assessment |
+| Intermediate report | Upon request | National CSIRT | Status update |
+| Final report | 1 month after notification | National CSIRT + ENISA | Root cause, mitigation, cross-border impact |
+
+For significant incidents affecting trust service users:
+- Notify affected users without undue delay (Art. 23(1))
+- Include mitigation guidance in user notification
+
+See also: SECURITY.md §Vulnerability Disclosure for CRA-specific reporting.
+
+## 10. Document Control
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.1 | 2026-08-31 | Security Officer | NIS2 Art. 23 notification SLAs, CIR 2025/2160 reference |
 | 1.0 | 2026-08-05 | Security Officer | Initial draft |

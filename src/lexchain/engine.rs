@@ -120,6 +120,8 @@ pub fn deploy(
         content_hash: hash,
         tsa_token: None,
         block_height: None,
+        delivery_receipts: Vec::new(),
+        preservation_records: Vec::new(),
     };
 
     store.save(contract.clone());
@@ -251,9 +253,12 @@ pub fn archive(store: &LexChainStore, contract_id: &str) -> Result<LexContract, 
         .get(contract_id)
         .ok_or_else(|| LexChainError::NotFound(contract_id.to_string()))?;
 
-    if contract.state != ContractState::Notarized && contract.state != ContractState::FullySigned {
+    if contract.state != ContractState::Notarized
+        && contract.state != ContractState::FullySigned
+        && contract.state != ContractState::Delivered
+    {
         return Err(LexChainError::InvalidState {
-            expected: "fully_signed or notarized".into(),
+            expected: "fully_signed, notarized, or delivered".into(),
             got: contract.state.to_string(),
         });
     }
@@ -286,6 +291,201 @@ pub fn archive(store: &LexChainStore, contract_id: &str) -> Result<LexContract, 
     Ok(contract)
 }
 
+pub fn deliver(
+    store: &LexChainStore,
+    contract_id: &str,
+    recipient_did: &str,
+    tsa: &TsaProvider,
+) -> Result<LexContract, LexChainError> {
+    let mut contract = store
+        .get(contract_id)
+        .ok_or_else(|| LexChainError::NotFound(contract_id.to_string()))?;
+
+    if contract.state != ContractState::FullySigned && contract.state != ContractState::Notarized {
+        return Err(LexChainError::InvalidState {
+            expected: "fully_signed or notarized".into(),
+            got: contract.state.to_string(),
+        });
+    }
+
+    if contract.party_by_did(recipient_did).is_none() {
+        return Err(LexChainError::PartyNotFound(recipient_did.to_string()));
+    }
+
+    let now = now_secs();
+    let send_imprint = hex::encode(hash(
+        format!("deliver:{}:{}:{}", contract_id, recipient_did, now).as_bytes(),
+    ));
+    let req = TimeStampRequest {
+        hash_algorithm: crate::crypto::hasher::HashAlgorithm::Sha256,
+        message_imprint: send_imprint,
+        nonce: Some(now),
+        require_ordering: true,
+    };
+    let resp = tsa.issue(&req);
+    let send_token = if resp.status == 0 { resp.token } else { None };
+
+    contract.delivery_receipts.push(DeliveryReceipt {
+        recipient_did: recipient_did.to_string(),
+        sent_at: now,
+        received_at: None,
+        send_tsa_token: send_token,
+        receipt_tsa_token: None,
+    });
+
+    let all_sent = contract.parties.iter().all(|p| {
+        contract
+            .delivery_receipts
+            .iter()
+            .any(|r| r.recipient_did == p.did)
+    });
+    if all_sent {
+        contract.state = ContractState::Delivered;
+    }
+
+    store.save(contract.clone());
+    Ok(contract)
+}
+
+pub fn acknowledge_delivery(
+    store: &LexChainStore,
+    contract_id: &str,
+    recipient_did: &str,
+    tsa: &TsaProvider,
+) -> Result<LexContract, LexChainError> {
+    let mut contract = store
+        .get(contract_id)
+        .ok_or_else(|| LexChainError::NotFound(contract_id.to_string()))?;
+
+    let receipt = contract
+        .delivery_receipts
+        .iter_mut()
+        .find(|r| r.recipient_did == recipient_did && r.received_at.is_none())
+        .ok_or_else(|| {
+            LexChainError::PartyNotFound(format!("{recipient_did} has no pending delivery"))
+        })?;
+
+    let now = now_secs();
+    let ack_imprint = hex::encode(hash(
+        format!("ack:{}:{}:{}", contract_id, recipient_did, now).as_bytes(),
+    ));
+    let req = TimeStampRequest {
+        hash_algorithm: crate::crypto::hasher::HashAlgorithm::Sha256,
+        message_imprint: ack_imprint,
+        nonce: Some(now),
+        require_ordering: true,
+    };
+    let resp = tsa.issue(&req);
+    receipt.received_at = Some(now);
+    receipt.receipt_tsa_token = if resp.status == 0 { resp.token } else { None };
+
+    store.save(contract.clone());
+    Ok(contract)
+}
+
+pub fn preserve_contract(
+    store: &LexChainStore,
+    contract_id: &str,
+    provider: &dyn crate::identity::signing::SigningProvider,
+    tsa: &TsaProvider,
+    reason: &str,
+) -> Result<LexContract, LexChainError> {
+    let mut contract = store
+        .get(contract_id)
+        .ok_or_else(|| LexChainError::NotFound(contract_id.to_string()))?;
+
+    if contract.state == ContractState::PendingSignatures
+        || contract.state == ContractState::Expired
+    {
+        return Err(LexChainError::InvalidState {
+            expected: "fully_signed, notarized, delivered, or archived".into(),
+            got: contract.state.to_string(),
+        });
+    }
+
+    let payload = format!("preserve:{}:{}", contract_id, contract.content_hash);
+    let sig = provider
+        .sign(payload.as_bytes())
+        .map_err(|e| LexChainError::ArchivalFailed(e.to_string()))?;
+
+    let now = now_secs();
+    let imprint = hex::encode(hash(payload.as_bytes()));
+    let tsa_req = TimeStampRequest {
+        hash_algorithm: crate::crypto::hasher::HashAlgorithm::Sha256,
+        message_imprint: imprint,
+        nonce: Some(now),
+        require_ordering: true,
+    };
+    let tsa_resp = tsa.issue(&tsa_req);
+
+    let original_algo = contract
+        .parties
+        .iter()
+        .find_map(|p| p.envelope.as_ref().map(|e| e.signature_algorithm))
+        .unwrap_or_default();
+
+    contract.preservation_records.push(PreservationRecord {
+        preserved_at: now,
+        original_algorithm: original_algo,
+        new_algorithm: provider.algorithm(),
+        new_signature: hex::encode(&sig),
+        new_public_key: hex::encode(provider.public_key()),
+        tsa_token: if tsa_resp.status == 0 {
+            tsa_resp.token
+        } else {
+            None
+        },
+        reason: reason.to_string(),
+    });
+
+    store.save(contract.clone());
+    Ok(contract)
+}
+
+pub fn preserve_expiring(
+    store: &LexChainStore,
+    policy: &crate::crypto::algorithm_policy::AlgorithmPolicy,
+    current_time: u64,
+    lead_time_secs: u64,
+    provider: &dyn crate::identity::signing::SigningProvider,
+    tsa: &TsaProvider,
+) -> Vec<String> {
+    let mut preserved = Vec::new();
+    for contract in store.list() {
+        if contract.state == ContractState::PendingSignatures
+            || contract.state == ContractState::Expired
+        {
+            continue;
+        }
+        let needs_preservation = contract.parties.iter().any(|p| {
+            p.envelope.as_ref().is_some_and(|e| {
+                policy.deprecated.iter().any(|d| {
+                    d.algorithm == e.signature_algorithm
+                        && current_time + lead_time_secs >= d.reject_after
+                })
+            })
+        });
+        let already_preserved = contract
+            .preservation_records
+            .iter()
+            .any(|r| !policy.is_rejected(&r.new_algorithm, current_time + lead_time_secs));
+        if needs_preservation
+            && !already_preserved
+            && preserve_contract(
+                store,
+                &contract.id,
+                provider,
+                tsa,
+                "algorithm approaching deprecation deadline",
+            )
+            .is_ok()
+        {
+            preserved.push(contract.id);
+        }
+    }
+    preserved
+}
+
 /// Check and expire contracts past their deadline. Returns expired contract IDs.
 pub fn expire_pending(store: &LexChainStore) -> Vec<String> {
     let now = now_secs();
@@ -308,6 +508,7 @@ pub fn quarantine_classical_contracts(
     for mut contract in store.list() {
         if contract.state != ContractState::FullySigned
             && contract.state != ContractState::Notarized
+            && contract.state != ContractState::Delivered
         {
             continue;
         }
@@ -866,6 +1067,273 @@ mod tests {
         )
         .unwrap();
         assert_eq!(contract.definition.contract_type, "residential_lease");
+    }
+
+    #[test]
+    fn deliver_creates_receipt_with_tsa() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let contract = deploy(&store, fes_definition()).unwrap();
+
+        let provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        let delivered = deliver(&store, &contract.id, "did:goya:alice", &tsa).unwrap();
+        assert_eq!(delivered.state, ContractState::Delivered);
+        assert_eq!(delivered.delivery_receipts.len(), 1);
+        assert_eq!(
+            delivered.delivery_receipts[0].recipient_did,
+            "did:goya:alice"
+        );
+        assert!(delivered.delivery_receipts[0].send_tsa_token.is_some());
+        assert!(delivered.delivery_receipts[0].received_at.is_none());
+    }
+
+    #[test]
+    fn acknowledge_delivery_timestamps_receipt() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let contract = deploy(&store, fes_definition()).unwrap();
+
+        let provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        deliver(&store, &contract.id, "did:goya:alice", &tsa).unwrap();
+        let acked = acknowledge_delivery(&store, &contract.id, "did:goya:alice", &tsa).unwrap();
+        assert!(acked.delivery_receipts[0].received_at.is_some());
+        assert!(acked.delivery_receipts[0].receipt_tsa_token.is_some());
+    }
+
+    #[test]
+    fn deliver_rejects_unknown_party() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let contract = deploy(&store, fes_definition()).unwrap();
+
+        let provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        let result = deliver(&store, &contract.id, "did:goya:unknown", &tsa);
+        assert!(matches!(result, Err(LexChainError::PartyNotFound(_))));
+    }
+
+    #[test]
+    fn deliver_rejects_pending_contract() {
+        let store = test_store();
+        let contract = deploy(&store, fes_definition()).unwrap();
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+        let result = deliver(&store, &contract.id, "did:goya:alice", &tsa);
+        assert!(matches!(result, Err(LexChainError::InvalidState { .. })));
+    }
+
+    #[test]
+    fn two_party_delivery_transitions_on_last() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        register_did(&store, "did:goya:bob");
+        let contract = deploy(&store, two_party_definition()).unwrap();
+
+        let alice = SoftwareSigningProvider::generate();
+        let req_a = sign_as(&contract, &alice);
+        sign(&store, &contract.id, &req_a).unwrap();
+
+        let bob = SoftwareSigningProvider::generate();
+        let req_b = SignRequest {
+            did: "did:goya:bob".into(),
+            signature: {
+                let payload = format!("fes:did:goya:bob:{}", contract.content_hash);
+                hex::encode(bob.sign(payload.as_bytes()).unwrap())
+            },
+            public_key: hex::encode(bob.public_key()),
+            biometric_evidence: vec![],
+        };
+        sign(&store, &contract.id, &req_b).unwrap();
+
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        let after_alice = deliver(&store, &contract.id, "did:goya:alice", &tsa).unwrap();
+        assert_eq!(after_alice.state, ContractState::FullySigned);
+
+        let after_bob = deliver(&store, &contract.id, "did:goya:bob", &tsa).unwrap();
+        assert_eq!(after_bob.state, ContractState::Delivered);
+    }
+
+    #[test]
+    fn archive_accepts_delivered_state() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let contract = deploy(&store, fes_definition()).unwrap();
+
+        let provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        deliver(&store, &contract.id, "did:goya:alice", &tsa).unwrap();
+        let archived = archive(&store, &contract.id).unwrap();
+        assert_eq!(archived.state, ContractState::Archived);
+    }
+
+    #[test]
+    fn full_erds_lifecycle() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let contract = deploy(&store, fes_definition()).unwrap();
+
+        let provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        notarize(&store, &contract.id, &tsa).unwrap();
+        deliver(&store, &contract.id, "did:goya:alice", &tsa).unwrap();
+        acknowledge_delivery(&store, &contract.id, "did:goya:alice", &tsa).unwrap();
+        let archived = archive(&store, &contract.id).unwrap();
+
+        assert_eq!(archived.state, ContractState::Archived);
+        assert_eq!(archived.delivery_receipts.len(), 1);
+        assert!(archived.delivery_receipts[0].send_tsa_token.is_some());
+        assert!(archived.delivery_receipts[0].receipt_tsa_token.is_some());
+    }
+
+    #[test]
+    fn preserve_contract_re_signs_with_pqc() {
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+        let contract = deploy(&store, fes_definition()).unwrap();
+
+        let ed_provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &ed_provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let pqc = MlDsaSigningProvider::generate();
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        let preserved =
+            preserve_contract(&store, &contract.id, &pqc, &tsa, "quantum migration").unwrap();
+        assert_eq!(preserved.preservation_records.len(), 1);
+        let rec = &preserved.preservation_records[0];
+        assert_eq!(rec.original_algorithm, SigningAlgorithm::Ed25519);
+        assert_eq!(rec.new_algorithm, SigningAlgorithm::MlDsa65);
+        assert!(rec.tsa_token.is_some());
+        assert_eq!(rec.reason, "quantum migration");
+    }
+
+    #[test]
+    fn preserve_rejects_pending_contract() {
+        let store = test_store();
+        let contract = deploy(&store, fes_definition()).unwrap();
+        let pqc = MlDsaSigningProvider::generate();
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+        let result = preserve_contract(&store, &contract.id, &pqc, &tsa, "test");
+        assert!(matches!(result, Err(LexChainError::InvalidState { .. })));
+    }
+
+    #[test]
+    fn preserve_expiring_sweeps_deprecated_contracts() {
+        use crate::crypto::algorithm_policy::AlgorithmPolicy;
+
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+
+        let contract = deploy(&store, fes_definition()).unwrap();
+        let ed_provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &ed_provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let mut policy = AlgorithmPolicy::new(SigningAlgorithm::MlDsa65);
+        policy
+            .deprecate(
+                SigningAlgorithm::Ed25519,
+                1000,
+                5000,
+                "quantum threat".into(),
+            )
+            .unwrap();
+
+        let pqc = MlDsaSigningProvider::generate();
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        let preserved = preserve_expiring(&store, &policy, 4000, 1500, &pqc, &tsa);
+        assert_eq!(preserved.len(), 1);
+        assert!(preserved.contains(&contract.id));
+
+        let updated = store.get(&contract.id).unwrap();
+        assert_eq!(updated.preservation_records.len(), 1);
+    }
+
+    #[test]
+    fn preserve_expiring_skips_already_preserved() {
+        use crate::crypto::algorithm_policy::AlgorithmPolicy;
+
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+
+        let contract = deploy(&store, fes_definition()).unwrap();
+        let ed_provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &ed_provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let mut policy = AlgorithmPolicy::new(SigningAlgorithm::MlDsa65);
+        policy
+            .deprecate(
+                SigningAlgorithm::Ed25519,
+                1000,
+                5000,
+                "quantum threat".into(),
+            )
+            .unwrap();
+
+        let pqc = MlDsaSigningProvider::generate();
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        preserve_expiring(&store, &policy, 4000, 1500, &pqc, &tsa);
+        let second_run = preserve_expiring(&store, &policy, 4000, 1500, &pqc, &tsa);
+        assert_eq!(second_run.len(), 0);
+    }
+
+    #[test]
+    fn preserve_expiring_ignores_safe_algorithms() {
+        use crate::crypto::algorithm_policy::AlgorithmPolicy;
+
+        let store = test_store();
+        register_did(&store, "did:goya:alice");
+
+        let contract = deploy(&store, fes_definition()).unwrap();
+        let ed_provider = SoftwareSigningProvider::generate();
+        let req = sign_as(&contract, &ed_provider);
+        sign(&store, &contract.id, &req).unwrap();
+
+        let policy = AlgorithmPolicy::new(SigningAlgorithm::MlDsa65);
+
+        let pqc = MlDsaSigningProvider::generate();
+        let signer = std::sync::Arc::new(SoftwareSigningProvider::generate());
+        let tsa = TsaProvider::new(signer, "did:goya:tsa".into());
+
+        let preserved = preserve_expiring(&store, &policy, 1000, 1000, &pqc, &tsa);
+        assert_eq!(preserved.len(), 0);
     }
 
     #[test]

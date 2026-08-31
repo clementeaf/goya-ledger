@@ -118,11 +118,24 @@ pub struct VerificationResult {
     pub nonce_verified: bool,
 }
 
-/// In-memory request store for cross-device flow + issuer key registry.
+/// Registered Relying Party (CIR 2025/848).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelyingParty {
+    pub client_id: String,
+    pub name: String,
+    pub redirect_uris: Vec<String>,
+    #[serde(default)]
+    pub purpose: String,
+    #[serde(default)]
+    pub data_requested: Vec<String>,
+    pub registered_at: u64,
+}
+
+/// In-memory request store for cross-device flow + issuer key registry + RP registry.
 pub struct VpRequestStore {
     requests: RwLock<HashMap<String, AuthorizationRequest>>,
-    /// Issuer DID → hex-encoded public key. Used for VP signature verification.
     issuer_keys: RwLock<HashMap<String, String>>,
+    relying_parties: RwLock<HashMap<String, RelyingParty>>,
 }
 
 impl VpRequestStore {
@@ -130,6 +143,7 @@ impl VpRequestStore {
         Self {
             requests: RwLock::new(HashMap::new()),
             issuer_keys: RwLock::new(HashMap::new()),
+            relying_parties: RwLock::new(HashMap::new()),
         }
     }
 
@@ -144,7 +158,6 @@ impl VpRequestStore {
         self.requests.read().unwrap().get(id).cloned()
     }
 
-    /// Register an issuer's public key for VP verification.
     pub fn register_issuer_key(&self, did: &str, pubkey_hex: &str) {
         self.issuer_keys
             .write()
@@ -152,9 +165,28 @@ impl VpRequestStore {
             .insert(did.to_string(), pubkey_hex.to_string());
     }
 
-    /// Look up an issuer's public key by DID.
     pub fn resolve_issuer_key(&self, did: &str) -> Option<String> {
         self.issuer_keys.read().unwrap().get(did).cloned()
+    }
+
+    pub fn register_rp(&self, rp: RelyingParty) {
+        self.relying_parties
+            .write()
+            .unwrap()
+            .insert(rp.client_id.clone(), rp);
+    }
+
+    pub fn get_rp(&self, client_id: &str) -> Option<RelyingParty> {
+        self.relying_parties.read().unwrap().get(client_id).cloned()
+    }
+
+    pub fn list_rps(&self) -> Vec<RelyingParty> {
+        self.relying_parties
+            .read()
+            .unwrap()
+            .values()
+            .cloned()
+            .collect()
     }
 }
 
@@ -185,6 +217,63 @@ fn claim_exists(claims: &serde_json::Value, key: &str) -> bool {
 // ── Endpoints ─────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
+pub struct RegisterRpBody {
+    pub client_id: String,
+    pub name: String,
+    pub redirect_uris: Vec<String>,
+    #[serde(default)]
+    pub purpose: Option<String>,
+    #[serde(default)]
+    pub data_requested: Option<Vec<String>>,
+}
+
+#[post("/oid4vp/rp")]
+pub async fn register_rp(
+    store: web::Data<VpRequestStore>,
+    body: web::Json<RegisterRpBody>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+
+    if body.client_id.is_empty() || body.name.is_empty() || body.redirect_uris.is_empty() {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "INVALID_REQUEST",
+                "client_id, name, and redirect_uris are required",
+            ),
+            400,
+        )));
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let rp = RelyingParty {
+        client_id: body.client_id.clone(),
+        name: body.name.clone(),
+        redirect_uris: body.redirect_uris.clone(),
+        purpose: body.purpose.clone().unwrap_or_default(),
+        data_requested: body.data_requested.clone().unwrap_or_default(),
+        registered_at: now,
+    };
+
+    store.register_rp(rp);
+
+    Ok(HttpResponse::Created().json(ApiResponse::success(
+        serde_json::json!({ "client_id": body.client_id, "registered": true }),
+        trace,
+    )))
+}
+
+#[get("/oid4vp/rp")]
+pub async fn list_rps(store: web::Data<VpRequestStore>) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let rps = store.list_rps();
+    Ok(HttpResponse::Ok().json(ApiResponse::success(rps, trace)))
+}
+
+#[derive(Deserialize)]
 pub struct CreateRequestBody {
     pub client_id: String,
     pub response_uri: String,
@@ -204,7 +293,16 @@ pub async fn create_request(
     store: web::Data<VpRequestStore>,
     body: web::Json<CreateRequestBody>,
 ) -> ApiResult<HttpResponse> {
-    // Reject legacy PresentationDefinition explicitly
+    if store.get_rp(&body.client_id).is_none() {
+        return Ok(HttpResponse::Forbidden().json(ApiResponse::<()>::error(
+            err_dto(
+                "UNREGISTERED_RP",
+                "relying party must be registered via POST /oid4vp/rp before creating requests (CIR 2025/848)",
+            ),
+            403,
+        )));
+    }
+
     if body.presentation_definition.is_some() {
         return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto(
@@ -253,12 +351,19 @@ pub async fn create_request(
 
     store.store(request);
 
+    let rp = store.get_rp(&body.client_id);
+
     Ok(HttpResponse::Created().json(ApiResponse::success(
         serde_json::json!({
             "request_id": trace,
             "request_uri": format!("/api/v1/oid4vp/request/{trace}"),
             "nonce": nonce,
             "state": state,
+            "client_metadata": rp.map(|r| serde_json::json!({
+                "client_name": r.name,
+                "purpose": r.purpose,
+                "data_requested": r.data_requested,
+            })),
         }),
         trace,
     )))
@@ -466,11 +571,24 @@ mod tests {
         }
     }
 
+    fn register_test_rp(store: &web::Data<VpRequestStore>, client_id: &str) {
+        store.register_rp(RelyingParty {
+            client_id: client_id.into(),
+            name: "Test Verifier".into(),
+            redirect_uris: vec!["https://v.example.com/cb".into()],
+            purpose: "testing".into(),
+            data_requested: vec!["given_name".into()],
+            registered_at: 0,
+        });
+    }
+
     macro_rules! vp_app {
         ($store:expr) => {
             test::init_service(
                 App::new().app_data($store).service(
                     web::scope("/api/v1")
+                        .service(register_rp)
+                        .service(list_rps)
                         .service(create_request)
                         .service(get_request)
                         .service(submit_response),
@@ -485,6 +603,7 @@ mod tests {
     #[actix_web::test]
     async fn e2e_create_and_fetch_dcql_request() {
         let store = make_store();
+        register_test_rp(&store, "verifier.example.com");
         let app = vp_app!(store);
 
         let req = test::TestRequest::post()
@@ -527,6 +646,7 @@ mod tests {
     #[actix_web::test]
     async fn e2e_rejects_presentation_definition() {
         let store = make_store();
+        register_test_rp(&store, "v.example.com");
         let app = vp_app!(store);
         let req = test::TestRequest::post()
             .uri("/api/v1/oid4vp/request")
@@ -549,6 +669,7 @@ mod tests {
     #[actix_web::test]
     async fn e2e_rejects_missing_dcql() {
         let store = make_store();
+        register_test_rp(&store, "v.example.com");
         let app = vp_app!(store);
         let req = test::TestRequest::post()
             .uri("/api/v1/oid4vp/request")
@@ -572,6 +693,7 @@ mod tests {
         let iss_did = format!("did:goya:{}", &hex::encode(provider.public_key())[..16]);
 
         let store = make_store();
+        register_test_rp(&store, "v.example.com");
         store.register_issuer_key(&iss_did, &hex::encode(provider.public_key()));
         let app = vp_app!(store.clone());
 
@@ -622,6 +744,7 @@ mod tests {
     #[actix_web::test]
     async fn e2e_submit_mdoc_via_dcql() {
         let store = make_store();
+        register_test_rp(&store, "v.example.com");
         let app = vp_app!(store.clone());
 
         let req = test::TestRequest::post()
@@ -686,6 +809,7 @@ mod tests {
 
         let provider = SoftwareSigningProvider::generate();
         let store = make_store();
+        register_test_rp(&store, "v.example.com");
         let app = vp_app!(store.clone());
 
         let req = test::TestRequest::post()
@@ -827,6 +951,79 @@ mod tests {
         assert!(match_dcql_query(&query, "vc+sd-jwt", &claims).is_err());
     }
 
+    // ── RP registration (CIR 2025/848) ────────────────────────────
+
+    #[actix_web::test]
+    async fn e2e_unregistered_rp_rejected() {
+        let store = make_store();
+        let app = vp_app!(store);
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/request")
+            .set_json(serde_json::json!({
+                "client_id": "unregistered.example.com",
+                "response_uri": "https://unregistered.example.com/cb",
+                "dcql_query": test_dcql(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 403);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let code = body["error"]["code"].as_str().unwrap_or("");
+        assert_eq!(code, "UNREGISTERED_RP");
+    }
+
+    #[actix_web::test]
+    async fn e2e_register_and_list_rps() {
+        let store = make_store();
+        let app = vp_app!(store);
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/rp")
+            .set_json(serde_json::json!({
+                "client_id": "test-verifier.example.com",
+                "name": "Test Verifier App",
+                "redirect_uris": ["https://test-verifier.example.com/cb"],
+                "purpose": "age verification",
+                "data_requested": ["age_over_18"]
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+
+        let req = test::TestRequest::get()
+            .uri("/api/v1/oid4vp/rp")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let rps = body["data"].as_array().unwrap();
+        assert_eq!(rps.len(), 1);
+        assert_eq!(rps[0]["client_id"], "test-verifier.example.com");
+        assert_eq!(rps[0]["purpose"], "age verification");
+    }
+
+    #[actix_web::test]
+    async fn e2e_request_includes_client_metadata() {
+        let store = make_store();
+        register_test_rp(&store, "v.example.com");
+        let app = vp_app!(store);
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/oid4vp/request")
+            .set_json(serde_json::json!({
+                "client_id": "v.example.com",
+                "response_uri": "https://v.example.com/cb",
+                "dcql_query": test_dcql(),
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let meta = &body["data"]["client_metadata"];
+        assert_eq!(meta["client_name"], "Test Verifier");
+        assert_eq!(meta["purpose"], "testing");
+    }
+
     // ── Other ────────────────────────────────────────────────────
 
     #[actix_web::test]
@@ -843,6 +1040,7 @@ mod tests {
     #[actix_web::test]
     async fn e2e_create_request_with_response_mode() {
         let store = make_store();
+        register_test_rp(&store, "v.example.com");
         let app = vp_app!(store);
         let req = test::TestRequest::post()
             .uri("/api/v1/oid4vp/request")

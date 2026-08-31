@@ -287,6 +287,69 @@ pub fn validate_national_id(id: &str, jurisdiction: Jurisdiction) -> Result<Stri
     }
 }
 
+/// Result of an external identity verification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerificationResult {
+    pub verified: bool,
+    pub provider_name: String,
+    pub loa: EidasLoA,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_reference: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rejection_reason: Option<String>,
+}
+
+/// Pluggable external identity verification provider (eIDAS Art. 26(b), CIR 2026/798).
+///
+/// Implementations call an external service (eID, video-ident, national eID scheme)
+/// to verify that a natural person matches their claimed identity.
+pub trait IdentityVerificationProvider: Send + Sync {
+    fn provider_name(&self) -> &str;
+    fn verify(
+        &self,
+        legal_name: &str,
+        national_id: &str,
+        jurisdiction: Jurisdiction,
+    ) -> Result<VerificationResult, String>;
+}
+
+/// Simulated external verifier for testing and development.
+/// Approves any identity where the national ID passes format validation.
+pub struct SimulatedIdentityVerifier;
+
+impl IdentityVerificationProvider for SimulatedIdentityVerifier {
+    fn provider_name(&self) -> &str {
+        "simulated"
+    }
+
+    fn verify(
+        &self,
+        _legal_name: &str,
+        national_id: &str,
+        jurisdiction: Jurisdiction,
+    ) -> Result<VerificationResult, String> {
+        match validate_national_id(national_id, jurisdiction) {
+            Ok(_) => Ok(VerificationResult {
+                verified: true,
+                provider_name: "simulated".into(),
+                loa: EidasLoA::Substantial,
+                external_reference: Some(format!(
+                    "sim-{}",
+                    &national_id[..4.min(national_id.len())]
+                )),
+                rejection_reason: None,
+            }),
+            Err(e) => Ok(VerificationResult {
+                verified: false,
+                provider_name: "simulated".into(),
+                loa: EidasLoA::Low,
+                external_reference: None,
+                rejection_reason: Some(e),
+            }),
+        }
+    }
+}
+
 /// In-memory Registration Authority store.
 pub struct RaStore {
     records: RwLock<HashMap<String, IdentityProofing>>,
@@ -392,6 +455,59 @@ impl RaStore {
         record.resolved_by = Some(officer_did.to_string());
         record.rejection_reason = Some(reason.to_string());
         Ok(record.clone())
+    }
+
+    /// Submit and immediately verify via an external identity provider.
+    /// On success, the record transitions directly to Verified with the
+    /// provider's LoA. On failure, it stays Pending for manual review.
+    pub fn submit_and_verify(
+        &self,
+        did: String,
+        national_id: String,
+        legal_name: String,
+        jurisdiction: Jurisdiction,
+        requested_at: u64,
+        provider: &dyn IdentityVerificationProvider,
+    ) -> Result<(IdentityProofing, VerificationResult), String> {
+        let vr = provider.verify(&legal_name, &national_id, jurisdiction)?;
+
+        let method = ProofingMethod::RemoteAutomated;
+        let loa = if vr.verified { vr.loa } else { EidasLoA::Low };
+
+        let proofing = IdentityProofing {
+            did: did.clone(),
+            rut: if jurisdiction == Jurisdiction::Chile {
+                validate_rut(&national_id).unwrap_or_default()
+            } else {
+                String::new()
+            },
+            national_id: Some(national_id),
+            jurisdiction,
+            legal_name,
+            loa,
+            method,
+            status: if vr.verified {
+                ProofingStatus::Verified
+            } else {
+                ProofingStatus::Pending
+            },
+            requested_at,
+            resolved_at: if vr.verified {
+                Some(requested_at)
+            } else {
+                None
+            },
+            resolved_by: if vr.verified {
+                Some(format!("provider:{}", provider.provider_name()))
+            } else {
+                None
+            },
+            rejection_reason: vr.rejection_reason.clone(),
+        };
+
+        let mut records = self.records.write().map_err(|e| e.to_string())?;
+        records.insert(did, proofing.clone());
+        Ok((proofing, vr))
     }
 
     /// Get a proofing record by DID.
@@ -811,5 +927,99 @@ mod tests {
         let result =
             store.approve_and_issue_cert("did:goya:none", "did:goya:off", 1_700_000_000, &ca, 365);
         assert!(result.is_err());
+    }
+
+    // ── External identity verification (CIR 2026/798) ──────────────
+
+    #[test]
+    fn simulated_verifier_approves_valid_rut() {
+        let verifier = SimulatedIdentityVerifier;
+        let result = verifier
+            .verify("Juan Pérez", "12345678-5", Jurisdiction::Chile)
+            .unwrap();
+        assert!(result.verified);
+        assert_eq!(result.provider_name, "simulated");
+        assert_eq!(result.loa, EidasLoA::Substantial);
+        assert!(result.external_reference.is_some());
+    }
+
+    #[test]
+    fn simulated_verifier_rejects_invalid_rut() {
+        let verifier = SimulatedIdentityVerifier;
+        let result = verifier
+            .verify("Juan Pérez", "12345678-0", Jurisdiction::Chile)
+            .unwrap();
+        assert!(!result.verified);
+        assert!(result.rejection_reason.is_some());
+    }
+
+    #[test]
+    fn submit_and_verify_success() {
+        let store = RaStore::new();
+        let verifier = SimulatedIdentityVerifier;
+        let (proofing, vr) = store
+            .submit_and_verify(
+                "did:goya:verified".into(),
+                "12345678-5".into(),
+                "Juan Pérez".into(),
+                Jurisdiction::Chile,
+                1_700_000_000,
+                &verifier,
+            )
+            .unwrap();
+
+        assert!(vr.verified);
+        assert_eq!(proofing.status, ProofingStatus::Verified);
+        assert_eq!(proofing.method, ProofingMethod::RemoteAutomated);
+        assert!(proofing.resolved_by.unwrap().starts_with("provider:"));
+        assert!(store.is_verified("did:goya:verified"));
+    }
+
+    #[test]
+    fn submit_and_verify_failure_stays_pending() {
+        let store = RaStore::new();
+        let verifier = SimulatedIdentityVerifier;
+        let (proofing, vr) = store
+            .submit_and_verify(
+                "did:goya:failed".into(),
+                "00000000-0".into(),
+                "Invalid Person".into(),
+                Jurisdiction::Chile,
+                1_700_000_000,
+                &verifier,
+            )
+            .unwrap();
+
+        assert!(!vr.verified);
+        assert_eq!(proofing.status, ProofingStatus::Pending);
+        assert!(!store.is_verified("did:goya:failed"));
+    }
+
+    #[test]
+    fn simulated_verifier_uae_valid() {
+        let verifier = SimulatedIdentityVerifier;
+        let result = verifier
+            .verify("Ahmed Al-Rashid", "784-1990-1234567-6", Jurisdiction::Uae)
+            .unwrap();
+        assert!(result.verified);
+    }
+
+    #[test]
+    fn simulated_verifier_eu_valid() {
+        let verifier = SimulatedIdentityVerifier;
+        let result = verifier
+            .verify("Hans Mueller", "DE-1234567890", Jurisdiction::Eu)
+            .unwrap();
+        assert!(result.verified);
+    }
+
+    #[test]
+    fn trait_object_dispatch() {
+        let verifier: Box<dyn IdentityVerificationProvider> = Box::new(SimulatedIdentityVerifier);
+        let result = verifier
+            .verify("Test", "12345678-5", Jurisdiction::Chile)
+            .unwrap();
+        assert!(result.verified);
+        assert_eq!(verifier.provider_name(), "simulated");
     }
 }
