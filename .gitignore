@@ -90,3 +90,5 @@ spec/tla/states/
 
 # Build artifacts
 dist/
+
+AGENT.md
