@@ -350,6 +350,186 @@ impl IdentityVerificationProvider for SimulatedIdentityVerifier {
     }
 }
 
+pub struct SmartIdVerifier {
+    base_url: String,
+    relying_party_uuid: String,
+    relying_party_name: String,
+    poll_interval_ms: u64,
+    max_polls: u32,
+}
+
+impl SmartIdVerifier {
+    pub fn new(relying_party_uuid: String, relying_party_name: String) -> Self {
+        Self {
+            base_url: "https://rp-api.smart-id.com/v2".into(),
+            relying_party_uuid,
+            relying_party_name,
+            poll_interval_ms: 1000,
+            max_polls: 90,
+        }
+    }
+
+    pub fn demo(relying_party_name: String) -> Self {
+        Self {
+            base_url: "https://sid.demo.sk.ee/smart-id-rp/v2".into(),
+            relying_party_uuid: "00000000-0000-0000-0000-000000000000".into(),
+            relying_party_name,
+            poll_interval_ms: 1000,
+            max_polls: 90,
+        }
+    }
+
+    fn country_code(jurisdiction: Jurisdiction) -> &'static str {
+        match jurisdiction {
+            Jurisdiction::Eu => "EE",
+            Jurisdiction::Chile => "CL",
+            Jurisdiction::Uae => "AE",
+        }
+    }
+
+    fn build_identifier(national_id: &str, jurisdiction: Jurisdiction) -> String {
+        let cc = Self::country_code(jurisdiction);
+        let digits: String = national_id.chars().filter(|c| c.is_ascii_digit()).collect();
+        format!("PNO{cc}-{digits}")
+    }
+
+    fn random_hash() -> String {
+        use pqc_crypto_module::legacy::rng::OsRng;
+        use rand_core::RngCore;
+        let mut buf = [0u8; 64];
+        OsRng.fill_bytes(&mut buf);
+        let hash = crate::crypto::hasher::hash(&buf);
+        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, hash)
+    }
+}
+
+impl IdentityVerificationProvider for SmartIdVerifier {
+    fn provider_name(&self) -> &str {
+        "smart-id"
+    }
+
+    fn verify(
+        &self,
+        _legal_name: &str,
+        national_id: &str,
+        jurisdiction: Jurisdiction,
+    ) -> Result<VerificationResult, String> {
+        let identifier = Self::build_identifier(national_id, jurisdiction);
+        let hash = Self::random_hash();
+
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .build()
+            .map_err(|e| format!("HTTP client error: {e}"))?;
+
+        let auth_url = format!("{}/authentication/etsi/{}", self.base_url, identifier);
+        let body = serde_json::json!({
+            "relyingPartyUUID": self.relying_party_uuid,
+            "relyingPartyName": self.relying_party_name,
+            "hash": hash,
+            "hashType": "SHA512",
+            "allowedInteractionsOrder": [
+                { "type": "verificationCodeChoice", "displayText60": "Goya identity verification" }
+            ]
+        });
+
+        let resp = client
+            .post(&auth_url)
+            .json(&body)
+            .send()
+            .map_err(|e| format!("Smart-ID auth request failed: {e}"))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status().as_u16();
+            let text = resp.text().unwrap_or_default();
+            return match status {
+                404 => Ok(VerificationResult {
+                    verified: false,
+                    provider_name: "smart-id".into(),
+                    loa: EidasLoA::Low,
+                    external_reference: None,
+                    rejection_reason: Some("Smart-ID account not found for this ID".into()),
+                }),
+                _ => Err(format!("Smart-ID API error {status}: {text}")),
+            };
+        }
+
+        let auth_resp: serde_json::Value = resp
+            .json()
+            .map_err(|e| format!("Smart-ID response parse error: {e}"))?;
+        let session_id = auth_resp["sessionID"]
+            .as_str()
+            .ok_or("Smart-ID response missing sessionID")?;
+
+        let session_url = format!("{}/session/{}", self.base_url, session_id);
+        let mut result_state = String::new();
+        let mut session_result: serde_json::Value = serde_json::Value::Null;
+
+        for _ in 0..self.max_polls {
+            std::thread::sleep(std::time::Duration::from_millis(self.poll_interval_ms));
+
+            let poll = client
+                .get(&session_url)
+                .query(&[("timeoutMs", "10000")])
+                .send()
+                .map_err(|e| format!("Smart-ID poll failed: {e}"))?;
+
+            let poll_body: serde_json::Value = poll
+                .json()
+                .map_err(|e| format!("Smart-ID poll parse error: {e}"))?;
+
+            result_state = poll_body["state"].as_str().unwrap_or("RUNNING").to_string();
+
+            if result_state == "COMPLETE" {
+                session_result = poll_body;
+                break;
+            }
+        }
+
+        if result_state != "COMPLETE" {
+            return Ok(VerificationResult {
+                verified: false,
+                provider_name: "smart-id".into(),
+                loa: EidasLoA::Low,
+                external_reference: Some(session_id.to_string()),
+                rejection_reason: Some("Smart-ID session timed out".into()),
+            });
+        }
+
+        let end_result = session_result["result"]["endResult"]
+            .as_str()
+            .unwrap_or("UNKNOWN");
+
+        if end_result != "OK" {
+            return Ok(VerificationResult {
+                verified: false,
+                provider_name: "smart-id".into(),
+                loa: EidasLoA::Low,
+                external_reference: Some(session_id.to_string()),
+                rejection_reason: Some(format!("Smart-ID result: {end_result}")),
+            });
+        }
+
+        let cert_level = session_result["cert"]["certificateLevel"]
+            .as_str()
+            .unwrap_or("");
+
+        let loa = match cert_level {
+            "QUALIFIED" => EidasLoA::High,
+            "ADVANCED" => EidasLoA::Substantial,
+            _ => EidasLoA::Substantial,
+        };
+
+        Ok(VerificationResult {
+            verified: true,
+            provider_name: "smart-id".into(),
+            loa,
+            external_reference: Some(session_id.to_string()),
+            rejection_reason: None,
+        })
+    }
+}
+
 /// In-memory Registration Authority store.
 pub struct RaStore {
     records: RwLock<HashMap<String, IdentityProofing>>,
@@ -1021,5 +1201,45 @@ mod tests {
             .unwrap();
         assert!(result.verified);
         assert_eq!(verifier.provider_name(), "simulated");
+    }
+
+    #[test]
+    fn smart_id_identifier_estonia() {
+        let id = SmartIdVerifier::build_identifier("39001010001", Jurisdiction::Eu);
+        assert_eq!(id, "PNOEE-39001010001");
+    }
+
+    #[test]
+    fn smart_id_identifier_strips_formatting() {
+        let id = SmartIdVerifier::build_identifier("390-010-10001", Jurisdiction::Eu);
+        assert_eq!(id, "PNOEE-39001010001");
+    }
+
+    #[test]
+    fn smart_id_demo_config() {
+        let verifier = SmartIdVerifier::demo("Goya Test".into());
+        assert_eq!(verifier.provider_name(), "smart-id");
+        assert!(verifier.base_url.contains("demo"));
+        assert_eq!(verifier.relying_party_name, "Goya Test");
+    }
+
+    #[test]
+    fn smart_id_production_config() {
+        let verifier = SmartIdVerifier::new("test-uuid".into(), "Goya Ledger".into());
+        assert!(verifier.base_url.contains("rp-api.smart-id.com"));
+        assert_eq!(verifier.relying_party_uuid, "test-uuid");
+    }
+
+    #[test]
+    fn smart_id_random_hash_is_base64() {
+        let hash = SmartIdVerifier::random_hash();
+        assert!(base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &hash).is_ok());
+    }
+
+    #[test]
+    fn smart_id_trait_object() {
+        let verifier: Box<dyn IdentityVerificationProvider> =
+            Box::new(SmartIdVerifier::demo("Test".into()));
+        assert_eq!(verifier.provider_name(), "smart-id");
     }
 }
