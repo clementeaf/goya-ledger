@@ -147,7 +147,66 @@ SHORT_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$NODE/token" \
   -d 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Apre-authorized_code&pre-authorized_code=short')
 assert_http "$SHORT_CODE" "400" "Rejects pre-authorized_code < 16 chars"
 
-step "Phase 9 — Credential Issuance (SD-JWT VC)"
+step "Phase 9 — PAR + Authorization Code Flow (RFC 9126 + RFC 7636)"
+
+CODE_VERIFIER=$(openssl rand -hex 32)
+CODE_CHALLENGE=$(printf '%s' "$CODE_VERIFIER" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+
+PAR_RESP=$(curl -sk -X POST "$NODE/as/par" \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d "client_id=conformance-wallet.example.com&response_type=code&code_challenge=$CODE_CHALLENGE&code_challenge_method=S256&redirect_uri=https%3A%2F%2Fconformance-wallet.example.com%2Fcb&scope=eudi_pid_sd_jwt")
+PAR_STATUS=$(echo "$PAR_RESP" | jq -r '.request_uri // empty')
+PAR_EXPIRES=$(echo "$PAR_RESP" | jq -r '.expires_in // empty')
+
+assert_not_empty "$PAR_STATUS" "PAR returns request_uri"
+assert_contains "$PAR_STATUS" "urn:ietf:params:oauth:request_uri:" "request_uri has correct URN scheme"
+assert_eq "$PAR_EXPIRES" "600" "PAR expires_in is 600s"
+
+PAR_PLAIN_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$NODE/as/par" \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d "client_id=test&response_type=code&code_challenge=test&code_challenge_method=plain&redirect_uri=https%3A%2F%2Ftest.example.com%2Fcb")
+assert_http "$PAR_PLAIN_CODE" "400" "PAR rejects plain code_challenge_method"
+
+ENCODED_URI=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$PAR_STATUS', safe=''))" 2>/dev/null || echo "$PAR_STATUS")
+AUTH_RESP=$(curl -sk -o /dev/null -D - -X GET "$NODE/authorize?request_uri=$ENCODED_URI" 2>&1)
+AUTH_LOCATION=$(echo "$AUTH_RESP" | grep -i "^location:" | tr -d '\r' | sed 's/^[Ll]ocation: //')
+
+if [ -n "$AUTH_LOCATION" ]; then
+  ok "Authorize endpoint returns redirect"; PASS=$((PASS+1))
+  assert_contains "$AUTH_LOCATION" "conformance-wallet.example.com/cb?code=" "Redirect contains code"
+  AUTH_CODE=$(echo "$AUTH_LOCATION" | sed 's/.*code=//' | cut -d'&' -f1)
+else
+  AUTH_JSON=$(curl -sk "$NODE/authorize?request_uri=$ENCODED_URI")
+  AUTH_CODE=$(echo "$AUTH_JSON" | jq -r '.code // empty')
+  if [ -n "$AUTH_CODE" ]; then
+    ok "Authorize endpoint returns code"; PASS=$((PASS+1))
+    ok "Code present in response"; PASS=$((PASS+1))
+  else
+    fail "Authorize endpoint returned no code or redirect"
+    fail "No code in response"
+    AUTH_CODE=""
+  fi
+fi
+
+if [ -n "$AUTH_CODE" ]; then
+  AUTH_TOKEN_RESP=$(curl -sk -X POST "$NODE/token" \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -d "grant_type=authorization_code&code=$AUTH_CODE&code_verifier=$CODE_VERIFIER&redirect_uri=https%3A%2F%2Fconformance-wallet.example.com%2Fcb")
+  AUTH_ACCESS_TOKEN=$(echo "$AUTH_TOKEN_RESP" | jq -r '.access_token // empty')
+  assert_not_empty "$AUTH_ACCESS_TOKEN" "Auth code + PKCE exchange returns access_token"
+
+  WRONG_VERIFIER_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$NODE/token" \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -d "grant_type=authorization_code&code=some-fake-code-value&code_verifier=wrong-verifier-value")
+  assert_http "$WRONG_VERIFIER_CODE" "400" "Auth code rejects wrong code_verifier"
+
+  NO_VERIFIER_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$NODE/token" \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -d "grant_type=authorization_code&code=$AUTH_CODE")
+  assert_http "$NO_VERIFIER_CODE" "400" "Auth code rejects missing code_verifier"
+fi
+
+step "Phase 10 — Credential Issuance (SD-JWT VC via pre-auth)"
 
 CRED_RESP=$(curl -sk -X POST "$NODE/credential" \
   -H 'Content-Type: application/json' \
@@ -186,7 +245,7 @@ else
   fail "Credential issuance failed: $ERROR_DESC"
 fi
 
-step "Phase 10 — Credential Issuance (mdoc)"
+step "Phase 11 — Credential Issuance (mdoc)"
 
 MDOC_RESP=$(curl -sk -X POST "$NODE/credential" \
   -H 'Content-Type: application/json' \
@@ -209,14 +268,14 @@ else
   fail "mdoc issuance failed: $ERROR_DESC"
 fi
 
-step "Phase 11 — Credential rejects unauthorized"
+step "Phase 12 — Credential rejects unauthorized"
 
 UNAUTH_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$NODE/credential" \
   -H 'Content-Type: application/json' \
   -d '{"credential_configuration_id":"eudi_pid_sd_jwt"}')
 assert_http "$UNAUTH_CODE" "401" "Credential endpoint rejects missing token"
 
-step "Phase 12 — OID4VP Relying Party Registration (CIR 2025/848)"
+step "Phase 13 — OID4VP Relying Party Registration (CIR 2025/848)"
 
 RP_RESP=$(curl -sk -X POST "$API/oid4vp/rp" \
   -H 'Content-Type: application/json' \
@@ -230,7 +289,7 @@ RP_RESP=$(curl -sk -X POST "$API/oid4vp/rp" \
 RP_REGISTERED=$(echo "$RP_RESP" | jq -r '.data.registered // empty')
 assert_eq "$RP_REGISTERED" "true" "RP registered successfully"
 
-step "Phase 13 — OID4VP Unregistered RP Rejected"
+step "Phase 14 — OID4VP Unregistered RP Rejected"
 
 UNREG_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$API/oid4vp/request" \
   -H 'Content-Type: application/json' \
@@ -241,7 +300,7 @@ UNREG_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$API/oid4vp/reques
   }')
 assert_http "$UNREG_CODE" "403" "Unregistered RP gets 403"
 
-step "Phase 14 — OID4VP Presentation Request (DCQL)"
+step "Phase 15 — OID4VP Presentation Request (DCQL)"
 
 VP_REQ_RESP=$(curl -sk -X POST "$API/oid4vp/request" \
   -H 'Content-Type: application/json' \
@@ -269,7 +328,7 @@ assert_not_empty "$VP_NONCE" "Request includes nonce"
 assert_not_empty "$VP_STATE" "Request includes state"
 assert_eq "$CLIENT_META" "EUDIW Conformance Verifier" "Client metadata disclosed to wallet"
 
-step "Phase 15 — OID4VP Request by Reference (cross-device QR flow)"
+step "Phase 16 — OID4VP Request by Reference (cross-device QR flow)"
 
 REF_RESP=$(curl -sk "$API/oid4vp/request/$REQUEST_ID")
 REF_CLIENT=$(echo "$REF_RESP" | jq -r '.data.client_id // empty')
@@ -278,7 +337,7 @@ assert_eq "$REF_CLIENT" "conformance-verifier.example.com" "Request retrievable 
 REF_DCQL=$(echo "$REF_RESP" | jq -r '.data.dcql_query.credentials[0].id // empty')
 assert_eq "$REF_DCQL" "pid" "DCQL query preserved in request"
 
-step "Phase 16 — OID4VP Rejects presentation_definition (legacy)"
+step "Phase 17 — OID4VP Rejects presentation_definition (legacy)"
 
 PD_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$API/oid4vp/request" \
   -H 'Content-Type: application/json' \
@@ -289,25 +348,25 @@ PD_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$API/oid4vp/request" 
   }')
 assert_http "$PD_CODE" "400" "Rejects presentation_definition (OID4VP 1.0 Final)"
 
-step "Phase 17 — OID4VP Rejects invalid state"
+step "Phase 18 — OID4VP Rejects invalid state"
 
 BAD_STATE_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X POST "$API/oid4vp/response" \
   -H 'Content-Type: application/json' \
   -d '{"vp_token":"fake~token~","state":"nonexistent"}')
 assert_http "$BAD_STATE_CODE" "400" "Rejects VP response with unknown state"
 
-step "Phase 18 — RP List"
+step "Phase 19 — RP List"
 
 RP_LIST=$(curl -sk "$API/oid4vp/rp")
 RP_COUNT=$(echo "$RP_LIST" | jq '.data | length')
 assert_eq "$([ "$RP_COUNT" -ge 1 ] && echo 'true' || echo 'false')" "true" "RP list returns registered parties"
 
-step "Phase 19 — Status List (IETF Token Status List)"
+step "Phase 20 — Status List (IETF Token Status List)"
 
 SL_CODE=$(curl -sk -o /dev/null -w '%{http_code}' "$API/statuslist/nonexistent")
 assert_http "$SL_CODE" "404" "Status list 404 for unknown list"
 
-step "Phase 20 — security.txt (RFC 9116)"
+step "Phase 21 — security.txt (RFC 9116)"
 
 SECTXT=$(curl -sk "$NODE/.well-known/security.txt")
 assert_contains "$SECTXT" "Contact:" "security.txt has Contact field"

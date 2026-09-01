@@ -4,6 +4,45 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.14.1] — 2026-09-01
+
+### Added — EU TSP Readiness
+
+EUDIW interop, legal docs, Smart-ID identity verification, and authorization code flow.
+
+#### EUDIW Conformance E2E
+- `scripts/eudiw-conformance-e2e.sh` — 53 assertions across 20 phases
+- Covers OID4VCI 1.0 Final (metadata, token, nonce, credential offer, SD-JWT + mdoc issuance)
+- Covers OID4VP 1.0 Final (RP registration, DCQL requests, cross-device QR, presentation_definition rejection)
+- Fix: `NonceStore`/`StatusListStore`/`VpRequestStore` shared across Actix workers (was per-worker)
+
+#### Legal Documents (live at goya-docs.fly.dev)
+- `cps.html` — Certificate Practice Statement (ETSI EN 319 411-1 / RFC 3647)
+- `privacy.html` — Privacy Policy (GDPR Art. 13-14, Estonian DPA as supervisory authority)
+- `terms.html` — Subscriber Agreement (eIDAS Art. 13, €100K liability cap for AdES)
+- Docs Dockerfile updated to serve all 6 pages
+
+#### Smart-ID Identity Verification (SK ID Solutions)
+- `SmartIdVerifier` — IdentityVerificationProvider for Estonian eID (Smart-ID RP API v2)
+- Demo (`SMART_ID_UUID=demo`) and production constructors
+- ETSI PNO identifier format, LoA mapping (QUALIFIED→High, ADVANCED→Substantial)
+- `POST /api/v1/identity/verify` — calls external IdP via `web::block`, returns proofing + verification result
+- `identity_verifier` field on `AppState`, wired via `SMART_ID_UUID` / `SMART_ID_NAME` env vars
+- Fallback: `SimulatedIdentityVerifier` when no env var set
+
+#### Authorization Code Flow (OID4VCI)
+- `POST /as/par` — Pushed Authorization Request (RFC 9126) with PKCE S256
+- `GET /authorize?request_uri=...` — issues authorization code, 302 redirect
+- Token endpoint now requires `code_verifier` for `authorization_code` grant
+- `AuthorizationStore` shared across workers, 600s session TTL, auto-eviction
+- Both grants supported: `pre-authorized_code` (QR offer) and `authorization_code` (wallet-initiated)
+
+### Stats
+- 56 OID4VCI tests, 8 RA handler tests, 49 RA unit tests, 53 E2E conformance assertions
+- Clippy clean, all pre-push gates pass
+
+---
+
 ## [0.14.0] — 2026-08-31
 
 ### Added — EU Compliance Gaps 1-9

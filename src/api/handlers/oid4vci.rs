@@ -2812,9 +2812,9 @@ mod tests {
         assert_eq!(resp.status(), 302);
         let location = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert!(location.starts_with("https://wallet.example.com/cb?code="));
-        let auth_code = location.split("code=").nth(1).unwrap();
         let auth_body: serde_json::Value = test::read_body_json(resp).await;
         let auth_code = auth_body["code"].as_str().unwrap();
+        assert!(location.contains(auth_code));
 
         let req = test::TestRequest::post()
             .uri("/token")
