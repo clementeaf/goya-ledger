@@ -2810,11 +2810,21 @@ mod tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 302);
-        let location = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let location = resp
+            .headers()
+            .get("Location")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
         assert!(location.starts_with("https://wallet.example.com/cb?code="));
-        let auth_body: serde_json::Value = test::read_body_json(resp).await;
-        let auth_code = auth_body["code"].as_str().unwrap();
-        assert!(location.contains(auth_code));
+        let auth_code = location
+            .split("code=")
+            .nth(1)
+            .unwrap()
+            .split('&')
+            .next()
+            .unwrap();
 
         let req = test::TestRequest::post()
             .uri("/token")

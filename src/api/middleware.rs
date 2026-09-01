@@ -395,7 +395,8 @@ where
         let is_exempt = path.contains("/events")
             || path.contains("/ws")
             || path.contains("/chaincode/install")
-            || path == "/token";
+            || path == "/token"
+            || path == "/as/par";
 
         if needs_json && !is_exempt {
             let content_type = req
