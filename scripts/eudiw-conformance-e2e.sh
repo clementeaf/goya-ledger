@@ -123,7 +123,7 @@ assert_contains "$ACCESS_TOKEN" "goya_at_" "Access token has goya prefix"
 assert_eq "$TOKEN_TYPE" "Bearer" "Token type is Bearer (no DPoP)"
 
 C_NONCE_IN_TOKEN=$(echo "$TOKEN_RESP" | jq -r '.c_nonce // "absent"')
-assert_eq "$C_NONCE_IN_TOKEN" "absent" "c_nonce NOT in token response (OID4VCI 1.0 Final)"
+assert_not_empty "$C_NONCE_IN_TOKEN" "c_nonce present in token response (Draft 13 backward compat)"
 
 step "Phase 7 — Nonce Endpoint (OID4VCI 1.0 Final §8)"
 

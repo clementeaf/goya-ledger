@@ -1867,8 +1867,8 @@ mod tests {
             .unwrap()
             .starts_with("goya_at_"));
         assert!(
-            body.get("c_nonce").is_none(),
-            "c_nonce must NOT be in token response (OID4VCI 1.0 Final)"
+            body.get("c_nonce").is_some(),
+            "c_nonce included for Draft 13 wallet backward compat"
         );
         assert_eq!(body["token_type"], "Bearer");
     }
@@ -2592,7 +2592,7 @@ mod tests {
         assert_eq!(resp.status(), 200);
         let token_body: serde_json::Value = test::read_body_json(resp).await;
         let access_token = token_body["access_token"].as_str().unwrap();
-        assert!(token_body.get("c_nonce").is_none());
+        assert!(token_body.get("c_nonce").is_some());
 
         // 3. Nonce
         let req = test::TestRequest::post().uri("/nonce").to_request();
