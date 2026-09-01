@@ -349,33 +349,35 @@ fn verify_wte(
 
 /// Serves the issuer's public key as JWKS for SD-JWT VC signature verification.
 #[get("/.well-known/jwt-vc-issuer")]
-pub async fn jwt_vc_issuer_metadata(state: web::Data<AppState>) -> ApiResult<HttpResponse> {
-    let provider = state.signing_provider.as_ref().ok_or_else(|| {
-        crate::api::errors::ApiError::StorageError {
-            reason: "signing provider not configured".into(),
-        }
-    })?;
-    let kid = crate::identity::sd_jwt::compute_kid(provider.as_ref());
+pub async fn jwt_vc_issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
+    use crate::identity::signing::SigningProvider;
+    let host = req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:8080");
+    let base = format!("https://{host}");
+
+    let provider = oid4vci_es256_provider();
+    let kid = crate::identity::sd_jwt::compute_kid(provider);
     let pk = provider.public_key();
-    let jwk = match provider.algorithm() {
-        crate::identity::signing::SigningAlgorithm::EcdsaP256 => {
-            if pk.len() == 65 && pk[0] == 0x04 {
-                serde_json::json!({
-                    "kty": "EC",
-                    "crv": "P-256",
-                    "kid": kid,
-                    "use": "sig",
-                    "x": base64url_encode(&pk[1..33]),
-                    "y": base64url_encode(&pk[33..65]),
-                })
-            } else {
-                serde_json::json!({"kty": "EC", "kid": kid})
-            }
-        }
-        _ => serde_json::json!({"kty": "OKP", "kid": kid}),
+
+    let jwk = if pk.len() == 65 && pk[0] == 0x04 {
+        serde_json::json!({
+            "kty": "EC",
+            "crv": "P-256",
+            "kid": kid,
+            "use": "sig",
+            "alg": "ES256",
+            "x": base64url_encode(&pk[1..33]),
+            "y": base64url_encode(&pk[33..65]),
+        })
+    } else {
+        serde_json::json!({"kty": "EC", "kid": kid})
     };
+
     Ok(HttpResponse::Ok().json(serde_json::json!({
-        "issuer": std::env::var("CREDENTIAL_ISSUER_URL").unwrap_or_else(|_| "https://goya-node.fly.dev".to_string()),
+        "issuer": base,
         "jwks": { "keys": [jwk] },
     })))
 }
@@ -748,7 +750,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
         ],
         "credential_configurations_supported": {
             "IdentityCredential_sd_jwt": {
-                "format": "dc+sd-jwt",
+                "format": "vc+sd-jwt",
                 "vct": "IdentityCredential",
                 "cryptographic_binding_methods_supported": ["jwk"],
                 "credential_signing_alg_values_supported": ["ES256", "EdDSA", "ML-DSA-65"],
@@ -757,70 +759,47 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                         "proof_signing_alg_values_supported": ["ES256", "ES384", "ES512"]
                     }
                 },
-                "credential_definition": {
-                    "type": "IdentityCredential",
-                    "claims": []
-                },
-                "credential_metadata": {
-                    "display": [{
-                        "name": "Identity Credential",
-                        "locale": "en"
-                    }],
-                    "claims": [
-                        { "path": ["given_name"], "mandatory": false, "value_type": "string", "display": [{"name": "Given Name", "locale": "en"}] },
-                        { "path": ["family_name"], "mandatory": false, "value_type": "string", "display": [{"name": "Family Name", "locale": "en"}] },
-                        { "path": ["birth_date"], "mandatory": false, "value_type": "full-date", "display": [{"name": "Birth Date", "locale": "en"}] },
-                        { "path": ["nationality"], "mandatory": false, "value_type": "string", "display": [{"name": "Nationality", "locale": "en"}] },
-                        { "path": ["age_over_18"], "mandatory": false, "value_type": "bool", "display": [{"name": "Age Over 18", "locale": "en"}] }
-                    ]
-                }
+                "display": [{
+                    "name": "Identity Credential",
+                    "locale": "en"
+                }],
+                "claims": [
+                    { "path": ["given_name"], "mandatory": false, "value_type": "string", "display": [{"name": "Given Name", "locale": "en"}] },
+                    { "path": ["family_name"], "mandatory": false, "value_type": "string", "display": [{"name": "Family Name", "locale": "en"}] },
+                    { "path": ["birth_date"], "mandatory": false, "value_type": "full-date", "display": [{"name": "Birth Date", "locale": "en"}] },
+                    { "path": ["nationality"], "mandatory": false, "value_type": "string", "display": [{"name": "Nationality", "locale": "en"}] },
+                    { "path": ["age_over_18"], "mandatory": false, "value_type": "bool", "display": [{"name": "Age Over 18", "locale": "en"}] }
+                ]
             },
             "eudi_pid_sd_jwt": {
-                "format": "dc+sd-jwt",
+                "format": "vc+sd-jwt",
                 "vct": "urn:eudi:pid:1",
                 "scope": "eudi_pid_sd_jwt",
-                "cryptographic_binding_methods_supported": ["jwk", "cose_key"],
+                "cryptographic_binding_methods_supported": ["jwk"],
                 "credential_signing_alg_values_supported": ["ES256"],
                 "proof_types_supported": {
-                    "attestation": {
-                        "proof_signing_alg_values_supported": ["ES256"],
-                        "key_attestations_required": {
-                            "key_storage": ["iso_18045_high"],
-                            "user_authentication": ["iso_18045_high"]
-                        }
-                    },
                     "jwt": {
-                        "proof_signing_alg_values_supported": ["ES256"],
-                        "key_attestations_required": {
-                            "key_storage": ["iso_18045_high"],
-                            "user_authentication": ["iso_18045_high"]
-                        }
+                        "proof_signing_alg_values_supported": ["ES256"]
                     }
                 },
                 "credential_definition": {
                     "type": "urn:eudi:pid:1",
-                    "claims": []
+                    "claims": {
+                        "family_name": { "mandatory": true, "display": [{"name": "Family Name", "locale": "en"}] },
+                        "given_name": { "mandatory": true, "display": [{"name": "Given Name", "locale": "en"}] },
+                        "birthdate": { "mandatory": true, "display": [{"name": "Birth Date", "locale": "en"}] },
+                        "nationalities": { "mandatory": false, "display": [{"name": "Nationalities", "locale": "en"}] },
+                        "issuing_country": { "mandatory": true, "display": [{"name": "Issuing Country", "locale": "en"}] },
+                        "issuing_authority": { "mandatory": true, "display": [{"name": "Issuance Authority", "locale": "en"}] }
+                    }
                 },
-                "credential_metadata": {
-                    "display": [{
-                        "name": "PID (SD-JWT VC)",
-                        "locale": "en",
-                        "logo": {
-                            "alt_text": "Goya PID",
-                            "uri": format!("{base}/public/pid.png")
-                        }
-                    }],
-                    "claims": [
-                        { "path": ["family_name"], "mandatory": true, "value_type": "string", "display": [{"name": "Family Name", "locale": "en"}] },
-                        { "path": ["given_name"], "mandatory": true, "value_type": "string", "display": [{"name": "Given Name", "locale": "en"}] },
-                        { "path": ["birthdate"], "mandatory": true, "value_type": "full-date", "display": [{"name": "Birth Date", "locale": "en"}] },
-                        { "path": ["nationalities"], "mandatory": false, "value_type": "list", "display": [{"name": "Nationalities", "locale": "en"}] },
-                        { "path": ["issuing_country"], "mandatory": true, "value_type": "string", "display": [{"name": "Issuing Country", "locale": "en"}] },
-                        { "path": ["issuing_authority"], "mandatory": true, "value_type": "string", "display": [{"name": "Issuance Authority", "locale": "en"}] },
-                        { "path": ["date_of_issuance"], "mandatory": true, "display": [{"name": "Issuance Date", "locale": "en"}] },
-                        { "path": ["date_of_expiry"], "mandatory": true, "display": [{"name": "Expiry Date", "locale": "en"}] }
-                    ]
-                }
+                "display": [{
+                    "name": "EU PID",
+                    "locale": "en",
+                    "description": "Personal Identification Data",
+                    "background_color": "#2C3E50",
+                    "text_color": "#FFFFFF"
+                }],
             },
             "eudi_pid_mdoc": {
                 "format": "mso_mdoc",
@@ -890,6 +869,10 @@ struct TokenResponse {
     expires_in: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     dpop_jkt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    c_nonce: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    c_nonce_expires_in: Option<u64>,
 }
 
 /// Token endpoint — exchange pre-authorized code or authorization code for access token.
@@ -1024,11 +1007,18 @@ pub async fn token_endpoint(
 
     let token_type = if dpop_jkt.is_some() { "DPoP" } else { "Bearer" };
 
+    let c_nonce = hex::encode(hash_with(
+        HashAlgorithm::Sha256,
+        format!("nonce:{access_token}").as_bytes(),
+    ));
+
     Ok(HttpResponse::Ok().json(TokenResponse {
         access_token,
         token_type: token_type.to_string(),
         expires_in: 3600,
         dpop_jkt,
+        c_nonce: Some(c_nonce),
+        c_nonce_expires_in: Some(86400),
     }))
 }
 
@@ -1382,7 +1372,7 @@ pub async fn credential_endpoint(
 
     match resolved_format.as_str() {
         "dc+sd-jwt" | "vc+sd-jwt" => {
-            issue_sd_jwt_credential(provider.as_ref(), &body, status_ref.as_ref())
+            issue_sd_jwt_credential(provider.as_ref(), &body, status_ref.as_ref(), &req)
         }
         "mso_mdoc" => issue_mdoc_credential(provider.as_ref(), &body, status_ref.as_ref()),
         other => Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
@@ -1447,6 +1437,57 @@ pub async fn credential_offer_endpoint(
         "credential_offer": offer,
         "credential_offer_uri": offer_uri,
     })))
+}
+
+#[derive(Deserialize)]
+pub struct OfferByRefQuery {
+    #[serde(default)]
+    credential_configuration_ids: Option<String>,
+}
+
+#[get("/credential_offer")]
+pub async fn credential_offer_get(
+    query: web::Query<OfferByRefQuery>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let host = req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:8080");
+    let base = format!("https://{host}");
+
+    let config_id = query
+        .credential_configuration_ids
+        .as_deref()
+        .unwrap_or("eudi_pid_sd_jwt");
+
+    let pre_auth_code = hex::encode(hash_with(
+        HashAlgorithm::Sha256,
+        uuid::Uuid::new_v4().as_bytes(),
+    ));
+
+    let offer = serde_json::json!({
+        "credential_issuer": base,
+        "credential_configuration_ids": [config_id],
+        "grants": {
+            "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
+                "pre-authorized_code": pre_auth_code,
+            }
+        }
+    });
+
+    Ok(HttpResponse::Ok().json(offer))
+}
+
+fn oid4vci_es256_provider() -> &'static crate::identity::signing::EcdsaP256SigningProvider {
+    use std::sync::OnceLock;
+    static PROVIDER: OnceLock<crate::identity::signing::EcdsaP256SigningProvider> = OnceLock::new();
+    PROVIDER.get_or_init(|| {
+        let seed = hash_with(HashAlgorithm::Sha256, b"goya-oid4vci-es256-issuer-key-v1");
+        crate::identity::signing::EcdsaP256SigningProvider::from_bytes(&seed)
+            .expect("deterministic ES256 key derivation")
+    })
 }
 
 fn extract_jwk_from_jwt(jwt: &str) -> Option<serde_json::Value> {
@@ -1514,9 +1555,10 @@ fn extract_holder_jwk(req: &CredentialRequest) -> Option<serde_json::Value> {
 }
 
 fn issue_sd_jwt_credential(
-    provider: &dyn crate::identity::signing::SigningProvider,
+    _provider: &dyn crate::identity::signing::SigningProvider,
     req: &CredentialRequest,
     _status_ref: Option<&(String, usize)>,
+    http_req: &HttpRequest,
 ) -> ApiResult<HttpResponse> {
     use crate::identity::sd_jwt::{issue_sd_jwt_vc, VcClaims};
 
@@ -1547,8 +1589,12 @@ fn issue_sd_jwt_credential(
 
     let cnf = extract_holder_jwk(req);
 
-    let issuer_url = std::env::var("CREDENTIAL_ISSUER_URL")
-        .unwrap_or_else(|_| "https://goya-node.fly.dev".to_string());
+    let host = http_req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:8080");
+    let issuer_url = format!("https://{host}");
 
     let vc_claims = VcClaims {
         iss: issuer_url,
@@ -1560,7 +1606,10 @@ fn issue_sd_jwt_credential(
         cnf,
     };
 
-    match issue_sd_jwt_vc(&vc_claims, provider) {
+    let effective_provider: &dyn crate::identity::signing::SigningProvider =
+        oid4vci_es256_provider();
+
+    match issue_sd_jwt_vc(&vc_claims, effective_provider) {
         Ok(sd_jwt) => {
             log::info!(
                 "OID4VCI issued credential: len={} has_cnf={}",
@@ -1726,7 +1775,7 @@ mod tests {
         let grants = body["grant_types_supported"].as_array().unwrap();
         assert!(grants.len() >= 2);
         let pid_cfg = &body["credential_configurations_supported"]["eudi_pid_sd_jwt"];
-        assert_eq!(pid_cfg["format"], "dc+sd-jwt");
+        assert_eq!(pid_cfg["format"], "vc+sd-jwt");
     }
 
     #[actix_web::test]

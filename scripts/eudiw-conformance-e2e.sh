@@ -58,7 +58,7 @@ CONFIGS=$(echo "$META" | jq '.credential_configurations_supported | keys | lengt
 assert_eq "$([ "$CONFIGS" -ge 2 ] && echo 'true' || echo 'false')" "true" "At least 2 credential configs (PID SD-JWT + mdoc)"
 
 PID_FORMAT=$(echo "$META" | jq -r '.credential_configurations_supported.eudi_pid_sd_jwt.format // empty')
-assert_eq "$PID_FORMAT" "dc+sd-jwt" "eudi_pid_sd_jwt format is dc+sd-jwt"
+assert_eq "$PID_FORMAT" "vc+sd-jwt" "eudi_pid_sd_jwt format is vc+sd-jwt"
 
 PID_VCT=$(echo "$META" | jq -r '.credential_configurations_supported.eudi_pid_sd_jwt.vct // empty')
 assert_eq "$PID_VCT" "urn:eudi:pid:1" "eudi_pid_sd_jwt vct is urn:eudi:pid:1"

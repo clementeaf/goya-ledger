@@ -149,7 +149,7 @@ pub fn issue_sd_jwt_vc(
 
     let header = serde_json::json!({
         "alg": alg_to_jwt(provider.algorithm()),
-        "typ": "dc+sd-jwt",
+        "typ": "vc+sd-jwt",
         "kid": compute_kid(provider),
     });
     let mut payload = serde_json::json!({
@@ -269,7 +269,7 @@ pub fn issue_sd_jwt_vc_with_kb(
 
     let header = serde_json::json!({
         "alg": alg_to_jwt(provider.algorithm()),
-        "typ": "dc+sd-jwt",
+        "typ": "vc+sd-jwt",
     });
     let payload = serde_json::json!({
         "iss": claims.iss,
@@ -680,7 +680,7 @@ mod tests {
         let jwt_parts: Vec<&str> = sd_jwt.jwt.split('.').collect();
         let header_bytes = base64url_decode(jwt_parts[0]).unwrap();
         let header: serde_json::Value = serde_json::from_slice(&header_bytes).unwrap();
-        assert_eq!(header["typ"], "dc+sd-jwt");
+        assert_eq!(header["typ"], "vc+sd-jwt");
         assert_eq!(header["alg"], "EdDSA");
     }
 
@@ -882,7 +882,7 @@ mod tests {
         let header_bytes = base64url_decode(jwt_parts[0]).unwrap();
         let header: serde_json::Value = serde_json::from_slice(&header_bytes).unwrap();
         assert_eq!(header["alg"], "ES256");
-        assert_eq!(header["typ"], "dc+sd-jwt");
+        assert_eq!(header["typ"], "vc+sd-jwt");
 
         let verified = verify_sd_jwt_vc(&sd_jwt.compact, &pk_hex).unwrap();
         assert_eq!(verified.iss, "did:goya:issuer");
