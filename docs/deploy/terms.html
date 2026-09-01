@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goya Ledger — Subscriber Agreement</title>
+<style>
+:root {
+  --bg: #FAFAF8; --bg-alt: #FFFFFF; --fg: #18181A; --fg-mid: #3D3D42;
+  --fg-soft: #6B6B73; --accent: #1A5C2E; --accent-bg: #E6F2EA;
+  --border: #E2E1DC; --border-soft: #EEEEE9;
+  --sans: 'Avenir Next', 'Avenir', 'Helvetica Neue', system-ui, sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111113; --bg-alt: #1A1A1D; --fg: #E8E8EC; --fg-mid: #B0B0B8;
+    --fg-soft: #7A7A85; --accent: #3DA65A; --accent-bg: #1A2E20;
+    --border: #2A2A2E; --border-soft: #222225;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--fg); line-height: 1.7; }
+nav { padding: 1rem 2rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.logo { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.02em; }
+.logo span { color: var(--accent); }
+.nav-tag { font-size: 0.85rem; padding: 0.3rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; color: var(--fg-mid); }
+.wrap { max-width: 800px; margin: 0 auto; padding: 3rem 1.5rem; }
+h1 { font-size: 2rem; margin-bottom: 0.5rem; letter-spacing: -0.03em; }
+h2 { font-size: 1.3rem; margin: 2.5rem 0 0.75rem; color: var(--accent); }
+p, li { color: var(--fg-mid); margin-bottom: 0.6rem; }
+ul, ol { padding-left: 1.5rem; }
+.meta { color: var(--fg-soft); font-size: 0.9rem; margin-bottom: 2rem; }
+footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--fg-soft); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">Goya<span>.</span></div>
+  <div style="display:flex;gap:0.75rem;align-items:center;">
+    <a href="/" class="nav-tag" style="text-decoration:none;">Home</a>
+    <a href="/cps.html" class="nav-tag" style="text-decoration:none;">CPS</a>
+    <a href="/privacy.html" class="nav-tag" style="text-decoration:none;">Privacy</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<h1>Subscriber Agreement</h1>
+<p class="meta">Effective date: 2026-09-01 &middot; Goya Ledger O&Uuml; (Estonia)</p>
+
+<h2>1. Definitions</h2>
+<ul>
+  <li><strong>"Goya"</strong> means Goya Ledger O&Uuml;, a company registered in Estonia.</li>
+  <li><strong>"Subscriber"</strong> means a natural or legal person who uses Goya's trust services.</li>
+  <li><strong>"Trust Services"</strong> means electronic signature services, time-stamping, credential issuance, notarization, and related services provided by Goya under eIDAS.</li>
+  <li><strong>"Certificate"</strong> means an X.509 certificate or verifiable credential issued by Goya to a Subscriber.</li>
+  <li><strong>"CPS"</strong> means Goya's Certificate Practice Statement, available at <a href="/cps.html" style="color:var(--accent);">/cps.html</a>.</li>
+</ul>
+
+<h2>2. Scope</h2>
+<p>This Agreement governs the Subscriber's use of Goya's Trust Services. By requesting a certificate, creating an identity (DID), or using any Trust Service, the Subscriber accepts this Agreement, the CPS, and the Privacy Policy.</p>
+
+<h2>3. Subscriber obligations</h2>
+<p>The Subscriber shall:</p>
+<ol>
+  <li>Provide accurate and complete identity information during registration</li>
+  <li>Maintain sole control of their private key and not disclose it to any third party</li>
+  <li>Use cryptographic keys only for purposes consistent with the certificate's stated usage</li>
+  <li>Promptly request revocation if the private key is compromised, lost, or if identity information becomes inaccurate</li>
+  <li>Comply with applicable laws regarding electronic signatures in their jurisdiction</li>
+  <li>Not use the Trust Services for illegal purposes, fraud, or to create misleading electronic signatures</li>
+</ol>
+
+<h2>4. Goya's obligations</h2>
+<p>Goya shall:</p>
+<ol>
+  <li>Operate Trust Services in accordance with the CPS and applicable eIDAS requirements</li>
+  <li>Verify Subscriber identity before issuing certificates (per eIDAS Art. 24)</li>
+  <li>Maintain the availability of revocation status services (OCSP, CRL)</li>
+  <li>Process personal data in accordance with the Privacy Policy and GDPR</li>
+  <li>Notify Subscribers of material changes to the CPS or this Agreement at least 30 days in advance</li>
+  <li>Maintain incident response procedures per NIS2 Art. 23</li>
+</ol>
+
+<h2>5. Service levels</h2>
+<ul>
+  <li><strong>Signature verification:</strong> Available 24/7 (public key and CRL/OCSP endpoints)</li>
+  <li><strong>Certificate issuance:</strong> Processed within 24 hours of identity verification</li>
+  <li><strong>Revocation:</strong> CRL updated within 1 hour of revocation request; OCSP reflects immediately</li>
+  <li><strong>Timestamp issuance:</strong> Real-time, subject to NTP clock synchronization</li>
+  <li><strong>Planned maintenance:</strong> Announced 48 hours in advance</li>
+</ul>
+
+<h2>6. Signature levels and legal effect</h2>
+<ul>
+  <li><strong>Simple Electronic Signature (FES):</strong> Ed25519. Legal effect per eIDAS Art. 25(1) &mdash; not denied legal validity solely because it is in electronic form.</li>
+  <li><strong>Advanced Electronic Signature (FEA):</strong> ML-DSA-65 or ECDSA P-256 with identity verification. Meets eIDAS Art. 26 requirements (a)&ndash;(d).</li>
+  <li><strong>Qualified Electronic Signature (QES):</strong> Not currently offered. Requires QTSP certification and QSCD &mdash; planned for 2027.</li>
+</ul>
+<p>The Subscriber acknowledges that only QES has the legal equivalence of a handwritten signature under eIDAS Art. 25(2). Advanced and simple signatures have legal validity subject to the applicable law of each jurisdiction.</p>
+
+<h2>7. Fees</h2>
+<p>Current pricing is published at <a href="/" style="color:var(--accent);">goya-docs.fly.dev</a>. Goya reserves the right to modify fees with 30 days' notice. Existing certificates remain valid regardless of fee changes.</p>
+
+<h2>8. Liability</h2>
+<ul>
+  <li>Goya is liable for damages caused by failure to comply with its obligations under eIDAS Art. 13, unless it proves that it acted without negligence.</li>
+  <li>Goya is not liable for damages arising from: (a) Subscriber's failure to protect their private key; (b) use of certificates beyond their stated purpose; (c) inaccurate information provided by the Subscriber; (d) force majeure events.</li>
+  <li>For advanced electronic signatures, Goya's aggregate liability per incident shall not exceed &euro;100,000 unless otherwise agreed in writing.</li>
+  <li>This limitation does not apply to damages caused by Goya's willful misconduct or gross negligence.</li>
+</ul>
+
+<h2>9. Certificate revocation by Goya</h2>
+<p>Goya may revoke a certificate without the Subscriber's consent if:</p>
+<ol>
+  <li>The Subscriber's identity information is found to be inaccurate</li>
+  <li>The private key is suspected to be compromised</li>
+  <li>The Subscriber breaches this Agreement</li>
+  <li>Required by law, regulation, or court order</li>
+  <li>Goya ceases operations as a TSP</li>
+</ol>
+<p>Goya will notify the Subscriber before or promptly after revocation, except where prohibited by law.</p>
+
+<h2>10. Term and termination</h2>
+<ul>
+  <li>This Agreement is effective upon the Subscriber's first use of Trust Services and remains in force until all certificates issued to the Subscriber have expired or been revoked.</li>
+  <li>Either party may terminate by providing 30 days' written notice. Termination does not affect certificates already issued (they remain valid until expiry or revocation).</li>
+  <li>Goya may terminate immediately if the Subscriber materially breaches this Agreement.</li>
+</ul>
+
+<h2>11. Data protection</h2>
+<p>Processing of personal data is governed by the <a href="/privacy.html" style="color:var(--accent);">Privacy Policy</a>. The Subscriber consents to identity verification by external providers as described in the CPS and Privacy Policy.</p>
+
+<h2>12. Governing law and disputes</h2>
+<p>This Agreement is governed by the laws of the Republic of Estonia. Disputes shall be resolved by the courts of Tallinn, Estonia.</p>
+<p>For consumer Subscribers resident in the EU, this does not affect mandatory consumer protection rights under the law of their country of residence.</p>
+
+<h2>13. Amendments</h2>
+<p>Goya may amend this Agreement by publishing the updated version at this URL and notifying Subscribers via the contact information on file. Continued use of Trust Services after the effective date constitutes acceptance.</p>
+
+<h2>14. Contact</h2>
+<p>
+  Goya Ledger O&Uuml;<br>
+  Email: <a href="mailto:legal@goya.cl" style="color:var(--accent);">legal@goya.cl</a><br>
+  Security: <a href="mailto:security@goya.cl" style="color:var(--accent);">security@goya.cl</a><br>
+  Privacy: <a href="mailto:privacy@goya.cl" style="color:var(--accent);">privacy@goya.cl</a>
+</p>
+
+</div>
+
+<footer>
+  &copy; 2026 Goya Ledger O&Uuml; &middot;
+  <a href="/cps.html" style="color:var(--accent);">CPS</a> &middot;
+  <a href="/privacy.html" style="color:var(--accent);">Privacy</a> &middot;
+  <a href="/terms.html" style="color:var(--accent);">Terms</a>
+</footer>
+</body>
+</html>

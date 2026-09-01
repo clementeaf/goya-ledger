@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Goya Ledger — Certificate Practice Statement</title>
+<style>
+:root {
+  --bg: #FAFAF8; --bg-alt: #FFFFFF; --fg: #18181A; --fg-mid: #3D3D42;
+  --fg-soft: #6B6B73; --accent: #1A5C2E; --accent-bg: #E6F2EA;
+  --border: #E2E1DC; --border-soft: #EEEEE9;
+  --mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  --sans: 'Avenir Next', 'Avenir', 'Helvetica Neue', system-ui, sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111113; --bg-alt: #1A1A1D; --fg: #E8E8EC; --fg-mid: #B0B0B8;
+    --fg-soft: #7A7A85; --accent: #3DA65A; --accent-bg: #1A2E20;
+    --border: #2A2A2E; --border-soft: #222225;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--fg); line-height: 1.7; }
+nav { padding: 1rem 2rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.logo { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.02em; }
+.logo span { color: var(--accent); }
+.nav-tag { font-size: 0.85rem; padding: 0.3rem 0.8rem; border: 1px solid var(--border); border-radius: 6px; color: var(--fg-mid); }
+.wrap { max-width: 800px; margin: 0 auto; padding: 3rem 1.5rem; }
+h1 { font-size: 2rem; margin-bottom: 0.5rem; letter-spacing: -0.03em; }
+h2 { font-size: 1.3rem; margin: 2.5rem 0 0.75rem; color: var(--accent); }
+h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+p, li { color: var(--fg-mid); margin-bottom: 0.6rem; }
+ul { padding-left: 1.5rem; }
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; overflow-x: auto; display: block; }
+th, td { padding: 0.5rem 0.75rem; border: 1px solid var(--border-soft); text-align: left; }
+th { background: var(--accent-bg); font-weight: 600; white-space: nowrap; }
+.meta { color: var(--fg-soft); font-size: 0.9rem; margin-bottom: 2rem; }
+.badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.draft { background: #FFF3CD; color: #856404; }
+footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--fg-soft); font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">Goya<span>.</span></div>
+  <div style="display:flex;gap:0.75rem;align-items:center;">
+    <a href="/" class="nav-tag" style="text-decoration:none;">Home</a>
+    <a href="/privacy.html" class="nav-tag" style="text-decoration:none;">Privacy</a>
+    <a href="/terms.html" class="nav-tag" style="text-decoration:none;">Terms</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<h1>Certificate Practice Statement</h1>
+<p class="meta">
+  Document ID: GOYA-CPS-001 &middot; Version 1.0 &middot; <span class="badge draft">Draft</span><br>
+  Date: 2026-09-01 &middot; Owner: Goya Ledger O&Uuml; (Estonia)<br>
+  Normative basis: ETSI EN 319 411-1, RFC 3647
+</p>
+
+<h2>1. Introduction</h2>
+
+<h3>1.1 Overview</h3>
+<p>This Certificate Practice Statement (CPS) describes the practices and procedures employed by Goya Ledger O&Uuml; ("Goya", "we") operating as a Trust Service Provider (TSP) under Regulation (EU) No 910/2014 (eIDAS). Goya provides advanced electronic signature services, time-stamping, and verifiable credential issuance.</p>
+
+<h3>1.2 Document name and identification</h3>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Document title</td><td>Goya Ledger Certificate Practice Statement</td></tr>
+  <tr><td>OID</td><td>1.3.6.1.4.1.XXXXX.1.1 (pending IANA assignment)</td></tr>
+  <tr><td>Version</td><td>1.0</td></tr>
+  <tr><td>Status</td><td>Draft &mdash; subject to revision upon CAB engagement</td></tr>
+</table>
+
+<h3>1.3 PKI participants</h3>
+<ul>
+  <li><strong>Certification Authority (CA):</strong> Goya Ledger root CA (offline) and intermediate CA (operational). Two-tier hierarchy per ETSI EN 319 411-1.</li>
+  <li><strong>Registration Authority (RA):</strong> Identity proofing via external identity verification providers. Supports Chilean RUT (Ley 19.799), UAE Emirates ID, and EU national eID schemes.</li>
+  <li><strong>Subscribers:</strong> Natural and legal persons requesting certificates or verifiable credentials.</li>
+  <li><strong>Relying Parties:</strong> Entities that verify signatures, timestamps, or credentials issued by Goya.</li>
+</ul>
+
+<h3>1.4 Certificate usage</h3>
+<p>Certificates and credentials issued by Goya are intended for:</p>
+<ul>
+  <li>Advanced electronic signatures (eIDAS Art. 26) using ML-DSA-65 or ECDSA P-256</li>
+  <li>Electronic seals for legal persons</li>
+  <li>Authentication in the EUDI Wallet ecosystem (OID4VCI/OID4VP)</li>
+  <li>Document notarization and proof of existence</li>
+</ul>
+
+<h2>2. Publication and repository responsibilities</h2>
+<p>Goya publishes the following at <code>https://goya-docs.fly.dev</code>:</p>
+<ul>
+  <li>This CPS (updated upon material changes)</li>
+  <li>Certificate Revocation Lists (CRL) via <code>/api/v1/crl</code></li>
+  <li>OCSP responder at <code>/api/v1/ocsp</code></li>
+  <li>Trust Service List entry (ETSI TS 119 612) at <code>/api/v1/tsl</code></li>
+  <li>OpenID credential issuer metadata at <code>/.well-known/openid-credential-issuer</code></li>
+</ul>
+
+<h2>3. Identification and authentication</h2>
+
+<h3>3.1 Naming</h3>
+<p>Subscriber identifiers use the Decentralized Identifier (DID) scheme: <code>did:goya:{pubkey_hex[..16]}</code>. DIDs are derived deterministically from the subscriber's public key.</p>
+
+<h3>3.2 Initial identity validation</h3>
+<p>Before issuing an advanced electronic signature certificate, Goya verifies the subscriber's identity through:</p>
+<ul>
+  <li><strong>Remote automated verification:</strong> Integration with external identity verification providers (eID schemes, video-ident services) via the <code>IdentityVerificationProvider</code> interface</li>
+  <li><strong>Document validation:</strong> National ID format and check digit verification (RUT mod-11, Emirates ID Luhn, EU national ID)</li>
+  <li><strong>eIDAS Level of Assurance:</strong> In-person = High, Video conference = Substantial, Remote automated = Substantial (when using certified eID), Low otherwise</li>
+</ul>
+
+<h3>3.3 Identification and authentication for re-key</h3>
+<p>Re-keying requires the subscriber to authenticate using their existing DID and demonstrate control of the current private key, or repeat the initial identity verification process.</p>
+
+<h2>4. Certificate life-cycle operational requirements</h2>
+
+<h3>4.1 Certificate application</h3>
+<p>Subscribers request certificates via <code>POST /api/v1/ra/proof</code> with identity evidence. The RA validates the evidence and, upon approval, issues a certificate signed by the intermediate CA.</p>
+
+<h3>4.2 Certificate issuance</h3>
+<p>Certificates are issued after successful identity proofing. The process:</p>
+<ul>
+  <li>RA verifies identity via external provider or manual review</li>
+  <li>CA signs certificate with configurable algorithm (ECDSA P-256 or ML-DSA-65)</li>
+  <li>Certificate published to subscriber and registered in certificate store</li>
+  <li>Audit event emitted (<code>AuditAction::CertificateIssued</code>)</li>
+</ul>
+
+<h3>4.3 Certificate revocation</h3>
+<ul>
+  <li>Subscribers may request revocation at any time via <code>POST /api/v1/msp/revoke</code></li>
+  <li>Goya revokes certificates upon: subscriber request, suspected key compromise, cessation of operations, or inaccurate information</li>
+  <li>CRL updated within 1 hour of revocation</li>
+  <li>OCSP reflects revocation immediately</li>
+  <li>Audit event emitted (<code>AuditAction::CertificateRevoked</code>)</li>
+</ul>
+
+<h3>4.4 Certificate renewal and re-key</h3>
+<p>Certificate renewal follows the same identity verification as initial issuance. Re-key generates a new key pair; the old certificate is revoked.</p>
+
+<h2>5. Facility, management, and operational controls</h2>
+
+<h3>5.1 Physical security</h3>
+<p>Production infrastructure operates on Fly.io with geographic distribution per the Business Continuity plan (GOYA-BCDR-001). Root CA key material is generated and stored offline.</p>
+
+<h3>5.2 Procedural controls</h3>
+<ul>
+  <li>Dual control for root CA operations (key ceremony)</li>
+  <li>Separation of duties between RA and CA functions</li>
+  <li>All administrative actions logged to tamper-evident audit trail</li>
+</ul>
+
+<h3>5.3 Personnel controls</h3>
+<p>Personnel with access to CA systems undergo background checks and security awareness training per NIS2 Art. 21(2)(g).</p>
+
+<h2>6. Technical security controls</h2>
+
+<h3>6.1 Key pair generation and installation</h3>
+<table>
+  <tr><th>Algorithm</th><th>Key size</th><th>Standard</th><th>Use</th></tr>
+  <tr><td>ECDSA P-256</td><td>256-bit</td><td>FIPS 186-5</td><td>EUDI Wallet interop (ES256)</td></tr>
+  <tr><td>ML-DSA-65</td><td>1952B pub / 4032B priv</td><td>FIPS 204</td><td>Post-quantum advanced signatures</td></tr>
+  <tr><td>Ed25519</td><td>256-bit</td><td>RFC 8032</td><td>Simple electronic signatures</td></tr>
+  <tr><td>SLH-DSA-128s</td><td>32B pub</td><td>FIPS 205</td><td>Stateless hash-based backup</td></tr>
+</table>
+
+<h3>6.2 Private key protection</h3>
+<ul>
+  <li>Private keys generated using OS CSPRNG (<code>OsRng</code>)</li>
+  <li>Keys encrypted at rest with Argon2id + AES-256-GCM</li>
+  <li>Key zeroization on provider drop (implemented in <code>SigningProvider</code>)</li>
+  <li>HSM abstraction available (<code>HsmConfig</code>) for production deployments</li>
+</ul>
+
+<h3>6.3 Cryptographic algorithm lifecycle</h3>
+<p>Algorithm deprecation managed via <code>AlgorithmPolicy</code> with configurable deadlines. Archived contracts re-signed before algorithm rejection via <code>preserve_expiring()</code> sweep.</p>
+
+<h3>6.4 Time-stamping</h3>
+<p>RFC 3161 Time Stamp Authority with NTP-synchronized clock. Drift guard rejects timestamps when clock offset exceeds 5 seconds. DER-encoded timestamp tokens available at <code>/api/v1/tsa/timestamp/der</code>.</p>
+
+<h2>7. Certificate and CRL profiles</h2>
+
+<h3>7.1 Certificate profile</h3>
+<p>X.509 v3 certificates per RFC 5280. Subject contains subscriber DID. Key usage and extended key usage set per certificate purpose.</p>
+
+<h3>7.2 CRL profile</h3>
+<p>X.509 v2 CRL per RFC 5280 &sect;5. Available in DER at <code>/api/v1/crl/der</code> and PEM at <code>/api/v1/crl/pem</code>.</p>
+
+<h2>8. Compliance audit and other assessments</h2>
+<p>Goya commits to:</p>
+<ul>
+  <li>Annual internal security review per ETSI EN 319 401 &sect;7.9</li>
+  <li>Conformity assessment by accredited CAB when seeking qualified status</li>
+  <li>Vulnerability disclosure per CRA (EU 2024/2847) via <code>/.well-known/security.txt</code></li>
+  <li>Incident notification per NIS2 Art. 23 (24h early warning, 72h full report)</li>
+</ul>
+
+<h2>9. Other business and legal matters</h2>
+
+<h3>9.1 Governing law</h3>
+<p>This CPS is governed by the laws of the Republic of Estonia and the European Union. Disputes shall be resolved in the courts of Tallinn, Estonia.</p>
+
+<h3>9.2 Liability</h3>
+<p>Goya's liability for trust services is as defined in the Subscriber Agreement and limited in accordance with eIDAS Art. 13. See <a href="/terms.html">Subscriber Agreement</a>.</p>
+
+<h3>9.3 Amendments</h3>
+<p>Material changes to this CPS are published at least 30 days before taking effect. Non-material changes (corrections, clarifications) are effective upon publication.</p>
+
+<h2>10. Document control</h2>
+<table>
+  <tr><th>Version</th><th>Date</th><th>Changes</th></tr>
+  <tr><td>1.0</td><td>2026-09-01</td><td>Initial draft</td></tr>
+</table>
+
+</div>
+
+<footer>
+  &copy; 2026 Goya Ledger O&Uuml; &middot; Estonian registry code: [pending] &middot;
+  <a href="/cps.html" style="color:var(--accent);">CPS</a> &middot;
+  <a href="/privacy.html" style="color:var(--accent);">Privacy</a> &middot;
+  <a href="/terms.html" style="color:var(--accent);">Terms</a>
+</footer>
+</body>
+</html>
