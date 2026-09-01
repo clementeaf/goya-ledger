@@ -1199,6 +1199,7 @@ async fn async_main_inner() -> std::io::Result<()> {
     let nonce_store = web::Data::new(crate::api::handlers::oid4vci::NonceStore::new());
     let status_list_store = web::Data::new(crate::api::handlers::oid4vci::StatusListStore::new());
     let vp_request_store = web::Data::new(crate::api::handlers::oid4vp::VpRequestStore::new());
+    let auth_store = web::Data::new(crate::api::handlers::oid4vci::AuthorizationStore::new());
 
     #[cfg(feature = "evm")]
     let evm_state = web::Data::new(crate::api::handlers::evm::EvmState::new());
@@ -1234,7 +1235,8 @@ async fn async_main_inner() -> std::io::Result<()> {
             .app_data(web::Data::new(app_state.clone()))
             .app_data(nonce_store.clone())
             .app_data(status_list_store.clone())
-            .app_data(vp_request_store.clone());
+            .app_data(vp_request_store.clone())
+            .app_data(auth_store.clone());
         #[cfg(feature = "evm")]
         let app = app.app_data(evm_state.clone());
         app.app_data(json_config.clone())

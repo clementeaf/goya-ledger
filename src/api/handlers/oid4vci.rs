@@ -512,6 +512,188 @@ pub async fn nonce_endpoint(nonce_store: web::Data<NonceStore>) -> ApiResult<Htt
         })))
 }
 
+// ── Authorization Session Store (RFC 9126 PAR + RFC 7636 PKCE) ──────────
+
+pub struct AuthorizationSession {
+    pub client_id: String,
+    pub code_challenge: String,
+    pub redirect_uri: String,
+    pub credential_configuration_ids: Vec<String>,
+    pub created_at: u64,
+    pub authorization_code: Option<String>,
+}
+
+pub struct AuthorizationStore {
+    sessions: std::sync::Mutex<std::collections::HashMap<String, AuthorizationSession>>,
+}
+
+impl AuthorizationStore {
+    pub fn new() -> Self {
+        Self {
+            sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+
+    pub fn create_par(
+        &self,
+        client_id: String,
+        code_challenge: String,
+        redirect_uri: String,
+        credential_configuration_ids: Vec<String>,
+    ) -> String {
+        let request_uri = format!("urn:ietf:params:oauth:request_uri:{}", uuid::Uuid::new_v4());
+        let mut sessions = self.sessions.lock().unwrap();
+        let now = now_secs();
+        sessions.retain(|_, s| now < s.created_at + 600);
+        sessions.insert(
+            request_uri.clone(),
+            AuthorizationSession {
+                client_id,
+                code_challenge,
+                redirect_uri,
+                credential_configuration_ids,
+                created_at: now,
+                authorization_code: None,
+            },
+        );
+        request_uri
+    }
+
+    pub fn authorize(&self, request_uri: &str) -> Result<(String, String), &'static str> {
+        let mut sessions = self.sessions.lock().unwrap();
+        let session = sessions.get_mut(request_uri).ok_or("unknown request_uri")?;
+        if session.authorization_code.is_some() {
+            return Err("already authorized");
+        }
+        use pqc_crypto_module::legacy::rng::OsRng;
+        use rand_core::RngCore;
+        let mut buf = [0u8; 32];
+        OsRng.fill_bytes(&mut buf);
+        let code = hex::encode(buf);
+        session.authorization_code = Some(code.clone());
+        Ok((code, session.redirect_uri.clone()))
+    }
+
+    pub fn exchange(
+        &self,
+        code: &str,
+        code_verifier: &str,
+    ) -> Result<AuthExchangeResult, &'static str> {
+        let mut sessions = self.sessions.lock().unwrap();
+        let (uri, session) = sessions
+            .iter()
+            .find(|(_, s)| s.authorization_code.as_deref() == Some(code))
+            .map(|(k, v)| (k.clone(), v))
+            .ok_or("unknown authorization code")?;
+        if !verify_pkce(code_verifier, &session.code_challenge) {
+            return Err("PKCE verification failed");
+        }
+        let result = AuthExchangeResult {
+            client_id: session.client_id.clone(),
+            credential_configuration_ids: session.credential_configuration_ids.clone(),
+        };
+        sessions.remove(&uri);
+        Ok(result)
+    }
+}
+
+impl Default for AuthorizationStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct AuthExchangeResult {
+    pub client_id: String,
+    pub credential_configuration_ids: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ParRequest {
+    pub client_id: String,
+    pub response_type: String,
+    pub code_challenge: String,
+    #[serde(default)]
+    pub code_challenge_method: Option<String>,
+    pub redirect_uri: String,
+    #[serde(default)]
+    pub authorization_details: Option<String>,
+    #[serde(default)]
+    pub scope: Option<String>,
+}
+
+#[post("/as/par")]
+pub async fn par_endpoint(
+    body: web::Form<ParRequest>,
+    auth_store: web::Data<AuthorizationStore>,
+) -> ApiResult<HttpResponse> {
+    if body.response_type != "code" {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("unsupported_response_type", "only 'code' is supported"),
+            400,
+        )));
+    }
+    let method = body.code_challenge_method.as_deref().unwrap_or("S256");
+    if method != "S256" {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "invalid_request",
+                "only S256 code_challenge_method is supported",
+            ),
+            400,
+        )));
+    }
+
+    let config_ids: Vec<String> = body
+        .scope
+        .as_deref()
+        .map(|s| s.split_whitespace().map(String::from).collect())
+        .unwrap_or_else(|| vec!["eudi_pid_sd_jwt".into()]);
+
+    let request_uri = auth_store.create_par(
+        body.client_id.clone(),
+        body.code_challenge.clone(),
+        body.redirect_uri.clone(),
+        config_ids,
+    );
+
+    Ok(HttpResponse::Created()
+        .insert_header(("Cache-Control", "no-store"))
+        .json(serde_json::json!({
+            "request_uri": request_uri,
+            "expires_in": 600,
+        })))
+}
+
+#[derive(Deserialize)]
+pub struct AuthorizeQuery {
+    pub request_uri: String,
+}
+
+#[get("/authorize")]
+pub async fn authorize_endpoint(
+    query: web::Query<AuthorizeQuery>,
+    auth_store: web::Data<AuthorizationStore>,
+) -> ApiResult<HttpResponse> {
+    match auth_store.authorize(&query.request_uri) {
+        Ok((code, redirect_uri)) => {
+            let location = if redirect_uri.contains('?') {
+                format!("{redirect_uri}&code={code}")
+            } else {
+                format!("{redirect_uri}?code={code}")
+            };
+            Ok(HttpResponse::Found()
+                .insert_header(("Location", location.as_str()))
+                .json(serde_json::json!({
+                    "code": code,
+                    "redirect_uri": location,
+                })))
+        }
+        Err(e) => Ok(HttpResponse::BadRequest()
+            .json(ApiResponse::<()>::error(err_dto("invalid_request", e), 400))),
+    }
+}
+
 // ── OAuth Authorization Server Metadata (RFC 8414) ──────────────────────
 
 /// EUDI Wallet fetches this after issuer metadata — mandatory for the flow.
@@ -710,13 +892,15 @@ struct TokenResponse {
     dpop_jkt: Option<String>,
 }
 
-/// Token endpoint — exchange pre-authorized code for access token.
-/// Supports DPoP (RFC 9449) via `DPoP` header and WIA via form field.
+/// Token endpoint — exchange pre-authorized code or authorization code for access token.
+/// Supports DPoP (RFC 9449) via `DPoP` header, WIA/WTE via form fields,
+/// and PKCE (RFC 7636) for the authorization_code grant.
 #[post("/token")]
 pub async fn token_endpoint(
     body: web::Form<TokenRequest>,
     req: HttpRequest,
     wia_registry: Option<web::Data<WalletProviderRegistry>>,
+    auth_store: Option<web::Data<AuthorizationStore>>,
 ) -> ApiResult<HttpResponse> {
     log::info!(
         "OID4VCI /token: grant_type={} has_pre_auth={} has_code={}",
@@ -745,6 +929,19 @@ pub async fn token_endpoint(
                     ),
                     400,
                 )));
+            }
+            let verifier = body.code_verifier.as_deref().unwrap_or("");
+            if verifier.is_empty() {
+                return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                    err_dto("invalid_request", "code_verifier required for PKCE"),
+                    400,
+                )));
+            }
+            if let Some(store) = &auth_store {
+                if let Err(e) = store.exchange(c, verifier) {
+                    return Ok(HttpResponse::BadRequest()
+                        .json(ApiResponse::<()>::error(err_dto("invalid_grant", e), 400)));
+                }
             }
             c
         }
@@ -2204,7 +2401,7 @@ mod tests {
     // ── Authorization code + PKCE + Credential Offer tests ─────────
 
     #[actix_web::test]
-    async fn e2e_token_authorization_code() {
+    async fn e2e_token_authorization_code_requires_pkce() {
         let state = make_state();
         let app = oid4vci_app!(state);
         let req = test::TestRequest::post()
@@ -2223,16 +2420,7 @@ mod tests {
             })
             .to_request();
         let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), 200);
-        let body: serde_json::Value = test::read_body_json(resp).await;
-        assert!(body["access_token"]
-            .as_str()
-            .unwrap()
-            .starts_with("goya_at_"));
-        assert!(
-            body.get("c_nonce").is_none(),
-            "c_nonce must NOT be in token response"
-        );
+        assert_eq!(resp.status(), 400);
     }
 
     #[actix_web::test]
@@ -2517,5 +2705,218 @@ mod tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 200);
+    }
+
+    fn make_auth_store() -> web::Data<AuthorizationStore> {
+        web::Data::new(AuthorizationStore::new())
+    }
+
+    macro_rules! auth_app {
+        ($state:expr, $auth:expr) => {
+            test::init_service(
+                App::new()
+                    .app_data($state)
+                    .app_data(make_nonce_store())
+                    .app_data($auth)
+                    .service(par_endpoint)
+                    .service(authorize_endpoint)
+                    .service(token_endpoint)
+                    .service(credential_endpoint),
+            )
+            .await
+        };
+    }
+
+    #[actix_web::test]
+    async fn e2e_par_creates_request_uri() {
+        let state = make_state();
+        let auth = make_auth_store();
+        let app = auth_app!(state, auth);
+
+        let req = test::TestRequest::post()
+            .uri("/as/par")
+            .set_form(ParRequest {
+                client_id: "wallet.example.com".into(),
+                response_type: "code".into(),
+                code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".into(),
+                code_challenge_method: Some("S256".into()),
+                redirect_uri: "https://wallet.example.com/cb".into(),
+                authorization_details: None,
+                scope: Some("eudi_pid_sd_jwt".into()),
+            })
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        let uri = body["request_uri"].as_str().unwrap();
+        assert!(uri.starts_with("urn:ietf:params:oauth:request_uri:"));
+        assert_eq!(body["expires_in"], 600);
+    }
+
+    #[actix_web::test]
+    async fn e2e_par_rejects_non_s256() {
+        let state = make_state();
+        let auth = make_auth_store();
+        let app = auth_app!(state, auth);
+
+        let req = test::TestRequest::post()
+            .uri("/as/par")
+            .set_form(ParRequest {
+                client_id: "wallet.example.com".into(),
+                response_type: "code".into(),
+                code_challenge: "test".into(),
+                code_challenge_method: Some("plain".into()),
+                redirect_uri: "https://wallet.example.com/cb".into(),
+                authorization_details: None,
+                scope: None,
+            })
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    #[actix_web::test]
+    async fn e2e_authorization_code_flow_with_pkce() {
+        let state = make_state();
+        let auth = make_auth_store();
+        let app = auth_app!(state, auth.clone());
+
+        let code_verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        let challenge =
+            base64url_encode(&hash_with(HashAlgorithm::Sha256, code_verifier.as_bytes()));
+
+        let req = test::TestRequest::post()
+            .uri("/as/par")
+            .set_form(ParRequest {
+                client_id: "wallet.example.com".into(),
+                response_type: "code".into(),
+                code_challenge: challenge.clone(),
+                code_challenge_method: Some("S256".into()),
+                redirect_uri: "https://wallet.example.com/cb".into(),
+                authorization_details: None,
+                scope: Some("eudi_pid_sd_jwt".into()),
+            })
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+        let par_body: serde_json::Value = test::read_body_json(resp).await;
+        let request_uri = par_body["request_uri"].as_str().unwrap();
+
+        let req = test::TestRequest::get()
+            .uri(&format!(
+                "/authorize?request_uri={}",
+                urlencoding::encode(request_uri)
+            ))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 302);
+        let location = resp.headers().get("Location").unwrap().to_str().unwrap();
+        assert!(location.starts_with("https://wallet.example.com/cb?code="));
+        let auth_code = location.split("code=").nth(1).unwrap();
+        let auth_body: serde_json::Value = test::read_body_json(resp).await;
+        let auth_code = auth_body["code"].as_str().unwrap();
+
+        let req = test::TestRequest::post()
+            .uri("/token")
+            .set_form(TokenRequest {
+                grant_type: "authorization_code".into(),
+                pre_authorized_code: None,
+                client_id: Some("wallet.example.com".into()),
+                tx_code: None,
+                code: Some(auth_code.to_string()),
+                code_verifier: Some(code_verifier.to_string()),
+                redirect_uri: Some("https://wallet.example.com/cb".into()),
+                wallet_instance_attestation: None,
+                wallet_trust_evidence: None,
+                authorization_details: None,
+            })
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let token_body: serde_json::Value = test::read_body_json(resp).await;
+        assert!(token_body["access_token"]
+            .as_str()
+            .unwrap()
+            .starts_with("goya_at_"));
+    }
+
+    #[actix_web::test]
+    async fn e2e_authorization_code_rejects_wrong_verifier() {
+        let state = make_state();
+        let auth = make_auth_store();
+        let app = auth_app!(state, auth.clone());
+
+        let code_verifier = "correct-verifier-value-with-enough-entropy";
+        let challenge =
+            base64url_encode(&hash_with(HashAlgorithm::Sha256, code_verifier.as_bytes()));
+
+        let req = test::TestRequest::post()
+            .uri("/as/par")
+            .set_form(ParRequest {
+                client_id: "w.example.com".into(),
+                response_type: "code".into(),
+                code_challenge: challenge,
+                code_challenge_method: Some("S256".into()),
+                redirect_uri: "https://w.example.com/cb".into(),
+                authorization_details: None,
+                scope: None,
+            })
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        let par_body: serde_json::Value = test::read_body_json(resp).await;
+        let request_uri = par_body["request_uri"].as_str().unwrap();
+
+        let req = test::TestRequest::get()
+            .uri(&format!(
+                "/authorize?request_uri={}",
+                urlencoding::encode(request_uri)
+            ))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        let auth_body: serde_json::Value = test::read_body_json(resp).await;
+        let auth_code = auth_body["code"].as_str().unwrap();
+
+        let req = test::TestRequest::post()
+            .uri("/token")
+            .set_form(TokenRequest {
+                grant_type: "authorization_code".into(),
+                pre_authorized_code: None,
+                client_id: Some("w.example.com".into()),
+                tx_code: None,
+                code: Some(auth_code.to_string()),
+                code_verifier: Some("wrong-verifier-not-matching".to_string()),
+                redirect_uri: None,
+                wallet_instance_attestation: None,
+                wallet_trust_evidence: None,
+                authorization_details: None,
+            })
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    #[actix_web::test]
+    async fn e2e_authorization_code_rejects_missing_verifier() {
+        let state = make_state();
+        let auth = make_auth_store();
+        let app = auth_app!(state, auth);
+
+        let req = test::TestRequest::post()
+            .uri("/token")
+            .set_form(TokenRequest {
+                grant_type: "authorization_code".into(),
+                pre_authorized_code: None,
+                client_id: None,
+                tx_code: None,
+                code: Some("some-authorization-code-value".into()),
+                code_verifier: None,
+                redirect_uri: None,
+                wallet_instance_attestation: None,
+                wallet_trust_evidence: None,
+                authorization_details: None,
+            })
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
     }
 }
