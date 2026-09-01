@@ -2,7 +2,7 @@
 
 use crate::api::errors::{ApiResponse, ApiResult, ErrorDto};
 use crate::app_state::AppState;
-use crate::identity::ra::{ProofingMethod, RaStore};
+use crate::identity::ra::{Jurisdiction, ProofingMethod, RaStore};
 use actix_web::{get, post, web, HttpResponse};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -147,6 +147,77 @@ pub async fn get_proof_status(
     }
 }
 
+#[derive(Deserialize)]
+pub struct VerifyRequest {
+    pub did: String,
+    pub national_id: String,
+    pub legal_name: String,
+    #[serde(default = "default_jurisdiction")]
+    pub jurisdiction: Jurisdiction,
+}
+
+fn default_jurisdiction() -> Jurisdiction {
+    Jurisdiction::Eu
+}
+
+#[post("/identity/verify")]
+pub async fn verify_identity(
+    state: web::Data<AppState>,
+    body: web::Json<VerifyRequest>,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let ra = match get_ra(&state) {
+        Ok(r) => r.clone(),
+        Err(resp) => return Ok(resp),
+    };
+    let verifier = match &state.identity_verifier {
+        Some(v) => v.clone(),
+        None => {
+            return Ok(
+                HttpResponse::ServiceUnavailable().json(ApiResponse::<()>::error(
+                    err_dto(
+                        "VERIFIER_UNAVAILABLE",
+                        "identity verification provider not configured",
+                    ),
+                    503,
+                )),
+            );
+        }
+    };
+
+    let did = body.did.clone();
+    let national_id = body.national_id.clone();
+    let legal_name = body.legal_name.clone();
+    let jurisdiction = body.jurisdiction;
+
+    let result = web::block(move || {
+        ra.submit_and_verify(
+            did,
+            national_id,
+            legal_name,
+            jurisdiction,
+            now_secs(),
+            verifier.as_ref(),
+        )
+    })
+    .await
+    .map_err(|e| crate::api::errors::ApiError::StorageError {
+        reason: format!("verification task failed: {e}"),
+    })?;
+
+    match result {
+        Ok((proofing, vr)) => {
+            let resp = serde_json::json!({
+                "proofing": proofing,
+                "verification": vr,
+            });
+            Ok(HttpResponse::Ok().json(ApiResponse::success(resp, trace)))
+        }
+        Err(msg) => Ok(HttpResponse::BadRequest()
+            .json(ApiResponse::<()>::error(err_dto("VERIFY_ERROR", &msg), 400))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +227,7 @@ mod tests {
     fn make_ra_state() -> web::Data<AppState> {
         let mut state = AppState::test_default();
         state.ra_store = Some(Arc::new(RaStore::new()));
+        state.identity_verifier = Some(Arc::new(crate::identity::ra::SimulatedIdentityVerifier));
         web::Data::new(state)
     }
 
@@ -167,7 +239,8 @@ mod tests {
                         .service(submit_proof)
                         .service(approve_proof)
                         .service(reject_proof)
-                        .service(get_proof_status),
+                        .service(get_proof_status)
+                        .service(verify_identity),
                 ),
             )
             .await
@@ -293,5 +366,69 @@ mod tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 503);
+    }
+
+    #[actix_web::test]
+    async fn e2e_verify_identity_success() {
+        let state = make_ra_state();
+        let app = ra_app!(state);
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/identity/verify")
+            .set_json(serde_json::json!({
+                "did": "did:goya:verified1",
+                "national_id": "12345678-5",
+                "legal_name": "Juan Pérez",
+                "jurisdiction": "chile",
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["verification"]["verified"], true);
+        assert_eq!(body["data"]["verification"]["provider_name"], "simulated");
+        assert_eq!(body["data"]["proofing"]["status"], "verified");
+    }
+
+    #[actix_web::test]
+    async fn e2e_verify_identity_invalid_id_stays_pending() {
+        let state = make_ra_state();
+        let app = ra_app!(state);
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/identity/verify")
+            .set_json(serde_json::json!({
+                "did": "did:goya:failed1",
+                "national_id": "00000000-0",
+                "legal_name": "Bad ID",
+                "jurisdiction": "chile",
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["verification"]["verified"], false);
+        assert_eq!(body["data"]["proofing"]["status"], "pending");
+    }
+
+    #[actix_web::test]
+    async fn e2e_verify_identity_eu_jurisdiction() {
+        let state = make_ra_state();
+        let app = ra_app!(state);
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/identity/verify")
+            .set_json(serde_json::json!({
+                "did": "did:goya:euuser1",
+                "national_id": "DE-1234567890",
+                "legal_name": "Hans Mueller",
+                "jurisdiction": "eu",
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["verification"]["verified"], true);
+        assert_eq!(body["data"]["proofing"]["loa"], "substantial");
     }
 }

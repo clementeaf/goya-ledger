@@ -111,6 +111,8 @@ pub struct AppState {
     pub tsa_provider: Option<Arc<crate::tsa::TsaProvider>>,
     /// Registration Authority store (Ley 19.799 Art. 15).
     pub ra_store: Option<Arc<crate::identity::ra::RaStore>>,
+    /// External identity verification provider (eIDAS Art. 26(b)).
+    pub identity_verifier: Option<Arc<dyn crate::identity::ra::IdentityVerificationProvider>>,
     /// OCSP responder (RFC 6960).
     pub ocsp_responder: Option<Arc<crate::msp::ocsp::OcspResponder>>,
     /// Certificate lifecycle manager (revoke→CRL, suspend, expiry monitoring).
@@ -183,6 +185,7 @@ impl AppState {
             proof_verifier: Arc::new(crate::inference::proof::MultiVerifier::new()),
             tsa_provider: None,
             ra_store: None,
+            identity_verifier: None,
             ocsp_responder: None,
             lifecycle_manager: None,
             lexchain_store: crate::lexchain::store::LexChainStore::new(),

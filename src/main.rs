@@ -897,6 +897,24 @@ async fn async_main_inner() -> std::io::Result<()> {
             log::info!("RA store initialized (Ley 19.799 Art. 15)");
             Some(store)
         },
+        identity_verifier: {
+            if let Ok(uuid) = std::env::var("SMART_ID_UUID") {
+                let name =
+                    std::env::var("SMART_ID_NAME").unwrap_or_else(|_| "Goya Ledger".to_string());
+                let verifier: Arc<dyn crate::identity::ra::IdentityVerificationProvider> =
+                    if uuid == "demo" {
+                        log::info!("Identity verifier: Smart-ID (demo)");
+                        Arc::new(crate::identity::ra::SmartIdVerifier::demo(name))
+                    } else {
+                        log::info!("Identity verifier: Smart-ID (production)");
+                        Arc::new(crate::identity::ra::SmartIdVerifier::new(uuid, name))
+                    };
+                Some(verifier)
+            } else {
+                log::info!("Identity verifier: simulated (set SMART_ID_UUID to enable Smart-ID)");
+                Some(Arc::new(crate::identity::ra::SimulatedIdentityVerifier))
+            }
+        },
         ocsp_responder: {
             let responder = crate::msp::ocsp::OcspResponder::new(
                 signing_provider.clone(),

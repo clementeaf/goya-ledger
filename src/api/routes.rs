@@ -268,7 +268,8 @@ impl ApiRoutes {
         cfg.service(ra::submit_proof)
             .service(ra::approve_proof)
             .service(ra::reject_proof)
-            .service(ra::get_proof_status);
+            .service(ra::get_proof_status)
+            .service(ra::verify_identity);
         // CP/CPS Policy (RFC 3647 / ETSI TS 102 042)
         cfg.service(policy::get_cp)
             .service(policy::get_cps)
