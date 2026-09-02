@@ -24,6 +24,8 @@
 
 pub mod api;
 pub mod approved_mode;
+#[allow(deprecated)]
+pub mod encrypt;
 pub mod errors;
 pub mod hashing;
 pub mod legacy;
