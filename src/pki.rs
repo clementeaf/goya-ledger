@@ -667,6 +667,157 @@ pub fn issue_fea_certificate(
     })
 }
 
+pub fn issue_fea_certificate_pqc(
+    req: &FeaCertRequest,
+    provider: &dyn crate::identity::signing::SigningProvider,
+) -> Result<Vec<u8>, PkiError> {
+    let now = time::OffsetDateTime::now_utc();
+    let not_after = now + time::Duration::days(i64::from(req.ttl_days));
+    let serial = did_to_cert_serial(&req.did);
+
+    let mldsa_alg_oid: &[u8] = &[0x30, 0x05, 0x06, 0x03, 0x60, 0x86, 0x48];
+
+    let mut subject_rdn_entries = Vec::new();
+    add_rdn_entry(
+        &mut subject_rdn_entries,
+        &[2, 5, 4, 3],
+        &format!("FEA:{}", req.did),
+    );
+    add_rdn_entry(&mut subject_rdn_entries, &[2, 5, 4, 42], &req.given_name);
+    add_rdn_entry(&mut subject_rdn_entries, &[2, 5, 4, 4], &req.surname);
+    add_rdn_entry(&mut subject_rdn_entries, &[2, 5, 4, 5], &req.rut);
+    add_rdn_entry(&mut subject_rdn_entries, &[2, 5, 4, 6], &req.country);
+
+    let mut subject = vec![0x30];
+    let subject_content: Vec<u8> = subject_rdn_entries.into_iter().flatten().collect();
+    der_push_length(&mut subject, subject_content.len());
+    subject.extend_from_slice(&subject_content);
+
+    let issuer_cn = "Goya Ledger CA";
+    let mut issuer = vec![0x30];
+    let issuer_entry = build_single_rdn(&[2, 5, 4, 3], issuer_cn);
+    der_push_length(&mut issuer, issuer_entry.len());
+    issuer.extend_from_slice(&issuer_entry);
+
+    let pk = provider.public_key();
+    let mut spki = Vec::new();
+    spki.extend_from_slice(mldsa_alg_oid);
+    let mut pk_bits = vec![0x00];
+    pk_bits.extend_from_slice(&pk);
+    let mut pk_tlv = vec![0x03];
+    der_push_length(&mut pk_tlv, pk_bits.len());
+    pk_tlv.extend_from_slice(&pk_bits);
+    spki.extend_from_slice(&pk_tlv);
+    let mut spki_seq = vec![0x30];
+    der_push_length(&mut spki_seq, spki.len());
+    spki_seq.extend_from_slice(&spki);
+
+    let mut tbs = Vec::new();
+    let version = [0xa0, 0x03, 0x02, 0x01, 0x02];
+    tbs.extend_from_slice(&version);
+
+    let mut serial_tlv = vec![0x02];
+    der_push_length(&mut serial_tlv, serial.len());
+    serial_tlv.extend_from_slice(&serial);
+    tbs.extend_from_slice(&serial_tlv);
+
+    tbs.extend_from_slice(mldsa_alg_oid);
+    tbs.extend_from_slice(&issuer);
+
+    let mut validity = Vec::new();
+    let nb = format_utc_time(now.unix_timestamp() as u64);
+    validity.extend_from_slice(&[0x17, nb.len() as u8]);
+    validity.extend_from_slice(nb.as_bytes());
+    let na = format_utc_time(not_after.unix_timestamp() as u64);
+    validity.extend_from_slice(&[0x17, na.len() as u8]);
+    validity.extend_from_slice(na.as_bytes());
+    let mut validity_seq = vec![0x30];
+    der_push_length(&mut validity_seq, validity.len());
+    validity_seq.extend_from_slice(&validity);
+    tbs.extend_from_slice(&validity_seq);
+
+    tbs.extend_from_slice(&subject);
+    tbs.extend_from_slice(&spki_seq);
+
+    let mut tbs_seq = vec![0x30];
+    der_push_length(&mut tbs_seq, tbs.len());
+    tbs_seq.extend_from_slice(&tbs);
+
+    let sig = provider
+        .sign(&tbs_seq)
+        .map_err(|_| PkiError::Rcgen(rcgen::Error::CouldNotParseCertificate))?;
+
+    let mut sig_bits = vec![0x00];
+    sig_bits.extend_from_slice(&sig);
+    let mut sig_tlv = vec![0x03];
+    der_push_length(&mut sig_tlv, sig_bits.len());
+    sig_tlv.extend_from_slice(&sig_bits);
+
+    let mut cert = vec![0x30];
+    let total_len = tbs_seq.len() + mldsa_alg_oid.len() + sig_tlv.len();
+    der_push_length(&mut cert, total_len);
+    cert.extend_from_slice(&tbs_seq);
+    cert.extend_from_slice(mldsa_alg_oid);
+    cert.extend_from_slice(&sig_tlv);
+
+    Ok(cert)
+}
+
+fn add_rdn_entry(entries: &mut Vec<Vec<u8>>, oid_parts: &[u64], value: &str) {
+    let entry = build_single_rdn_from_oid_parts(oid_parts, value);
+    entries.push(entry);
+}
+
+fn build_single_rdn(oid_der: &[u8], value: &str) -> Vec<u8> {
+    let mut attr = vec![0x30];
+    let oid_tlv = {
+        let mut o = vec![0x06, oid_der.len() as u8];
+        o.extend_from_slice(oid_der);
+        o
+    };
+    let val_tlv = {
+        let mut v = vec![0x0c];
+        der_push_length(&mut v, value.len());
+        v.extend_from_slice(value.as_bytes());
+        v
+    };
+    let inner_len = oid_tlv.len() + val_tlv.len();
+    der_push_length(&mut attr, inner_len);
+    attr.extend_from_slice(&oid_tlv);
+    attr.extend_from_slice(&val_tlv);
+
+    let mut set = vec![0x31];
+    der_push_length(&mut set, attr.len());
+    set.extend_from_slice(&attr);
+    set
+}
+
+fn build_single_rdn_from_oid_parts(parts: &[u64], value: &str) -> Vec<u8> {
+    let oid_der = encode_oid_der(parts);
+    let val_tlv = {
+        let mut v = vec![0x0c];
+        der_push_length(&mut v, value.len());
+        v.extend_from_slice(value.as_bytes());
+        v
+    };
+
+    let mut attr = vec![0x30];
+    let inner_len = oid_der.len() + val_tlv.len();
+    der_push_length(&mut attr, inner_len);
+    attr.extend_from_slice(&oid_der);
+    attr.extend_from_slice(&val_tlv);
+
+    let mut set = vec![0x31];
+    der_push_length(&mut set, attr.len());
+    set.extend_from_slice(&attr);
+    set
+}
+
+#[cfg(test)]
+fn extract_cert_signature(cert_der: &[u8]) -> Vec<u8> {
+    extract_crl_signature(cert_der, find_tbs_end(cert_der))
+}
+
 pub fn did_to_cert_serial(did: &str) -> Vec<u8> {
     use crate::crypto::hasher::{hash_with, HashAlgorithm};
     let hash = hash_with(HashAlgorithm::Sha256, did.as_bytes());
@@ -1729,5 +1880,86 @@ mod tests {
         let crl_der = build_crl_signed(&[], &provider).unwrap();
         assert!(crl_der[0] == 0x30);
         assert!(crl_der.len() > 50);
+    }
+
+    #[test]
+    fn issue_fea_cert_pqc_produces_valid_der() {
+        let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+        let req = FeaCertRequest {
+            did: "did:goya:pqctest1234abcd".into(),
+            rut: "11111111-1".into(),
+            given_name: "Carlos".into(),
+            surname: "Quantum".into(),
+            country: "CL".into(),
+            ttl_days: 365,
+        };
+        let cert_der = issue_fea_certificate_pqc(&req, &provider).unwrap();
+        assert!(cert_der[0] == 0x30, "must be DER SEQUENCE");
+        assert!(
+            cert_der.len() > 3500,
+            "PQC cert with ML-DSA-65 sig must be >3500B, got {}",
+            cert_der.len()
+        );
+    }
+
+    #[test]
+    fn issue_fea_cert_pqc_contains_rut() {
+        let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+        let req = FeaCertRequest {
+            did: "did:goya:pqctest5678efgh".into(),
+            rut: "22222222-2".into(),
+            given_name: "Ana".into(),
+            surname: "PostQuantum".into(),
+            country: "CL".into(),
+            ttl_days: 730,
+        };
+        let cert_der = issue_fea_certificate_pqc(&req, &provider).unwrap();
+        let cert_str = String::from_utf8_lossy(&cert_der);
+        assert!(
+            cert_str.contains("22222222-2"),
+            "RUT must appear in cert DER"
+        );
+    }
+
+    #[test]
+    fn issue_fea_cert_pqc_signature_is_3309_bytes() {
+        let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+        let req = FeaCertRequest {
+            did: "did:goya:sigsize12345678".into(),
+            rut: "33333333-3".into(),
+            given_name: "Test".into(),
+            surname: "SigSize".into(),
+            country: "CL".into(),
+            ttl_days: 365,
+        };
+        let cert_der = issue_fea_certificate_pqc(&req, &provider).unwrap();
+        let sig = extract_cert_signature(&cert_der);
+        assert_eq!(
+            sig.len(),
+            3309,
+            "ML-DSA-65 signature in cert must be 3309 bytes, got {}",
+            sig.len()
+        );
+    }
+
+    #[test]
+    fn issue_fea_cert_pqc_has_pqc_pubkey() {
+        use crate::identity::signing::SigningProvider;
+        let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+        let req = FeaCertRequest {
+            did: "did:goya:pubkeytest12345".into(),
+            rut: "44444444-4".into(),
+            given_name: "Key".into(),
+            surname: "Check".into(),
+            country: "CL".into(),
+            ttl_days: 365,
+        };
+        let cert_der = issue_fea_certificate_pqc(&req, &provider).unwrap();
+        let pk_hex = hex::encode(provider.public_key());
+        let cert_hex = hex::encode(&cert_der);
+        assert!(
+            cert_hex.contains(&pk_hex[..64]),
+            "cert must contain issuer public key"
+        );
     }
 }
