@@ -283,8 +283,9 @@ impl ApiRoutes {
             .service(ocsp::ocsp_status);
         // CRL Distribution Point (RFC 5280 §5)
         cfg.service(crl::get_crl_der).service(crl::get_crl_pem);
-        // FEA Certificate Issuance (Ley 19.799 / EA-103)
-        cfg.service(certificates::issue_fea_cert);
+        // FEA Certificate Issuance & Revocation (Ley 19.799 / EA-103)
+        cfg.service(certificates::issue_fea_cert)
+            .service(certificates::revoke_fea_cert);
         // Trust Service List (ETSI TS 119 612)
         cfg.service(tsl::get_tsl);
         // OpenID4VCI (EUDI Wallet credential issuance)

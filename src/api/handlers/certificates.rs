@@ -115,6 +115,65 @@ pub async fn issue_fea_cert(
     )))
 }
 
+#[derive(Deserialize)]
+pub struct RevokeFEACertRequest {
+    pub did: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Serialize)]
+struct RevokeFEACertResponse {
+    did: String,
+    serial_hex: String,
+    revoked: bool,
+}
+
+#[post("/certificates/fea/revoke")]
+pub async fn revoke_fea_cert(
+    crl_store: Option<web::Data<std::sync::Arc<dyn crate::msp::CrlStore>>>,
+    body: web::Json<RevokeFEACertRequest>,
+) -> ApiResult<HttpResponse> {
+    if body.did.is_empty() || !body.did.starts_with("did:goya:") {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto("INVALID_DID", "did must start with did:goya:"),
+            400,
+        )));
+    }
+
+    let crl_store = crl_store.ok_or_else(|| crate::api::errors::ApiError::StorageError {
+        reason: "CRL store not configured".into(),
+    })?;
+
+    let serial = crate::pki::did_to_cert_serial(&body.did);
+    let serial_hex = hex::encode(&serial);
+
+    let existing = crl_store.read_crl("fea").unwrap_or_default();
+    if existing.contains(&serial_hex) {
+        return Ok(HttpResponse::Conflict().json(ApiResponse::<()>::error(
+            err_dto("ALREADY_REVOKED", "certificate already revoked"),
+            409,
+        )));
+    }
+
+    let mut updated = existing;
+    updated.push(serial_hex.clone());
+    crl_store.write_crl("fea", &updated).map_err(|e| {
+        crate::api::errors::ApiError::StorageError {
+            reason: format!("CRL write failed: {e}"),
+        }
+    })?;
+
+    let trace = uuid::Uuid::new_v4().to_string();
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        RevokeFEACertResponse {
+            did: body.did.clone(),
+            serial_hex,
+            revoked: true,
+        },
+        trace,
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,6 +259,82 @@ mod tests {
                 "given_name": "Test",
                 "surname": "User"
             }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 400);
+    }
+
+    fn make_crl_store() -> std::sync::Arc<dyn crate::msp::CrlStore> {
+        std::sync::Arc::new(crate::msp::MemoryCrlStore::new())
+    }
+
+    #[actix_web::test]
+    async fn revoke_fea_cert_returns_200() {
+        let crl = make_crl_store();
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(crl))
+                .service(web::scope("/api/v1").service(revoke_fea_cert)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/certificates/fea/revoke")
+            .set_json(serde_json::json!({
+                "did": "did:goya:abcdef01234567"
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["revoked"], true);
+        assert!(!body["data"]["serial_hex"].as_str().unwrap().is_empty());
+    }
+
+    #[actix_web::test]
+    async fn revoke_fea_cert_returns_409_if_already_revoked() {
+        let crl = make_crl_store();
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(crl))
+                .service(web::scope("/api/v1").service(revoke_fea_cert)),
+        )
+        .await;
+
+        let payload = serde_json::json!({
+            "did": "did:goya:abcdef01234567"
+        });
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/certificates/fea/revoke")
+            .set_json(&payload)
+            .to_request();
+        test::call_service(&app, req).await;
+
+        let req2 = test::TestRequest::post()
+            .uri("/api/v1/certificates/fea/revoke")
+            .set_json(&payload)
+            .to_request();
+        let resp2 = test::call_service(&app, req2).await;
+        assert_eq!(resp2.status(), 409);
+    }
+
+    #[actix_web::test]
+    async fn revoke_fea_cert_rejects_invalid_did() {
+        let crl = make_crl_store();
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(crl))
+                .service(web::scope("/api/v1").service(revoke_fea_cert)),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/certificates/fea/revoke")
+            .set_json(serde_json::json!({"did": "bad"}))
             .to_request();
 
         let resp = test::call_service(&app, req).await;
