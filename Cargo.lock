@@ -5481,6 +5481,7 @@ dependencies = [
 name = "pqc_crypto_module"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "cc",
  "ed25519-dalek",
  "hex",
