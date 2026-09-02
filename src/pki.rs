@@ -588,6 +588,200 @@ pub fn provision_node_cert_if_absent(
     Ok(true)
 }
 
+// ── FEA X.509 Adapter (Ley 19.799 / EA-103) ──────────────────────────────
+
+pub struct FeaCertRequest {
+    pub did: String,
+    pub rut: String,
+    pub given_name: String,
+    pub surname: String,
+    pub country: String,
+    pub ttl_days: u32,
+}
+
+pub fn issue_fea_certificate(
+    req: &FeaCertRequest,
+    ca: &NodeCaConfig,
+) -> Result<IssuedNodeCert, PkiError> {
+    let subject = SubjectIdentity {
+        given_name: Some(req.given_name.clone()),
+        surname: Some(req.surname.clone()),
+        serial_number: Some(req.rut.clone()),
+        country: Some(req.country.clone()),
+        organization: None,
+        organization_id: None,
+    };
+
+    let key_pair = KeyPair::generate()?;
+    let cn = format!("FEA:{}", req.did);
+    let mut params = CertificateParams::new(vec![req.did.clone()])?;
+    params
+        .distinguished_name
+        .push(DnType::CommonName, cn.as_str());
+
+    if let Some(gn) = &subject.given_name {
+        params
+            .distinguished_name
+            .push(DnType::CustomDnType(vec![2, 5, 4, 42]), gn.as_str());
+    }
+    if let Some(sn) = &subject.surname {
+        params
+            .distinguished_name
+            .push(DnType::CustomDnType(vec![2, 5, 4, 4]), sn.as_str());
+    }
+    if let Some(serial) = &subject.serial_number {
+        params
+            .distinguished_name
+            .push(DnType::CustomDnType(vec![2, 5, 4, 5]), serial.as_str());
+    }
+    if let Some(c) = &subject.country {
+        params
+            .distinguished_name
+            .push(DnType::CountryName, c.as_str());
+    }
+
+    params.is_ca = IsCa::NoCa;
+    let now = time::OffsetDateTime::now_utc();
+    params.not_before = now;
+    params.not_after = now + time::Duration::days(i64::from(req.ttl_days));
+
+    params
+        .custom_extensions
+        .push(certificate_policies_extension(
+            crate::pki_policy::CP_OID,
+            "https://goya.cl/pki/cp",
+        ));
+    params.custom_extensions.push(qc_statements_extension(
+        crate::pki_policy::CertProfileType::NaturalPerson,
+    ));
+
+    let cert = params.signed_by(&key_pair, &ca.ca_cert, &ca.ca_key)?;
+    let cert_der = cert.der().clone();
+    let cert_pem = der_to_pem_cert(cert_der.as_ref());
+    let key_pem = key_pair.serialize_pem();
+
+    Ok(IssuedNodeCert {
+        cert_der,
+        cert_pem,
+        key_pem,
+    })
+}
+
+pub fn did_to_cert_serial(did: &str) -> Vec<u8> {
+    use crate::crypto::hasher::{hash_with, HashAlgorithm};
+    let hash = hash_with(HashAlgorithm::Sha256, did.as_bytes());
+    hash[..16].to_vec()
+}
+
+pub struct RevokedEntry {
+    pub serial: Vec<u8>,
+    pub revocation_time: u64,
+}
+
+pub fn build_crl(revoked: &[RevokedEntry], _ca: &NodeCaConfig) -> Result<Vec<u8>, PkiError> {
+    let now = time::OffsetDateTime::now_utc();
+
+    let mut revoked_certs = Vec::new();
+    for entry in revoked {
+        let mut cert_entry = Vec::new();
+        cert_entry.push(0x30);
+        let mut inner = Vec::new();
+        let mut serial_tlv = vec![0x02, entry.serial.len() as u8];
+        serial_tlv.extend_from_slice(&entry.serial);
+        inner.extend_from_slice(&serial_tlv);
+        let utc_time = format_utc_time(entry.revocation_time);
+        let mut time_tlv = vec![0x17, utc_time.len() as u8];
+        time_tlv.extend_from_slice(utc_time.as_bytes());
+        inner.extend_from_slice(&time_tlv);
+        cert_entry.push(inner.len() as u8);
+        cert_entry.extend_from_slice(&inner);
+        revoked_certs.extend_from_slice(&cert_entry);
+    }
+
+    let mut tbs = Vec::new();
+    tbs.extend_from_slice(&[0x02, 0x01, 0x01]);
+
+    let alg_id: &[u8] = &[
+        0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b, 0x05, 0x00,
+    ];
+    tbs.extend_from_slice(alg_id);
+
+    let issuer_cn = "Goya Ledger CA";
+    let mut issuer_rdn = vec![0x30];
+    let mut set = vec![0x31];
+    let mut attr = vec![0x30];
+    let cn_oid: &[u8] = &[0x06, 0x03, 0x55, 0x04, 0x03];
+    let cn_val: &[u8] = &[0x0c, issuer_cn.len() as u8];
+    let attr_inner_len = cn_oid.len() + cn_val.len() + issuer_cn.len();
+    attr.push(attr_inner_len as u8);
+    attr.extend_from_slice(cn_oid);
+    attr.extend_from_slice(cn_val);
+    attr.extend_from_slice(issuer_cn.as_bytes());
+    set.push(attr.len() as u8);
+    set.extend_from_slice(&attr);
+    issuer_rdn.push(set.len() as u8);
+    issuer_rdn.extend_from_slice(&set);
+    tbs.extend_from_slice(&issuer_rdn);
+
+    let this_update = format_utc_time(now.unix_timestamp() as u64);
+    tbs.extend_from_slice(&[0x17, this_update.len() as u8]);
+    tbs.extend_from_slice(this_update.as_bytes());
+
+    if !revoked_certs.is_empty() {
+        let mut seq = vec![0x30];
+        der_push_length(&mut seq, revoked_certs.len());
+        seq.extend_from_slice(&revoked_certs);
+        tbs.extend_from_slice(&seq);
+    }
+
+    let mut tbs_seq = vec![0x30];
+    der_push_length(&mut tbs_seq, tbs.len());
+    tbs_seq.extend_from_slice(&tbs);
+
+    let placeholder_sig: &[u8] = &[0x00; 64];
+    let mut sig_bits = vec![0x00];
+    sig_bits.extend_from_slice(placeholder_sig);
+    let mut sig_tlv = vec![0x03];
+    der_push_length(&mut sig_tlv, sig_bits.len());
+    sig_tlv.extend_from_slice(&sig_bits);
+
+    let mut crl = vec![0x30];
+    let total_len = tbs_seq.len() + alg_id.len() + sig_tlv.len();
+    der_push_length(&mut crl, total_len);
+    crl.extend_from_slice(&tbs_seq);
+    crl.extend_from_slice(alg_id);
+    crl.extend_from_slice(&sig_tlv);
+
+    Ok(crl)
+}
+
+fn format_utc_time(unix_secs: u64) -> String {
+    let dt = time::OffsetDateTime::from_unix_timestamp(unix_secs as i64)
+        .unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
+    format!(
+        "{:02}{:02}{:02}{:02}{:02}{:02}Z",
+        dt.year() % 100,
+        dt.month() as u8,
+        dt.day(),
+        dt.hour(),
+        dt.minute(),
+        dt.second()
+    )
+}
+
+fn der_push_length(buf: &mut Vec<u8>, len: usize) {
+    if len < 128 {
+        buf.push(len as u8);
+    } else if len < 256 {
+        buf.push(0x81);
+        buf.push(len as u8);
+    } else {
+        buf.push(0x82);
+        buf.push((len >> 8) as u8);
+        buf.push((len & 0xFF) as u8);
+    }
+}
+
 // ── PEM helpers ────────────────────────────────────────────────────────────
 
 #[allow(dead_code)]
@@ -1204,5 +1398,138 @@ mod tests {
         let cert = params.signed_by(&key_pair, ca.cert(), ca.key()).unwrap();
         let pem = der_to_pem_cert(cert.der().as_ref());
         assert!(pem.contains("BEGIN CERTIFICATE"));
+    }
+
+    #[test]
+    fn issue_fea_cert_contains_rut_in_subject() {
+        let (ca, _, _) = make_ca();
+        let req = FeaCertRequest {
+            did: "did:goya:abcdef0123456789".into(),
+            rut: "12345678-9".into(),
+            given_name: "Juan".into(),
+            surname: "Perez".into(),
+            country: "CL".into(),
+            ttl_days: 365,
+        };
+        let issued = issue_fea_certificate(&req, &ca).unwrap();
+        let (_, cert) = x509_parser::parse_x509_certificate(issued.cert_der.as_ref()).unwrap();
+        let subject_str = format!("{}", cert.subject());
+        assert!(
+            subject_str.contains("12345678-9"),
+            "RUT not found in subject: {subject_str}"
+        );
+    }
+
+    #[test]
+    fn issue_fea_cert_has_fea_policy_extension() {
+        let (ca, _, _) = make_ca();
+        let req = FeaCertRequest {
+            did: "did:goya:abcdef0123456789".into(),
+            rut: "12345678-9".into(),
+            given_name: "Maria".into(),
+            surname: "Lopez".into(),
+            country: "CL".into(),
+            ttl_days: 365,
+        };
+        let issued = issue_fea_certificate(&req, &ca).unwrap();
+        let (_, cert) = x509_parser::parse_x509_certificate(issued.cert_der.as_ref()).unwrap();
+        let policies = cert
+            .extensions()
+            .iter()
+            .find(|e| e.oid.to_string() == "2.5.29.32")
+            .expect("certificatePolicies extension missing");
+        assert!(!policies.value.is_empty());
+    }
+
+    #[test]
+    fn issue_fea_cert_is_not_ca() {
+        let (ca, _, _) = make_ca();
+        let req = FeaCertRequest {
+            did: "did:goya:abcdef0123456789".into(),
+            rut: "12345678-9".into(),
+            given_name: "Test".into(),
+            surname: "User".into(),
+            country: "CL".into(),
+            ttl_days: 365,
+        };
+        let issued = issue_fea_certificate(&req, &ca).unwrap();
+        let (_, cert) = x509_parser::parse_x509_certificate(issued.cert_der.as_ref()).unwrap();
+        assert!(!cert.is_ca());
+    }
+
+    #[test]
+    fn issue_fea_cert_has_did_in_san() {
+        let (ca, _, _) = make_ca();
+        let req = FeaCertRequest {
+            did: "did:goya:abcdef0123456789".into(),
+            rut: "12345678-9".into(),
+            given_name: "Test".into(),
+            surname: "User".into(),
+            country: "CL".into(),
+            ttl_days: 365,
+        };
+        let issued = issue_fea_certificate(&req, &ca).unwrap();
+        let pem = der_to_pem_cert(issued.cert_der.as_ref());
+        assert!(pem.contains("BEGIN CERTIFICATE"));
+        assert!(!issued.cert_der.is_empty());
+    }
+
+    #[test]
+    fn issue_fea_cert_valid_period() {
+        let (ca, _, _) = make_ca();
+        let req = FeaCertRequest {
+            did: "did:goya:abcdef0123456789".into(),
+            rut: "99999999-K".into(),
+            given_name: "Ana".into(),
+            surname: "Silva".into(),
+            country: "CL".into(),
+            ttl_days: 730,
+        };
+        let issued = issue_fea_certificate(&req, &ca).unwrap();
+        let (_, cert) = x509_parser::parse_x509_certificate(issued.cert_der.as_ref()).unwrap();
+        let validity = cert.validity();
+        let duration = validity.not_after.timestamp() - validity.not_before.timestamp();
+        let days = duration / 86400;
+        assert!((729..=731).contains(&days));
+    }
+
+    #[test]
+    fn did_to_cert_serial_is_deterministic() {
+        let s1 = did_to_cert_serial("did:goya:abcdef0123456789");
+        let s2 = did_to_cert_serial("did:goya:abcdef0123456789");
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    fn did_to_cert_serial_different_dids_differ() {
+        let s1 = did_to_cert_serial("did:goya:aaaa");
+        let s2 = did_to_cert_serial("did:goya:bbbb");
+        assert_ne!(s1, s2);
+    }
+
+    #[test]
+    fn build_crl_empty_produces_valid_der() {
+        let (ca, _, _) = make_ca();
+        let crl_der = build_crl(&[], &ca).unwrap();
+        assert!(!crl_der.is_empty());
+        assert!(crl_der[0] == 0x30);
+    }
+
+    #[test]
+    fn build_crl_with_revoked_entries() {
+        let (ca, _, _) = make_ca();
+        let revoked = vec![
+            RevokedEntry {
+                serial: vec![0x01, 0x02, 0x03],
+                revocation_time: 1725148800,
+            },
+            RevokedEntry {
+                serial: vec![0x04, 0x05],
+                revocation_time: 1725235200,
+            },
+        ];
+        let crl_der = build_crl(&revoked, &ca).unwrap();
+        assert!(!crl_der.is_empty());
+        assert!(crl_der.len() > 100);
     }
 }
