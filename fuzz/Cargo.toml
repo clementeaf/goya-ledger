@@ -26,3 +26,8 @@ doc = false
 name = "gossip_message_parser"
 path = "fuzz_targets/gossip_message_parser.rs"
 doc = false
+
+[[bin]]
+name = "mldsa65_verify"
+path = "fuzz_targets/mldsa65_verify.rs"
+doc = false
