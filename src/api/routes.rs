@@ -409,7 +409,8 @@ impl LightRoutes {
         // Identity (DID management)
         cfg.service(identity::store_write_identity)
             .service(identity::store_list_identities)
-            .service(identity::store_get_identity);
+            .service(identity::store_get_identity)
+            .service(identity::migrate_did);
         // Credentials (VCs)
         cfg.service(credentials::store_write_credential)
             .service(credentials::store_list_credentials)

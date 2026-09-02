@@ -284,4 +284,106 @@ mod tests {
         }
         assert_eq!(km.retired_key_count(), 5);
     }
+
+    #[test]
+    fn migrate_ed25519_to_mldsa65() {
+        let store = crate::storage::memory::MemoryStore::new();
+        let km = KeyManager::new(1000);
+        let old_did = km.did();
+        let old_pk = km.public_key_hex();
+
+        store
+            .write_identity(&IdentityRecord {
+                did: old_did.clone(),
+                public_key: old_pk.clone(),
+                created_at: 1000,
+                updated_at: 1000,
+                status: "active".into(),
+                migrated_from: None,
+            })
+            .unwrap();
+
+        let result = migrate_identity(&store, &old_did, SigningAlgorithm::MlDsa65, 2000).unwrap();
+
+        assert_ne!(result.old_did, result.new_did);
+        assert_eq!(result.new_algorithm, SigningAlgorithm::MlDsa65);
+        assert_eq!(result.new_public_key_hex.len(), 3904);
+
+        let old_record = store.read_identity(&old_did).unwrap();
+        assert_eq!(old_record.status, "migrated");
+
+        let new_record = store.read_identity(&result.new_did).unwrap();
+        assert_eq!(new_record.status, "active");
+        assert_eq!(new_record.migrated_from.as_deref(), Some(old_did.as_str()));
+    }
+
+    #[test]
+    fn resolve_follows_migration_chain() {
+        let store = crate::storage::memory::MemoryStore::new();
+        let km = KeyManager::new(1000);
+        let old_did = km.did();
+
+        store
+            .write_identity(&IdentityRecord {
+                did: old_did.clone(),
+                public_key: km.public_key_hex(),
+                created_at: 1000,
+                updated_at: 1000,
+                status: "active".into(),
+                migrated_from: None,
+            })
+            .unwrap();
+
+        let result = migrate_identity(&store, &old_did, SigningAlgorithm::MlDsa65, 2000).unwrap();
+
+        let resolved = resolve_identity(&store, &old_did).unwrap();
+        assert_eq!(resolved.did, result.new_did);
+        assert_eq!(resolved.status, "active");
+    }
+
+    #[test]
+    fn resolve_returns_active_if_not_migrated() {
+        let store = crate::storage::memory::MemoryStore::new();
+        let km = KeyManager::with_algorithm(SigningAlgorithm::MlDsa65, 1000);
+        let did = km.did();
+
+        store
+            .write_identity(&IdentityRecord {
+                did: did.clone(),
+                public_key: km.public_key_hex(),
+                created_at: 1000,
+                updated_at: 1000,
+                status: "active".into(),
+                migrated_from: None,
+            })
+            .unwrap();
+
+        let resolved = resolve_identity(&store, &did).unwrap();
+        assert_eq!(resolved.did, did);
+        assert_eq!(resolved.status, "active");
+    }
+
+    #[test]
+    fn migrate_produces_valid_signing_proof() {
+        let store = crate::storage::memory::MemoryStore::new();
+        let km = KeyManager::new(1000);
+        let old_did = km.did();
+
+        store
+            .write_identity(&IdentityRecord {
+                did: old_did.clone(),
+                public_key: km.public_key_hex(),
+                created_at: 1000,
+                updated_at: 1000,
+                status: "active".into(),
+                migrated_from: None,
+            })
+            .unwrap();
+
+        let result = migrate_identity(&store, &old_did, SigningAlgorithm::MlDsa65, 2000).unwrap();
+        let new_provider = new_provider(result.new_algorithm);
+        let test_data = b"migration verification";
+        let sig = new_provider.sign(test_data).unwrap();
+        assert_eq!(sig.len(), 3309);
+    }
 }
