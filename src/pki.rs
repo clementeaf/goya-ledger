@@ -755,6 +755,154 @@ pub fn build_crl(revoked: &[RevokedEntry], _ca: &NodeCaConfig) -> Result<Vec<u8>
     Ok(crl)
 }
 
+pub fn build_crl_signed(
+    revoked: &[RevokedEntry],
+    provider: &dyn crate::identity::signing::SigningProvider,
+) -> Result<Vec<u8>, PkiError> {
+    let now = time::OffsetDateTime::now_utc();
+
+    let mut revoked_certs = Vec::new();
+    for entry in revoked {
+        let mut inner = Vec::new();
+        let mut serial_tlv = vec![0x02, entry.serial.len() as u8];
+        serial_tlv.extend_from_slice(&entry.serial);
+        inner.extend_from_slice(&serial_tlv);
+        let utc_time = format_utc_time(entry.revocation_time);
+        let mut time_tlv = vec![0x17, utc_time.len() as u8];
+        time_tlv.extend_from_slice(utc_time.as_bytes());
+        inner.extend_from_slice(&time_tlv);
+        let mut cert_entry = vec![0x30];
+        der_push_length(&mut cert_entry, inner.len());
+        cert_entry.extend_from_slice(&inner);
+        revoked_certs.extend_from_slice(&cert_entry);
+    }
+
+    let alg_name = format!("{}", provider.algorithm());
+    let alg_oid_der = match provider.algorithm() {
+        crate::identity::signing::SigningAlgorithm::MlDsa65 => {
+            vec![0x30, 0x05, 0x06, 0x03, 0x60, 0x86, 0x48]
+        }
+        crate::identity::signing::SigningAlgorithm::Ed25519 => {
+            vec![0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70]
+        }
+        _ => vec![
+            0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0b, 0x05,
+            0x00,
+        ],
+    };
+    let _ = alg_name;
+
+    let mut tbs = Vec::new();
+    tbs.extend_from_slice(&[0x02, 0x01, 0x01]);
+    tbs.extend_from_slice(&alg_oid_der);
+
+    let issuer_cn = "Goya Ledger CA";
+    let mut issuer_rdn = vec![0x30];
+    let mut set = vec![0x31];
+    let mut attr = vec![0x30];
+    let cn_oid: &[u8] = &[0x06, 0x03, 0x55, 0x04, 0x03];
+    let cn_val: &[u8] = &[0x0c, issuer_cn.len() as u8];
+    let attr_inner_len = cn_oid.len() + cn_val.len() + issuer_cn.len();
+    attr.push(attr_inner_len as u8);
+    attr.extend_from_slice(cn_oid);
+    attr.extend_from_slice(cn_val);
+    attr.extend_from_slice(issuer_cn.as_bytes());
+    set.push(attr.len() as u8);
+    set.extend_from_slice(&attr);
+    issuer_rdn.push(set.len() as u8);
+    issuer_rdn.extend_from_slice(&set);
+    tbs.extend_from_slice(&issuer_rdn);
+
+    let this_update = format_utc_time(now.unix_timestamp() as u64);
+    tbs.extend_from_slice(&[0x17, this_update.len() as u8]);
+    tbs.extend_from_slice(this_update.as_bytes());
+
+    if !revoked_certs.is_empty() {
+        let mut seq = vec![0x30];
+        der_push_length(&mut seq, revoked_certs.len());
+        seq.extend_from_slice(&revoked_certs);
+        tbs.extend_from_slice(&seq);
+    }
+
+    let mut tbs_seq = vec![0x30];
+    der_push_length(&mut tbs_seq, tbs.len());
+    tbs_seq.extend_from_slice(&tbs);
+
+    let sig = provider
+        .sign(&tbs_seq)
+        .map_err(|_| PkiError::Rcgen(rcgen::Error::CouldNotParseCertificate))?;
+
+    let mut sig_bits = vec![0x00];
+    sig_bits.extend_from_slice(&sig);
+    let mut sig_tlv = vec![0x03];
+    der_push_length(&mut sig_tlv, sig_bits.len());
+    sig_tlv.extend_from_slice(&sig_bits);
+
+    let mut crl = vec![0x30];
+    let total_len = tbs_seq.len() + alg_oid_der.len() + sig_tlv.len();
+    der_push_length(&mut crl, total_len);
+    crl.extend_from_slice(&tbs_seq);
+    crl.extend_from_slice(&alg_oid_der);
+    crl.extend_from_slice(&sig_tlv);
+
+    Ok(crl)
+}
+
+#[cfg(test)]
+fn find_tbs_end(crl_der: &[u8]) -> usize {
+    if crl_der.len() < 4 || crl_der[0] != 0x30 {
+        return 0;
+    }
+    let (outer_hdr, _) = der_read_length(&crl_der[1..]);
+    let tbs_start = 1 + outer_hdr;
+    if tbs_start >= crl_der.len() || crl_der[tbs_start] != 0x30 {
+        return 0;
+    }
+    let (tbs_hdr, tbs_content_len) = der_read_length(&crl_der[tbs_start + 1..]);
+    tbs_start + 1 + tbs_hdr + tbs_content_len
+}
+
+#[cfg(test)]
+fn extract_crl_signature(crl_der: &[u8], tbs_end: usize) -> Vec<u8> {
+    let after_tbs = &crl_der[tbs_end..];
+    if after_tbs.is_empty() || after_tbs[0] != 0x30 {
+        return Vec::new();
+    }
+    let (alg_hdr, alg_len) = der_read_length(&after_tbs[1..]);
+    let sig_start = 1 + alg_hdr + alg_len;
+    let sig_tlv = &after_tbs[sig_start..];
+    if sig_tlv.is_empty() || sig_tlv[0] != 0x03 {
+        return Vec::new();
+    }
+    let (sig_hdr, sig_content_len) = der_read_length(&sig_tlv[1..]);
+    let sig_content = &sig_tlv[1 + sig_hdr..1 + sig_hdr + sig_content_len];
+    if sig_content.is_empty() {
+        return Vec::new();
+    }
+    sig_content[1..].to_vec()
+}
+
+#[cfg(test)]
+fn der_read_length(data: &[u8]) -> (usize, usize) {
+    if data.is_empty() {
+        return (0, 0);
+    }
+    if data[0] < 128 {
+        (1, data[0] as usize)
+    } else if data[0] == 0x81 && data.len() >= 2 {
+        (2, data[1] as usize)
+    } else if data[0] == 0x82 && data.len() >= 3 {
+        (3, ((data[1] as usize) << 8) | (data[2] as usize))
+    } else if data[0] == 0x83 && data.len() >= 4 {
+        (
+            4,
+            ((data[1] as usize) << 16) | ((data[2] as usize) << 8) | (data[3] as usize),
+        )
+    } else {
+        (1, 0)
+    }
+}
+
 fn format_utc_time(unix_secs: u64) -> String {
     let dt = time::OffsetDateTime::from_unix_timestamp(unix_secs as i64)
         .unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
@@ -1531,5 +1679,55 @@ mod tests {
         let crl_der = build_crl(&revoked, &ca).unwrap();
         assert!(!crl_der.is_empty());
         assert!(crl_der.len() > 100);
+    }
+
+    #[test]
+    fn build_crl_signed_mldsa65_produces_large_signature() {
+        let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+        let crl_der = build_crl_signed(&[], &provider).unwrap();
+        assert!(crl_der[0] == 0x30);
+        assert!(
+            crl_der.len() > 3300,
+            "ML-DSA-65 sig is 3309B, CRL must be larger: got {}",
+            crl_der.len()
+        );
+    }
+
+    #[test]
+    fn build_crl_signed_mldsa65_has_real_signature() {
+        let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+        let revoked = vec![RevokedEntry {
+            serial: vec![0xAA, 0xBB],
+            revocation_time: 1725148800,
+        }];
+        let crl_der = build_crl_signed(&revoked, &provider).unwrap();
+
+        let sig_bytes = extract_crl_signature(&crl_der, find_tbs_end(&crl_der));
+        assert_eq!(
+            sig_bytes.len(),
+            3309,
+            "ML-DSA-65 signature must be 3309 bytes, got {}",
+            sig_bytes.len()
+        );
+        assert!(
+            sig_bytes.iter().any(|&b| b != 0),
+            "signature must not be all zeros"
+        );
+    }
+
+    #[test]
+    fn build_crl_signed_ed25519_works() {
+        let provider = crate::identity::signing::SoftwareSigningProvider::generate();
+        let crl_der = build_crl_signed(&[], &provider).unwrap();
+        assert!(crl_der[0] == 0x30);
+        assert!(crl_der.len() > 50);
+    }
+
+    #[test]
+    fn build_crl_signed_es256_works() {
+        let provider = crate::identity::signing::EcdsaP256SigningProvider::generate();
+        let crl_der = build_crl_signed(&[], &provider).unwrap();
+        assert!(crl_der[0] == 0x30);
+        assert!(crl_der.len() > 50);
     }
 }
