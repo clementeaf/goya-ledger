@@ -7,6 +7,7 @@ pub mod audit;
 pub mod billing;
 pub mod blocks;
 pub mod bridge;
+pub mod certificates;
 pub mod chain;
 pub mod chaincode;
 pub mod channels;

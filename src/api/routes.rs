@@ -3,12 +3,13 @@ use actix_web::{web, Scope};
 #[cfg(feature = "evm")]
 use crate::api::handlers::evm;
 use crate::api::handlers::{
-    acl, airdrop, alias, audit, billing, blocks, bridge, chain, chaincode, channels, compliance,
-    compliance_auto, contact, contracts, credentials, crl, discovery, events, forensic, gateway,
-    governance, governance_entities, identity, inference, intelligence, interop, invitations,
-    legal_oracle, lexchain, msp, network, notarize, ocsp, oid4vci, oid4vp, oracle, organizations,
-    pentest, pin, policy, private_data, proposals, ra, registry, regulatory, snapshots, staking,
-    stats, stress, stripe, tokenization, transactions, tsa, tsl, utilities, vault, wallets, zkp,
+    acl, airdrop, alias, audit, billing, blocks, bridge, certificates, chain, chaincode, channels,
+    compliance, compliance_auto, contact, contracts, credentials, crl, discovery, events, forensic,
+    gateway, governance, governance_entities, identity, inference, intelligence, interop,
+    invitations, legal_oracle, lexchain, msp, network, notarize, ocsp, oid4vci, oid4vp, oracle,
+    organizations, pentest, pin, policy, private_data, proposals, ra, registry, regulatory,
+    snapshots, staking, stats, stress, stripe, tokenization, transactions, tsa, tsl, utilities,
+    vault, wallets, zkp,
 };
 
 /// API routes configuration
@@ -282,6 +283,8 @@ impl ApiRoutes {
             .service(ocsp::ocsp_status);
         // CRL Distribution Point (RFC 5280 §5)
         cfg.service(crl::get_crl_der).service(crl::get_crl_pem);
+        // FEA Certificate Issuance (Ley 19.799 / EA-103)
+        cfg.service(certificates::issue_fea_cert);
         // Trust Service List (ETSI TS 119 612)
         cfg.service(tsl::get_tsl);
         // OpenID4VCI (EUDI Wallet credential issuance)
