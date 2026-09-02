@@ -319,6 +319,73 @@ impl SigningProvider for EcdsaP256SigningProvider {
     }
 }
 
+// ── SLH-DSA-128s (FIPS 205 — hash-based, stateless) ──────────────────────────
+
+pub struct SlhDsaSigningProvider {
+    keypair: pqc_crypto_module::slhdsa::SlhDsaKeyPair,
+}
+
+impl SlhDsaSigningProvider {
+    pub fn generate() -> Self {
+        let _ = pqc_crypto_module::api::initialize_approved_mode();
+        Self {
+            keypair: pqc_crypto_module::slhdsa::generate_keypair()
+                .expect("SLH-DSA keypair generation"),
+        }
+    }
+
+    pub fn from_bytes(
+        secret_key_bytes: &[u8],
+        public_key_bytes: &[u8],
+    ) -> Result<Self, SigningError> {
+        Ok(Self {
+            keypair: pqc_crypto_module::slhdsa::SlhDsaKeyPair {
+                public_key: pqc_crypto_module::slhdsa::SlhDsaPublicKey::from_bytes(
+                    public_key_bytes,
+                )
+                .map_err(|e| SigningError::KeyNotAvailable(format!("SLH-DSA pubkey: {e}")))?,
+                private_key: pqc_crypto_module::slhdsa::SlhDsaPrivateKey(secret_key_bytes.to_vec()),
+            },
+        })
+    }
+
+    pub fn public_key_bytes(&self) -> &[u8] {
+        self.keypair.public_key.as_bytes()
+    }
+
+    pub fn private_key_bytes(&self) -> &[u8] {
+        self.keypair.private_key.as_bytes()
+    }
+}
+
+impl SigningProvider for SlhDsaSigningProvider {
+    fn algorithm(&self) -> SigningAlgorithm {
+        SigningAlgorithm::SlhDsa128s
+    }
+
+    fn sign(&self, data: &[u8]) -> Result<Vec<u8>, SigningError> {
+        let sig = pqc_crypto_module::slhdsa::sign_message_raw(&self.keypair.private_key, data)
+            .map_err(|e| SigningError::SignFailed(format!("SLH-DSA sign: {e}")))?;
+        Ok(sig.as_bytes().to_vec())
+    }
+
+    fn public_key(&self) -> Vec<u8> {
+        self.keypair.public_key.as_bytes().to_vec()
+    }
+
+    fn verify(&self, data: &[u8], sig: &[u8]) -> Result<bool, SigningError> {
+        let signature = pqc_crypto_module::slhdsa::SlhDsaSignature(sig.to_vec());
+        match pqc_crypto_module::slhdsa::verify_signature_raw(
+            &self.keypair.public_key,
+            data,
+            &signature,
+        ) {
+            Ok(()) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    }
+}
+
 // ── FIPS 140-3 Power-Up Self-Tests (Known Answer Tests) ─────────────────────
 
 /// Run cryptographic self-tests for all supported algorithms.
@@ -811,6 +878,56 @@ mod tests {
             &msg,
             sig_hex,
         ));
+    }
+
+    #[test]
+    fn slhdsa_generate_and_sign() {
+        let provider = SlhDsaSigningProvider::generate();
+        assert_eq!(provider.algorithm(), SigningAlgorithm::SlhDsa128s);
+        assert!(provider.algorithm().is_post_quantum());
+        let sig = provider.sign(b"test message").unwrap();
+        assert!(
+            sig.len() > 7000,
+            "SLH-DSA-128s sig should be ~7856B, got {}",
+            sig.len()
+        );
+    }
+
+    #[test]
+    fn slhdsa_sign_and_verify() {
+        let provider = SlhDsaSigningProvider::generate();
+        let msg = b"post-quantum backup signing";
+        let sig = provider.sign(msg).unwrap();
+        assert!(provider.verify(msg, &sig).unwrap());
+    }
+
+    #[test]
+    fn slhdsa_verify_rejects_wrong_message() {
+        let provider = SlhDsaSigningProvider::generate();
+        let sig = provider.sign(b"correct").unwrap();
+        assert!(!provider.verify(b"wrong", &sig).unwrap());
+    }
+
+    #[test]
+    fn slhdsa_from_bytes_roundtrip() {
+        let provider = SlhDsaSigningProvider::generate();
+        let sk = provider.private_key_bytes().to_vec();
+        let pk = provider.public_key_bytes().to_vec();
+
+        let restored = SlhDsaSigningProvider::from_bytes(&sk, &pk).unwrap();
+        let msg = b"persistence test";
+        let sig = provider.sign(msg).unwrap();
+        assert!(restored.verify(msg, &sig).unwrap());
+    }
+
+    #[test]
+    fn slhdsa_pubkey_size() {
+        let provider = SlhDsaSigningProvider::generate();
+        assert_eq!(
+            provider.public_key().len(),
+            32,
+            "SLH-DSA-SHAKE-128s pubkey is 32 bytes"
+        );
     }
 
     #[test]
