@@ -183,6 +183,9 @@ pub fn sign(
         signature_algorithm: algorithm,
         biometric_evidence: req.biometric_evidence.clone(),
         signed_at: now_secs(),
+        secondary_signature: None,
+        secondary_public_key: None,
+        secondary_algorithm: None,
     };
 
     envelope

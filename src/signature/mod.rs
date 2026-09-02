@@ -235,6 +235,12 @@ pub struct SignedEnvelope {
     pub biometric_evidence: Vec<BiometricEvidence>,
     /// Unix timestamp when the envelope was created.
     pub signed_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secondary_signature: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secondary_public_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secondary_algorithm: Option<SigningAlgorithm>,
 }
 
 impl SignedEnvelope {
@@ -260,6 +266,52 @@ impl SignedEnvelope {
     /// - Biometric evidence present when required
     /// - All biometric commitments are valid hex
     /// - Content hash is valid SHA-256 hex
+    pub fn is_hybrid(&self) -> bool {
+        self.secondary_signature.is_some()
+            && self.secondary_public_key.is_some()
+            && self.secondary_algorithm.is_some()
+    }
+
+    pub fn attach_secondary(
+        &mut self,
+        provider: &dyn crate::identity::signing::SigningProvider,
+    ) -> Result<(), SignatureError> {
+        let payload = self.signing_payload();
+        let sig = provider
+            .sign(payload.as_bytes())
+            .map_err(|e| SignatureError::InvalidBiometric(format!("signing failed: {e}")))?;
+        self.secondary_signature = Some(hex::encode(&sig));
+        self.secondary_public_key = Some(hex::encode(provider.public_key()));
+        self.secondary_algorithm = Some(provider.algorithm());
+        Ok(())
+    }
+
+    pub fn verify_hybrid(&self) -> Result<bool, SignatureError> {
+        let payload = self.signing_payload();
+
+        let primary_valid = verify_signature(
+            self.signature_algorithm,
+            &self.public_key,
+            payload.as_bytes(),
+            &self.signature,
+        );
+
+        if !primary_valid {
+            return Ok(false);
+        }
+
+        if let (Some(sec_sig), Some(sec_pk), Some(sec_alg)) = (
+            &self.secondary_signature,
+            &self.secondary_public_key,
+            &self.secondary_algorithm,
+        ) {
+            let secondary_valid = verify_signature(*sec_alg, sec_pk, payload.as_bytes(), sec_sig);
+            Ok(secondary_valid)
+        } else {
+            Ok(true)
+        }
+    }
+
     pub fn validate_structure(&self) -> Result<(), SignatureError> {
         // Algorithm must satisfy level requirements
         if !self.level.algorithm_satisfies(self.signature_algorithm) {
@@ -396,6 +448,9 @@ mod tests {
             signature_algorithm: SigningAlgorithm::Ed25519,
             biometric_evidence: vec![],
             signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
         }
     }
 
@@ -412,6 +467,9 @@ mod tests {
                 dummy_bio(BiometricType::Rut),
             ],
             signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
         }
     }
 
@@ -602,6 +660,9 @@ mod tests {
             signature_algorithm: SigningAlgorithm::MlDsa65,
             biometric_evidence: vec![dummy_bio(BiometricType::FacialRecognition)],
             signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
         }
     }
 
@@ -1070,6 +1131,121 @@ mod tests {
     }
 
     // ── TDD: Qualified rejected at API level ──────────────────────
+    #[test]
+    fn hybrid_envelope_has_two_signatures() {
+        use crate::identity::signing::{
+            EcdsaP256SigningProvider, MlDsaSigningProvider, SigningProvider,
+        };
+        let pqc = MlDsaSigningProvider::generate();
+        let ec = EcdsaP256SigningProvider::generate();
+
+        let payload = "fes:did:goya:test:abcdef";
+        let sig = pqc.sign(payload.as_bytes()).unwrap();
+
+        let mut env = SignedEnvelope {
+            level: SignatureLevel::Simple,
+            signer: "did:goya:test".into(),
+            content_hash: "abcdef".into(),
+            signature: hex::encode(&sig),
+            public_key: hex::encode(pqc.public_key()),
+            signature_algorithm: SigningAlgorithm::MlDsa65,
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
+        };
+
+        assert!(!env.is_hybrid());
+        env.attach_secondary(&ec).unwrap();
+        assert!(env.is_hybrid());
+        assert_eq!(env.secondary_algorithm, Some(SigningAlgorithm::EcdsaP256));
+    }
+
+    #[test]
+    fn hybrid_verify_both_signatures_pass() {
+        use crate::identity::signing::{
+            EcdsaP256SigningProvider, MlDsaSigningProvider, SigningProvider,
+        };
+        let pqc = MlDsaSigningProvider::generate();
+        let ec = EcdsaP256SigningProvider::generate();
+
+        let payload = "fes:did:goya:hybrid:aabbccdd";
+        let sig = pqc.sign(payload.as_bytes()).unwrap();
+
+        let mut env = SignedEnvelope {
+            level: SignatureLevel::Simple,
+            signer: "did:goya:hybrid".into(),
+            content_hash: "aabbccdd".into(),
+            signature: hex::encode(&sig),
+            public_key: hex::encode(pqc.public_key()),
+            signature_algorithm: SigningAlgorithm::MlDsa65,
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
+        };
+
+        env.attach_secondary(&ec).unwrap();
+        assert!(env.verify_hybrid().unwrap());
+    }
+
+    #[test]
+    fn hybrid_verify_fails_if_primary_corrupted() {
+        use crate::identity::signing::{
+            EcdsaP256SigningProvider, MlDsaSigningProvider, SigningProvider,
+        };
+        let pqc = MlDsaSigningProvider::generate();
+        let ec = EcdsaP256SigningProvider::generate();
+
+        let payload = "fes:did:goya:corrupt:deadbeef";
+        let sig = pqc.sign(payload.as_bytes()).unwrap();
+
+        let mut env = SignedEnvelope {
+            level: SignatureLevel::Simple,
+            signer: "did:goya:corrupt".into(),
+            content_hash: "deadbeef".into(),
+            signature: hex::encode(&sig),
+            public_key: hex::encode(pqc.public_key()),
+            signature_algorithm: SigningAlgorithm::MlDsa65,
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
+        };
+
+        env.attach_secondary(&ec).unwrap();
+        env.signature = "00".repeat(3309);
+        assert!(!env.verify_hybrid().unwrap());
+    }
+
+    #[test]
+    fn non_hybrid_verify_works() {
+        use crate::identity::signing::{MlDsaSigningProvider, SigningProvider};
+        let pqc = MlDsaSigningProvider::generate();
+        let payload = "fes:did:goya:single:112233";
+        let sig = pqc.sign(payload.as_bytes()).unwrap();
+
+        let env = SignedEnvelope {
+            level: SignatureLevel::Simple,
+            signer: "did:goya:single".into(),
+            content_hash: "112233".into(),
+            signature: hex::encode(&sig),
+            public_key: hex::encode(pqc.public_key()),
+            signature_algorithm: SigningAlgorithm::MlDsa65,
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
+        };
+
+        assert!(!env.is_hybrid());
+        assert!(env.verify_hybrid().unwrap());
+    }
+
     #[test]
     fn validate_fes_fea_rejects_qualified() {
         let pk = "aa".repeat(1952);

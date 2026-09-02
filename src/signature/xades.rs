@@ -442,6 +442,9 @@ mod tests {
             signature_algorithm: SigningAlgorithm::Ed25519,
             biometric_evidence: vec![],
             signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
         }
     }
 
@@ -661,6 +664,9 @@ mod tests {
             signature_algorithm: provider.algorithm(),
             biometric_evidence: vec![],
             signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
         }
     }
 
