@@ -4,6 +4,72 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.16.1] — 2026-09-02
+
+### Added — PQC Testing & EU Compliance Documentation
+
+Comprehensive property-based testing, stress testing, and mechanical verification
+of BSI TR-02102-1, ANSSI hybrid mandate, and Mosca's theorem against live code.
+
+#### Property-based testing (proptest)
+- `src/fuzz_tests.rs`: 12 new proptest blocks (23 total)
+- Block full roundtrip — all fields including PQC (signature, endorsements, QC, embedded entries)
+- Transaction, IdentityRecord, Credential full roundtrip with all fields verified
+- Endorsement roundtrip exercising custom `vec_hex` + `hash_hex` serializers
+- `vec_hex`/`opt_vec_hex` edge cases: empty signatures, `Some(vec![])`
+- Block with `QuorumCertificate` roundtrip (VoteMessage signatures, BftPhase)
+- NotarizationEntry with biometric evidence roundtrip
+- Block double roundtrip idempotency (JSON stability)
+- Signature size x algorithm cross-validation (correct size passes, wrong size fails)
+- Legacy JSON (missing `#[serde(default)]` fields) produces sane defaults
+- Tampered JSON height detection
+- SigningAlgorithm (5 variants) and HashAlgorithm (2 variants) enum roundtrip
+
+#### Mempool stress test
+- `tests/mempool_stress.rs`: 8 integration tests
+- Backpressure: rejects at capacity, pool size invariant
+- Concurrent add (10 threads x 100 txs): no lost transactions, no duplicates
+- Drain under contention: adder + drainer simultaneous, conservation invariant
+- Double-spend under concurrent load: 10 threads, shared sender, balance enforced
+- Saturate-drain-refill cycle, drain more than available, remove under contention
+
+#### BSI TR-02102-1 (2024) compliance
+- `tests/eu_pqc_compliance.rs`: 5 BSI tests
+- Algorithm classification: ML-DSA-65/SLH-DSA-128s = recommended, Ed25519/ECDSA = transitional, RSA = not recommended
+- Primary algorithm meets NIST Level 3 (>=192-bit classical security)
+- Key sizes verified against live keygen (Ed25519, ML-DSA-65, SLH-DSA-128s)
+- Hash algorithm compliance (SHA-256 acceptable, SHA3-256 recommended)
+- ML-KEM-768 encap/decap verified (pk=1184B, ct=1088B, ss=32B)
+
+#### ANSSI hybrid mandate (2024) compliance
+- `tests/eu_pqc_compliance.rs`: 5 ANSSI tests
+- Hybrid signatures: Ed25519 primary + ML-DSA-65 secondary, `verify_hybrid` passes
+- Corrupted primary rejected, corrupted secondary rejected
+- Minimum NIST Level 3 for primary PQC
+- Dual assumption independence (ECC + lattice + hash = 3 independent families)
+
+#### Mosca's theorem — quantum migration urgency
+- `tests/mosca_theorem.rs`: 5 tests
+- 8 goya-ledger scenarios evaluated: FEA cert, CA root (17y), CA intermediate (12y), LexChain contract (17y), BFT vote (ephemeral), FES signature, notarized doc (27y perpetual), OID4VCI token (ephemeral)
+- All long-term data (x >= 5y) PQC-protected where Mosca inequality holds (x+y > z)
+- Urgency ranking: notarized docs > CA root > CA intermediate > LexChain > FES/FEA
+- Ephemeral data (BFT votes, tokens) safe without PQC
+- CRQC sensitivity analysis: 4 timelines (optimistic 2040, median 2035, pessimistic 2030, aggressive 2028) — zero unprotected long-term data under all scenarios
+
+#### EA-103 documentation — BSI/ANSSI citations
+- PS01 (Risk Management): BSI/ANSSI in R-11 quantum risk mitigation + references
+- PS02 (Security Policy): BSI classification in crypto directives, ANSSI hybrid mandate in section 8.2, both in normative references
+- PO01 (Certificate Policy): BSI/ANSSI in legal framework (section 2.5) + references (section 13)
+- PS06 (Key Management): BSI classification per algorithm in selection criteria (section 6.1.6), ANSSI hybrid mandate paragraph, both in framework (section 3) + references (section 14)
+- PSC Accreditation Checklist: BSI/ANSSI alignment noted in key management status
+
+### Stats
+- 46 new tests (23 proptest + 8 mempool + 10 EU PQC + 5 Mosca)
+- 14 BSI TR-02102-1 citations + 10 ANSSI Avis PQC citations across 5 EA-103 documents
+- Clippy clean, all pre-push gates pass
+
+---
+
 ## [0.14.1] — 2026-09-01
 
 ### Added — EU TSP Readiness

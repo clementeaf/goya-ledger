@@ -85,6 +85,8 @@ PS04 seccion 9 establece el inventario y las politicas generales del ciclo de vi
 | NIST SP 800-57 Parte 1 Rev. 5 | Recomendaciones para gestion de claves: tipos, estados, crypto-periodos |
 | NIST SP 800-88 Rev. 1 | Directrices para sanitizacion de medios (zeroizacion) |
 | NIST SP 800-133 Rev. 2 | Recomendaciones para generacion de claves criptograficas |
+| BSI TR-02102-1 (2024) | Recomendaciones de algoritmos criptograficos y longitudes de clave |
+| ANSSI Avis PQC (2024) | Migracion a criptografia post-cuantica con modo hibrido obligatorio |
 | ISO 27002:2022 Control 8.24 | Uso de criptografia |
 | RFC 3161 | Protocolo de sellado de tiempo |
 | RFC 6960 | Protocolo OCSP |
@@ -219,10 +221,12 @@ Requisitos:
 
 | Servicio | Algoritmo seleccionado | Justificacion |
 |----------|----------------------|---------------|
-| CA, TSA, OCSP, FEA | ML-DSA-65 | Resistencia post-cuantica (NIST Nivel 3). Certificados de larga duracion requieren proteccion contra computacion cuantica futura |
-| OID4VCI, TLS | ECDSA P-256 / ES256 | Interoperabilidad con ecosistema OAuth 2.0 / OpenID4VCI. Tokens de vida corta no requieren proteccion post-cuantica |
-| FES, BFT | Ed25519 | Rendimiento y tamano compacto (32B pubkey, 64B firma). FES es firma simple sin valor legal equivalente a FEA. Consenso BFT prioriza throughput |
-| Respaldo PQC | SLH-DSA-128s | Hash-based, independiente de supuestos lattice. Disponible como fallback si ML-DSA resulta vulnerable |
+| CA, TSA, OCSP, FEA | ML-DSA-65 | Resistencia post-cuantica (NIST Nivel 3). Clasificado "recommended" por BSI TR-02102-1 (2024). Certificados de larga duracion requieren proteccion contra computacion cuantica futura |
+| OID4VCI, TLS | ECDSA P-256 / ES256 | Interoperabilidad con ecosistema OAuth 2.0 / OpenID4VCI. Clasificado "transitional" por BSI TR-02102-1. Tokens de vida corta no requieren proteccion post-cuantica |
+| FES, BFT | Ed25519 | Rendimiento y tamano compacto (32B pubkey, 64B firma). Clasificado "transitional" por BSI TR-02102-1. FES es firma simple sin valor legal equivalente a FEA. Consenso BFT prioriza throughput |
+| Respaldo PQC | SLH-DSA-128s | Hash-based, independiente de supuestos lattice. Clasificado "recommended" por BSI TR-02102-1. Disponible como fallback si ML-DSA resulta vulnerable |
+
+La seleccion de algoritmos incorpora el requisito ANSSI de modo hibrido obligatorio (Avis PQC 2024, seccion 2): todo despliegue PQC combina una firma clasica (ECC) con una firma post-cuantica (lattice o hash), asegurando supuestos matematicos independientes. La seguridad no depende exclusivamente de ninguna familia criptografica.
 
 ### 6.2 Almacenamiento y Proteccion (ETSI TS 102 042 seccion 7.2.2)
 
@@ -803,6 +807,8 @@ Cada revision se documenta con:
 | RFC 5280 | Internet X.509 PKI Certificate and CRL Profile |
 | RFC 6960 | X.509 Internet PKI Online Certificate Status Protocol - OCSP |
 | RFC 7517 | JSON Web Key (JWK) |
+| BSI TR-02102-1 (2024) | Kryptographische Verfahren: Empfehlungen und Schlussellangen |
+| ANSSI Avis PQC (2024) | Avis relatif a la migration vers la cryptographie post-quantique |
 | DIN 66399 | Office machines - Destruction of data carriers |
 | PS01 | GOYA-PS01-001 - Plan de Gestion de Riesgos y Amenazas |
 | PS02 | GOYA-PS02-001 - Politica de Seguridad |

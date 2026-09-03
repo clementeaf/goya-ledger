@@ -284,8 +284,9 @@ Cada dominio de seguridad se rige por directrices derivadas de esta politica gen
 
 **Directrices:**
 
-- Los certificados FEA se firman exclusivamente con ML-DSA-65 (FIPS 204, nivel de seguridad NIST 3).
-- Las firmas electronicas simples (FES) utilizan Ed25519 (FIPS 186-5).
+- Los certificados FEA se firman exclusivamente con ML-DSA-65 (FIPS 204, nivel de seguridad NIST 3), clasificado como "recommended" por BSI TR-02102-1 (2024).
+- Las firmas electronicas simples (FES) utilizan Ed25519 (FIPS 186-5), clasificado como "transitional" por BSI TR-02102-1.
+- El despliegue PQC emplea modo hibrido obligatorio (firma clasica + firma post-cuantica simultaneas) conforme a la recomendacion ANSSI "Avis relatif a la migration vers la cryptographie post-quantique" (2024, seccion 2): la seguridad no debe depender exclusivamente de un algoritmo post-cuantico ni exclusivamente de uno clasico. El modo hibrido combina supuestos matematicos independientes (ECC + lattice).
 - Las claves privadas de la CA raiz se almacenan offline, fragmentadas mediante esquema M-of-N, y solo se activan durante ceremonias de clave documentadas.
 - Las claves privadas de la CA intermedia, TSA y OCSP se protegen mediante HSM certificado FIPS 140-3 Nivel 2 o superior (en proceso de implementacion; interim: almacenamiento en memoria volatil del servidor con zeroizacion al terminar).
 - La generacion, almacenamiento, uso, rotacion, respaldo, recuperacion y destruccion de claves siguen el ciclo de vida definido en NIST SP 800-57 Parte 1.
@@ -560,6 +561,8 @@ El Oficial de Seguridad mantiene un programa anual de concientizacion en segurid
 | ETSI EN 319 411-2 | Requisitos de politica para CA (cualificados) |
 | ETSI EN 319 421 | Requisitos de politica y seguridad para TSA |
 | FIPS 204 | ML-DSA (Module-Lattice-Based Digital Signature Algorithm) |
+| BSI TR-02102-1 (2024) | Kryptographische Verfahren: Empfehlungen und Schlussellangen (Algoritmos criptograficos: recomendaciones y longitudes de clave) |
+| ANSSI Avis PQC (2024) | Avis relatif a la migration vers la cryptographie post-quantique (Recomendacion sobre migracion a criptografia post-cuantica) |
 | FIPS 186-5 | Digital Signature Standard (Ed25519) |
 | NIST SP 800-57 Parte 1 | Gestion de claves criptograficas |
 | RFC 3161 | Internet X.509 PKI Time-Stamp Protocol |

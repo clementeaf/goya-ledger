@@ -529,7 +529,9 @@ Evaluation scale per the guide:
 
 - Goya has Ed25519 and ML-DSA-65 key management implemented in code.
 - Key generation, storage, and signing are implemented in `crates/pqc_crypto_module/`.
-- No formal key management plan document.
+- Algorithm selection aligned with BSI TR-02102-1 (2024): ML-DSA-65 "recommended", Ed25519 "transitional".
+- Hybrid mode (classical + PQC signatures) deployed per ANSSI Avis PQC (2024) section 2.
+- Formal Key Management Plan: PS06-KEY-MANAGEMENT-PLAN.md (completed).
 - No HSM integration (keys are software-managed).
 - No FIPS 140-2 certified cryptographic module.
 - No independent auditor report.

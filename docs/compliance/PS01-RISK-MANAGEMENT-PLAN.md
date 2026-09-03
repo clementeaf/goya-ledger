@@ -397,8 +397,10 @@ Se adopta ISO/IEC 27005:2022 como marco principal, complementado con NIST SP 800
   2. Para documentos de larga retencion, recomendar firma con FEA desde el inicio.
   3. Publicar guia de transicion para suscriptores.
   4. Monitorear avances en computacion cuantica y ajustar plazos de migracion.
+  5. Mantener modo hibrido obligatorio (firma clasica + PQC) conforme a ANSSI Avis PQC (2024, seccion 2), combinando supuestos matematicos independientes (ECC + lattice).
+  6. Seleccion de algoritmos alineada con BSI TR-02102-1 (2024): ML-DSA-65 "recommended", Ed25519 "transitional".
 - **Riesgo residual estimado:** 6 (Bajo)
-- **Estado:** Parcial (ML-DSA-65 operativo, guia de migracion pendiente)
+- **Estado:** Parcial (ML-DSA-65 operativo, modo hibrido operativo, guia de migracion pendiente)
 - **Responsable:** Arquitecto Criptografico
 - **Plazo:** 2027-Q2
 
@@ -770,3 +772,5 @@ La Guia de Acreditacion EA-103 v2.1 establece que el proceso de gestion de riesg
 | EA-103 v2.1 | Guia de acreditacion de PSC |
 | ETSI TS 102 042 | Requisitos de politica para CA |
 | ETSI EN 319 401 | Requisitos generales para prestadores de servicios de confianza |
+| BSI TR-02102-1 (2024) | Kryptographische Verfahren: Empfehlungen und Schlussellangen (recomendaciones de algoritmos criptograficos) |
+| ANSSI Avis PQC (2024) | Avis relatif a la migration vers la cryptographie post-quantique (modo hibrido obligatorio) |

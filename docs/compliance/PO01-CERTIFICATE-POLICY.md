@@ -170,6 +170,8 @@ Son entidades que verifican firmas electronicas avanzadas realizadas con certifi
 | RFC 5280 | Perfil de certificado y CRL para Internet PKI |
 | RFC 6960 | OCSP |
 | FIPS 204 | ML-DSA (Module Lattice Digital Signature Algorithm) |
+| BSI TR-02102-1 (2024) | Recomendaciones de algoritmos criptograficos y longitudes de clave (BSI, Alemania) |
+| ANSSI Avis PQC (2024) | Recomendacion sobre migracion a criptografia post-cuantica con modo hibrido obligatorio (ANSSI, Francia) |
 
 ---
 
@@ -708,6 +710,8 @@ En caso de brecha de seguridad que afecte datos personales:
 | FIPS 204 | Module-Lattice-Based Digital Signature Standard (ML-DSA) |
 | FIPS 186-5 | Digital Signature Standard (DSS) |
 | FIPS 140-3 | Security Requirements for Cryptographic Modules |
+| BSI TR-02102-1 (2024) | Kryptographische Verfahren: Empfehlungen und Schlussellangen |
+| ANSSI Avis PQC (2024) | Avis relatif a la migration vers la cryptographie post-quantique |
 
 ---
 
