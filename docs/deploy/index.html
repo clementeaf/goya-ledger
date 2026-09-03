@@ -235,6 +235,22 @@ strong { color: var(--fg); font-weight: 700; }
 .lang { display: none; }
 .lang.active { display: block; }
 
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .page { padding: 1.5rem 1rem 3rem; }
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.15rem; }
+  .subtitle { font-size: 1rem; }
+  .lang-nav { gap: 0; }
+  .lang-btn { padding: 0.35rem 0.8rem; font-size: 0.78rem; }
+  .examples { grid-template-columns: 1fr; }
+  .compare table { font-size: 0.82rem; }
+  .compare th, .compare td { padding: 0.4rem 0.5rem; }
+  .negative-card { padding: 1rem; }
+  .top-bar { margin-bottom: 0.5rem; }
+  .foot-links { flex-wrap: wrap; gap: 0.8rem; }
+}
+
 /* ── Footer ── */
 .foot {
   margin-top: 4rem;
