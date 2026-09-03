@@ -3,600 +3,593 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Goya Ledger — Firma electrónica accesible para Chile</title>
-<meta name="description" content="Firma electrónica con validez legal para pymes chilenas. FES y FEA cumpliendo Ley 19.799. 10x más barata, con seguridad de próxima generación.">
+<meta name="description" content="Goya Ledger — Firma electronica con prueba matematica. Post-quantum, blockchain BFT, verificable para siempre.">
+<title>Goya Ledger — What, Why, How</title>
 <style>
+@font-face {
+  font-family: 'Display';
+  src: local('Iowan Old Style'), local('Palatino Linotype'), local('Palatino'), local('Book Antiqua'), local('Georgia');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Display';
+  src: local('Iowan Old Style Bold'), local('Palatino Linotype Bold'), local('Palatino Bold'), local('Georgia Bold');
+  font-weight: 700;
+}
+
 :root {
-  --bg: #FAFAF8;
-  --bg-alt: #FFFFFF;
-  --fg: #18181A;
-  --fg-mid: #3D3D42;
-  --fg-soft: #6B6B73;
-  --accent: #1A5C2E;
-  --accent-hover: #14461F;
-  --accent-bg: #E6F2EA;
-  --accent-subtle: #F0F7F2;
-  --border: #E2E1DC;
-  --border-soft: #EEEEE9;
-  --gold: #9E7C2B;
-  --gold-bg: #FBF6EC;
-  --mono: 'SF Mono', 'Menlo', 'Consolas', 'Liberation Mono', monospace;
-  --sans: 'Avenir Next', 'Avenir', 'Helvetica Neue', 'Segoe UI', system-ui, sans-serif;
-  --serif: Georgia, 'Times New Roman', serif;
-  color-scheme: light dark;
+  --bg: #FCFBF8;
+  --bg-alt: #F3F1EC;
+  --fg: #1C1917;
+  --fg-mid: #44403C;
+  --fg-soft: #78716C;
+  --accent: #1B4332;
+  --accent-light: #D8E8DF;
+  --border: #D6D3CE;
+  --negative: #92400E;
+  --negative-bg: #FEF3C7;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #111110;
-    --bg-alt: #1A1A18;
-    --fg: #E8E7E3;
-    --fg-mid: #B5B4AF;
-    --fg-soft: #7D7C77;
-    --accent: #4DB66A;
-    --accent-hover: #5DC97A;
-    --accent-bg: #162118;
-    --accent-subtle: #131C15;
-    --border: #2A2A27;
-    --border-soft: #222220;
-    --gold: #D4A84B;
-    --gold-bg: #1F1B12;
+    --bg: #1A1816;
+    --bg-alt: #252220;
+    --fg: #F5F3EF;
+    --fg-mid: #C8C4BD;
+    --fg-soft: #8C877F;
+    --accent: #6EE7A0;
+    --accent-light: #1B3328;
+    --border: #3D3935;
+    --negative: #FCD34D;
+    --negative-bg: #3D2E0A;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #1A1816;
+  --bg-alt: #252220;
+  --fg: #F5F3EF;
+  --fg-mid: #C8C4BD;
+  --fg-soft: #8C877F;
+  --accent: #6EE7A0;
+  --accent-light: #1B3328;
+  --border: #3D3935;
+  --negative: #FCD34D;
+  --negative-bg: #3D2E0A;
+}
+:root[data-theme="light"] {
+  --bg: #FCFBF8;
+  --bg-alt: #F3F1EC;
+  --fg: #1C1917;
+  --fg-mid: #44403C;
+  --fg-soft: #78716C;
+  --accent: #1B4332;
+  --accent-light: #D8E8DF;
+  --border: #D6D3CE;
+  --negative: #92400E;
+  --negative-bg: #FEF3C7;
+}
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
 body {
-  font-family: var(--sans);
   background: var(--bg);
   color: var(--fg);
-  line-height: 1.6;
+  font-family: Display, Georgia, 'Times New Roman', serif;
+  font-size: 1.05rem;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
 }
 
-.wrap { max-width: 960px; margin: 0 auto; padding: 0 2rem; }
-
-nav {
-  padding: 1.25rem 0;
-  border-bottom: 1px solid var(--border-soft);
-}
-nav .wrap {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.logo {
-  font-family: var(--serif);
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: var(--fg);
-  letter-spacing: -0.02em;
-}
-.logo span { color: var(--accent); }
-.nav-tag {
-  font-family: var(--mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--fg-soft);
-  background: var(--accent-subtle);
-  padding: 0.25rem 0.6rem;
-  border-radius: 3px;
+.page {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
 }
 
-.hero {
-  padding: 5rem 0 4rem;
-  text-align: center;
-}
-.hero h1 {
-  font-family: var(--serif);
-  font-size: 2.8rem;
-  font-weight: 700;
-  line-height: 1.15;
-  color: var(--fg);
-  max-width: 700px;
-  margin: 0 auto 1.25rem;
-  text-wrap: balance;
-  letter-spacing: -0.02em;
-}
-.hero-sub {
-  font-size: 1.15rem;
-  color: var(--fg-mid);
-  max-width: 540px;
-  margin: 0 auto 2rem;
-  line-height: 1.55;
-}
-.hero-price {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  background: var(--accent-bg);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  padding: 0.6rem 1.5rem;
-  margin-bottom: 2.5rem;
-}
-.hero-price .amount {
-  font-family: var(--serif);
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-.hero-price .unit { font-size: 0.85rem; color: var(--fg-mid); }
-.hero-price .note { font-size: 0.75rem; color: var(--fg-soft); margin-left: 0.5rem; }
-.hero-badges {
+/* ── Language nav ── */
+.lang-nav {
   display: flex;
+  gap: 0.25rem;
   justify-content: center;
-  gap: 2rem;
+  margin-bottom: 3rem;
   flex-wrap: wrap;
 }
-.badge {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.2rem;
+.lang-btn {
+  background: none;
+  border: 1.5px solid var(--border);
+  color: var(--fg-mid);
+  padding: 0.4rem 1.2rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.2s;
 }
-.badge-value {
-  font-family: var(--serif);
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--accent);
+.lang-btn:first-child { border-radius: 4px 0 0 4px; }
+.lang-btn:last-child { border-radius: 0 4px 4px 0; }
+.lang-btn:hover { background: var(--bg-alt); }
+.lang-btn.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
 }
-.badge-label {
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-soft);
+.lang-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-.section {
-  padding: 3.5rem 0;
-  border-top: 1px solid var(--border-soft);
+/* ── Typography ── */
+h1 {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 700;
+  line-height: 1.15;
+  text-wrap: balance;
+  color: var(--fg);
+  margin-bottom: 0.4em;
 }
-.section-eyebrow {
-  font-family: var(--mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.14em;
+h1 span { color: var(--accent); }
+
+.subtitle {
+  font-size: 1.15rem;
+  color: var(--fg-mid);
+  line-height: 1.5;
+  max-width: 40rem;
+  margin-bottom: 3rem;
+}
+
+h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--fg);
+  margin: 2.8rem 0 0.8rem;
+  text-wrap: balance;
+}
+
+h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 2rem 0 0.5rem;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.8rem;
+}
+
+p { margin-bottom: 1rem; color: var(--fg-mid); }
+p + p { margin-top: 0; }
+
+strong { color: var(--fg); font-weight: 700; }
+
+/* ── Sections ── */
+.section {
+  border-top: 1px solid var(--border);
+  padding-top: 2rem;
+}
+
+/* ── Example cards ── */
+.examples {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin: 1.2rem 0 1.5rem;
+}
+.example {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.2rem 1.3rem;
+}
+.example-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--accent);
   margin-bottom: 0.5rem;
 }
-.section h2 {
-  font-family: var(--serif);
-  font-size: 1.7rem;
-  font-weight: 700;
-  line-height: 1.2;
-  margin-bottom: 1rem;
-  text-wrap: balance;
-}
-.section p {
-  color: var(--fg-mid);
-  margin-bottom: 0.85rem;
-  max-width: 640px;
+.example p {
+  font-size: 0.92rem;
+  margin-bottom: 0;
+  line-height: 1.5;
 }
 
-.features {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
-  margin-top: 1.5rem;
+/* ── Negative card ── */
+.negative-card {
+  background: var(--negative-bg);
+  border-left: 3px solid var(--negative);
+  padding: 1.2rem 1.5rem;
+  border-radius: 0 6px 6px 0;
+  margin: 1.2rem 0;
 }
-.feature-card {
-  background: var(--bg-alt);
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  padding: 1.5rem;
-}
-.feature-icon {
-  width: 36px;
-  height: 36px;
-  background: var(--accent-bg);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.75rem;
-  font-size: 1.1rem;
-}
-.feature-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.35rem; }
-.feature-card p { font-size: 0.88rem; color: var(--fg-soft); margin: 0; line-height: 1.5; }
+.negative-card p { color: var(--fg-mid); margin-bottom: 0.5rem; }
+.negative-card p:last-child { margin-bottom: 0; }
+.negative-card strong { color: var(--negative); }
 
-.compare-table {
+/* ── Comparison table ── */
+.compare {
+  overflow-x: auto;
+  margin: 1.2rem 0;
+}
+.compare table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 1.5rem;
   font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
 }
-.compare-table th {
-  font-family: var(--mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-soft);
+.compare th, .compare td {
   text-align: left;
-  padding: 0.6rem 0.75rem;
-  border-bottom: 2px solid var(--border);
-  font-weight: 500;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
 }
-.compare-table td {
-  padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid var(--border-soft);
-  color: var(--fg-mid);
-}
-.compare-table td:first-child { color: var(--fg); font-weight: 600; }
-.compare-table tr:last-child td { border-bottom: none; }
-.compare-table .check { color: var(--accent); font-weight: 700; }
-.compare-table .cross { color: var(--fg-soft); }
-.overflow-x { overflow-x: auto; }
-.compare-table .goya-col { background: var(--accent-subtle); }
-
-.steps {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem;
-  margin-top: 1.5rem;
-}
-.step { text-align: center; }
-.step-num {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--bg);
-  font-family: var(--serif);
-  font-weight: 700;
-  font-size: 0.85rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.6rem;
-}
-.step h3 { font-size: 0.88rem; font-weight: 700; margin-bottom: 0.25rem; }
-.step p { font-size: 0.78rem; color: var(--fg-soft); margin: 0 auto; max-width: 180px; line-height: 1.45; }
-
-.compliance {
-  background: var(--bg-alt);
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  padding: 1.75rem 2rem;
-  margin-top: 1.5rem;
-}
-.compliance h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.75rem; }
-.compliance-items { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.compliance-tag {
-  font-family: var(--mono);
-  font-size: 0.65rem;
-  letter-spacing: 0.04em;
-  padding: 0.3rem 0.7rem;
-  border-radius: 4px;
-  background: var(--accent-bg);
-  color: var(--accent);
-}
-.compliance-tag.gold { background: var(--gold-bg); color: var(--gold); }
-
-.status-bar {
-  display: flex;
-  gap: 2rem;
-  flex-wrap: wrap;
-  margin-top: 1.5rem;
-  padding: 1.5rem 2rem;
-  background: var(--bg-alt);
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-}
-.status-item { display: flex; flex-direction: column; gap: 0.15rem; }
-.status-value {
-  font-family: var(--serif);
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-.status-label {
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.06em;
+.compare th {
+  font-size: 0.72rem;
   text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--fg-soft);
+  font-weight: 700;
 }
+.compare td { color: var(--fg-mid); }
+.compare tr:last-child td { border-bottom: none; }
 
-.cta-section {
-  padding: 4rem 0;
+/* ── Hide inactive languages ── */
+.lang { display: none; }
+.lang.active { display: block; }
+
+/* ── Footer ── */
+.foot {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--fg-soft);
   text-align: center;
-  border-top: 1px solid var(--border-soft);
 }
-.cta-section h2 { font-family: var(--serif); font-size: 1.8rem; margin-bottom: 0.75rem; }
-.cta-section p { color: var(--fg-mid); max-width: 460px; margin: 0 auto 1.5rem; }
-.cta-btn {
-  display: inline-block;
-  background: var(--accent);
-  color: #fff;
-  font-weight: 600;
-  font-size: 0.95rem;
-  padding: 0.75rem 2rem;
-  border-radius: 6px;
-  text-decoration: none;
-  border: none;
+.top-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.theme-toggle {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  color: var(--fg-mid);
+  padding: 0.35rem 0.8rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  border-radius: 4px;
   cursor: pointer;
-  font-family: var(--sans);
+  transition: all 0.2s;
 }
-.cta-btn:hover { background: var(--accent-hover); }
-.cta-note { font-size: 0.75rem; color: var(--fg-soft); margin-top: 0.75rem; }
-
-footer {
-  padding: 2rem 0;
-  border-top: 1px solid var(--border-soft);
-  text-align: center;
-}
-footer p { font-family: var(--mono); font-size: 0.6rem; color: var(--fg-soft); letter-spacing: 0.03em; }
-
-@media (max-width: 700px) {
-  .hero h1 { font-size: 2rem; }
-  .features { grid-template-columns: 1fr; }
-  .steps { grid-template-columns: repeat(2, 1fr); }
-  .hero-badges { gap: 1.25rem; }
-  .status-bar { gap: 1.25rem; }
-  .wrap { padding: 0 1.25rem; }
-}
-@media (max-width: 480px) {
-  .steps { grid-template-columns: 1fr; }
-}
+.theme-toggle:hover { background: var(--accent-light); color: var(--accent); }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.foot-links { display: flex; gap: 1.5rem; justify-content: center; margin-top: 0.5rem; }
+.foot-links a { color: var(--fg-soft); text-decoration: none; font-size: 0.8rem; }
+.foot-links a:hover { color: var(--accent); }
 </style>
-<script>
-(function(r,a){var s=document.createElement("script");s.async=true;
-s.src=a+"/public/tracking/"+r+"/script.js?v="+Math.floor(Date.now()/60000);
-document.head.appendChild(s);
-})("eeca0023-94f5-4206-b604-a6781323d1b2","https://emotio.cx/api");
-</script>
 </head>
 <body>
 
-<nav>
-  <div class="wrap">
-    <div class="logo">Goya<span>.</span></div>
-    <div style="display:flex;gap:0.75rem;align-items:center;">
-      <a href="https://goya-explorer.fly.dev" class="nav-tag" style="text-decoration:none;">Abrir App &rarr;</a>
-      <a href="/investors.html" class="nav-tag" style="text-decoration:none;">Investors</a>
-    </div>
-  </div>
+<div class="page">
+
+<div class="top-bar">
+  <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle light/dark mode">Light / Dark</button>
+</div>
+
+<nav class="lang-nav" aria-label="Language">
+  <button class="lang-btn active" onclick="switchLang('es')" aria-pressed="true">Espanol</button>
+  <button class="lang-btn" onclick="switchLang('en')" aria-pressed="false">English</button>
+  <button class="lang-btn" onclick="switchLang('fr')" aria-pressed="false">Francais</button>
 </nav>
 
-<div class="wrap">
+<!-- ═══════════════════ ESPANOL ═══════════════════ -->
+<div class="lang active" id="lang-es">
 
-  <div class="hero">
-    <h1>Firma electr&oacute;nica con validez legal para pymes chilenas</h1>
-    <p class="hero-sub">Firma Simple y Avanzada cumpliendo Ley 19.799. 10 veces m&aacute;s barata que los proveedores actuales, con seguridad de pr&oacute;xima generaci&oacute;n.</p>
-    <div class="hero-price">
-      <span class="amount">$99</span>
-      <span class="unit">/mes</span>
-      <span class="note">firmas ilimitadas</span>
-    </div>
-    <div class="hero-badges">
-      <div class="badge">
-        <div class="badge-value">v0.13</div>
-        <div class="badge-label">13 releases</div>
-      </div>
-      <div class="badge">
-        <div class="badge-value">280</div>
-        <div class="badge-label">Funcionalidades API</div>
-      </div>
-      <div class="badge">
-        <div class="badge-value">4</div>
-        <div class="badge-label">Jurisdicciones</div>
-      </div>
-      <div class="badge">
-        <div class="badge-value">0</div>
-        <div class="badge-label">Clientes (a&uacute;n)</div>
-      </div>
-    </div>
-  </div>
+<h1>Goya Ledger es una <span>prueba matematica</span> que viaja con tu documento.</h1>
+<p class="subtitle">En el mundo digital no puedes distinguir lo real de lo falso. Goya agrega una firma criptografica que cualquiera puede verificar, sin depender de nadie, para siempre.</p>
 
-  <div class="section">
-    <div class="section-eyebrow">El problema</div>
-    <h2>250.000 pymes chilenas firman en papel porque la firma electr&oacute;nica es muy cara</h2>
-    <p>Los proveedores actuales cobran entre $5.000 y $50.000 CLP por cada firma. Para un estudio jur&iacute;dico que firma 20 contratos al mes, eso es m&aacute;s de un mill&oacute;n de pesos. La mayor&iacute;a simplemente no firma electr&oacute;nicamente &mdash; y queda expuesta a disputas, fraude y demoras.</p>
-    <p>Adem&aacute;s, usan tecnolog&iacute;a criptogr&aacute;fica de los a&ntilde;os 90. Los documentos firmados hoy ser&aacute;n vulnerables ma&ntilde;ana.</p>
-  </div>
+<div class="section">
+<h2>Que es</h2>
+<p>Goya Ledger es una infraestructura blockchain que permite <strong>firmar documentos digitales con validez legal</strong> y verificar esas firmas sin depender de un tercero. Funciona como un notario digital automatico: registra quien firmo, cuando, y que el documento no fue alterado despues.</p>
+<p>A diferencia de una firma electronica tradicional, la firma de Goya no depende de que una empresa siga existiendo para ser valida. La prueba matematica es autocontenida — funciona hoy y seguira funcionando en 30 anos.</p>
+</div>
 
-  <div class="section">
-    <div class="section-eyebrow">Qu&eacute; hacemos</div>
-    <h2>Firma electr&oacute;nica accesible, con la seguridad m&aacute;s avanzada del mundo</h2>
-    <div class="features">
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M13.5 6.75L7.5 12.75L4.5 9.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="var(--accent)"/></svg>
-        </div>
-        <h3>Firma Simple (FES)</h3>
-        <p>Cualquier persona firma un documento con validez legal. Sin costo por firma, sin hardware especial, desde el navegador.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 1.5L11.3 6.2L16.5 6.9L12.75 10.5L13.6 15.7L9 13.3L4.4 15.7L5.25 10.5L1.5 6.9L6.7 6.2L9 1.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" color="var(--accent)"/></svg>
-        </div>
-        <h3>Firma Avanzada (FEA)</h3>
-        <p>Para contratos que requieren mayor seguridad. Verificaci&oacute;n biom&eacute;trica incluida. Criptograf&iacute;a de pr&oacute;xima generaci&oacute;n.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.5" color="var(--accent)"/><path d="M6 7.5H12M6 10.5H10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" color="var(--accent)"/></svg>
-        </div>
-        <h3>Contratos inteligentes</h3>
-        <p>Define flujos de firma en minutos. Controla qui&eacute;n firma, en qu&eacute; orden, con qu&eacute; nivel de seguridad. Notarizaci&oacute;n autom&aacute;tica.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5" color="var(--accent)"/><path d="M6 9L8 11L12 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" color="var(--accent)"/></svg>
-        </div>
-        <h3>Verificaci&oacute;n instant&aacute;nea</h3>
-        <p>Cualquier persona autorizada verifica un documento en segundos, desde cualquier dispositivo. Sin llamar a nadie.</p>
-      </div>
-    </div>
-  </div>
+<div class="section">
+<h2>Por que existe</h2>
+<p>Hoy, para firmar un documento con validez legal necesitas un <strong>Prestador de Servicios de Certificacion (PSC)</strong> — empresas como E-certchile o Acepta. Eso implica:</p>
+<p><strong>Dependencia:</strong> Si el PSC cierra o su certificado expira, tu firma pierde verificabilidad. <strong>Costo:</strong> Una firma avanzada cuesta entre $15.000 y $45.000 CLP al ano. <strong>Vulnerabilidad futura:</strong> Todas usan criptografia clasica que los computadores cuanticos podran romper en 10-15 anos.</p>
+<p>Goya existe porque la firma digital deberia ser <strong>independiente, verificable y resistente al futuro</strong>.</p>
+</div>
 
-  <div class="section">
-    <div class="section-eyebrow">C&oacute;mo funciona</div>
-    <h2>De contrato en papel a firmado digitalmente en 4 pasos</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-num">1</div>
-        <h3>Sube el contrato</h3>
-        <p>Usa una plantilla o sube tu propio documento.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <h3>Asigna las partes</h3>
-        <p>RUT y correo de cada firmante. Define nivel de firma.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <h3>Las partes firman</h3>
-        <p>Reciben un link. Firman desde el navegador en segundos.</p>
-      </div>
-      <div class="step">
-        <div class="step-num">4</div>
-        <h3>Contrato sellado</h3>
-        <p>Estampa de tiempo, respaldo criptogr&aacute;fico, verificable por terceros.</p>
-      </div>
-    </div>
-  </div>
+<div class="section">
+<h2>Para quien es</h2>
+<p><strong>Notarias</strong> que deben digitalizar sus procesos por ley (468 notarias, Ley 21.772, plazo octubre 2026). <strong>Empresas</strong> que firman contratos, acuerdos, ordenes de compra y necesitan prueba legal permanente. <strong>Fintechs</strong> que necesitan firma electronica avanzada para operar bajo regulacion CMF. <strong>Gobiernos</strong> que emiten certificados, licencias o permisos que deben ser verificables. <strong>Cualquier organizacion</strong> que necesite que un documento firmado hoy siga siendo verificable en 2040.</p>
+</div>
 
-  <div class="section">
-    <div class="section-eyebrow">Comparaci&oacute;n</div>
-    <h2>Goya vs. proveedores actuales</h2>
-    <div class="overflow-x">
-    <table class="compare-table">
-      <tr>
-        <th></th>
-        <th class="goya-col">Goya</th>
-        <th>E-certchile</th>
-        <th>TOC</th>
-        <th>DocuSign</th>
-      </tr>
-      <tr>
-        <td>Precio mensual</td>
-        <td class="goya-col"><strong>$99/mes</strong></td>
-        <td>$5K-50K por firma</td>
-        <td>Variable</td>
-        <td>USD $25+/mes</td>
-      </tr>
-      <tr>
-        <td>Firma Avanzada (FEA)</td>
-        <td class="goya-col check">S&iacute;</td>
-        <td class="check">S&iacute;</td>
-        <td class="cross">No</td>
-        <td class="cross">No</td>
-      </tr>
-      <tr>
-        <td>Cumple Ley 19.799</td>
-        <td class="goya-col check">S&iacute;</td>
-        <td class="check">S&iacute;</td>
-        <td class="check">Parcial</td>
-        <td class="cross">No</td>
-      </tr>
-      <tr>
-        <td>Contratos inteligentes</td>
-        <td class="goya-col check">S&iacute;</td>
-        <td class="cross">No</td>
-        <td class="cross">No</td>
-        <td class="cross">No</td>
-      </tr>
-      <tr>
-        <td>Seguridad pr&oacute;xima generaci&oacute;n</td>
-        <td class="goya-col check">S&iacute;</td>
-        <td class="cross">No</td>
-        <td class="cross">No</td>
-        <td class="cross">No</td>
-      </tr>
-      <tr>
-        <td>Datos en Chile</td>
-        <td class="goya-col check">S&iacute;</td>
-        <td class="check">S&iacute;</td>
-        <td class="check">S&iacute;</td>
-        <td class="cross">No</td>
-      </tr>
-    </table>
-    </div>
-  </div>
+<div class="section">
+<h2>Que soluciona</h2>
+<h3>Problema 1 — Verificacion dependiente</h3>
+<p>Hoy verificar una firma requiere contactar al PSC que la emitio. Si ese PSC deja de operar, la firma queda sin forma de verificarse. Goya produce firmas que se verifican con matematica pura — no necesitas llamar a nadie.</p>
+<h3>Problema 2 — Vulnerabilidad cuantica</h3>
+<p>Los computadores cuanticos podran romper las firmas actuales (RSA, ECDSA, Ed25519). Goya usa los 3 estandares NIST post-cuanticos (ML-DSA-65, ML-KEM-768, SLH-DSA-128s), los mismos que el gobierno de EE.UU. exigira para 2035.</p>
+<h3>Problema 3 — Costo de acceso</h3>
+<p>La contraparte de un contrato no deberia necesitar comprar su propia firma electronica para firmar. Con Goya, la contraparte firma via un link — sin instalar nada, sin pagar nada.</p>
+</div>
 
-  <div class="section">
-    <div class="section-eyebrow">Cumplimiento</div>
-    <h2>Construido para cumplir la regulaci&oacute;n chilena desde el dise&ntilde;o</h2>
-    <p>No adaptamos un producto extranjero a la ley chilena. Construimos con la regulaci&oacute;n como requisito de dise&ntilde;o.</p>
-    <div class="compliance">
-      <h3>Regulaci&oacute;n y est&aacute;ndares</h3>
-      <div class="compliance-items">
-        <span class="compliance-tag">Ley 19.799</span>
-        <span class="compliance-tag">DS 181</span>
-        <span class="compliance-tag">Ley 21.663 Ciberseguridad</span>
-        <span class="compliance-tag">FES &mdash; Firma Simple</span>
-        <span class="compliance-tag">FEA &mdash; Firma Avanzada</span>
-        <span class="compliance-tag gold">Certificaci&oacute;n PSC en tr&aacute;mite</span>
-        <span class="compliance-tag">Estampa de tiempo RFC 3161</span>
-        <span class="compliance-tag">Identidad digital DID</span>
-        <span class="compliance-tag">Validaci&oacute;n RUT</span>
-      </div>
-    </div>
-  </div>
+<div class="section">
+<h2>Como lo soluciona</h2>
+<p>Cada documento firmado recibe una <strong>firma dual</strong>: una clasica (Ed25519, valida hoy) y una post-cuantica (ML-DSA-65, valida contra computadores cuanticos). Ambas deben verificarse para que el documento sea valido.</p>
+<p>Las firmas se registran en una <strong>blockchain inmutable</strong> con consenso BFT (tolerancia a fallas bizantinas) — ni siquiera un nodo malicioso puede falsificar un registro. El sellado de tiempo con TSA (RFC 3161) garantiza la fecha exacta de la firma.</p>
+<p>Todo el sistema esta <strong>verificado contra los vectores de prueba oficiales del NIST</strong> (117 vectores, coincidencia exacta byte a byte) y cumple con las recomendaciones del BSI aleman y la agencia francesa ANSSI.</p>
+</div>
 
-  <div class="section">
-    <div class="section-eyebrow">Estado actual</div>
-    <h2>Un producto funcional, no un pitch deck</h2>
-    <p>Goya Ledger es pre-revenue. Estamos buscando nuestros primeros 5 clientes piloto &mdash; notar&iacute;as y estudios jur&iacute;dicos en Santiago. El producto ya est&aacute; construido y desplegado en <a href="https://goya-explorer.fly.dev" style="color:var(--accent);font-weight:600;">goya-explorer.fly.dev</a>.</p>
-    <div class="status-bar">
-      <div class="status-item">
-        <div class="status-value">13</div>
-        <div class="status-label">Versiones publicadas</div>
-      </div>
-      <div class="status-item">
-        <div class="status-value">280</div>
-        <div class="status-label">Funcionalidades</div>
-      </div>
-      <div class="status-item">
-        <div class="status-value">2.722</div>
-        <div class="status-label">Tests autom&aacute;ticos</div>
-      </div>
-      <div class="status-item">
-        <div class="status-value">App</div>
-        <div class="status-label">Desktop Mac + Windows</div>
-      </div>
-      <div class="status-item">
-        <div class="status-value">SDK</div>
-        <div class="status-label">Para desarrolladores</div>
-      </div>
-    </div>
+<div class="section">
+<h2>Ejemplos concretos</h2>
+<div class="examples">
+  <div class="example">
+    <div class="example-label">Notaria</div>
+    <p>Un abogado redacta un contrato de compraventa. Ambas partes lo firman desde su celular con Goya. La notaria recibe el contrato con dos firmas criptograficas, sello de tiempo, y un hash registrado en blockchain. En 20 anos, cualquier juez puede verificar que el contrato no fue alterado — sin contactar a nadie.</p>
   </div>
+  <div class="example">
+    <div class="example-label">Fintech</div>
+    <p>Una fintech CMF necesita que sus clientes firmen pagares digitales con Firma Electronica Avanzada (FEA). Con Goya, el pagare se firma con ML-DSA-65 y biometria, cumpliendo Ley 19.799 Art. 2. El pagare tiene validez legal equivalente a firma ante notario — y es resistente a ataques cuanticos.</p>
+  </div>
+  <div class="example">
+    <div class="example-label">Gobierno</div>
+    <p>Un municipio emite patentes comerciales digitales. Cada patente es un certificado X.509 firmado por la CA de Goya con ML-DSA-65. El comerciante puede presentar su patente a cualquier fiscalizador, quien la verifica escaneando un QR — sin conexion al municipio, sin depender de un servidor.</p>
+  </div>
+  <div class="example">
+    <div class="example-label">Exportador</div>
+    <p>Una empresa chilena exporta a la UE. Los documentos de embarque se firman con Goya y reciben un sello eIDAS-compatible. La contraparte europea verifica la firma con su wallet EUDIW (HopaeEUDIWallet verificado). Un solo sistema, dos continentes, sin intermediarios.</p>
+  </div>
+</div>
+</div>
 
-  <div class="section">
-    <div class="section-eyebrow">Planes</div>
-    <h2>Precio claro, sin sorpresas</h2>
-    <div class="features">
-      <div class="feature-card">
-        <h3>Starter &mdash; $99/mes</h3>
-        <p>Hasta 500 firmas/mes. FES y FEA. Verificaci&oacute;n ilimitada. Para pymes y profesionales independientes.</p>
-      </div>
-      <div class="feature-card">
-        <h3>Profesional &mdash; $299/mes</h3>
-        <p>Firmas ilimitadas. Plantillas de contratos. Soporte dedicado. Para estudios jur&iacute;dicos y consultoras.</p>
-      </div>
-    </div>
-    <p style="margin-top:1rem; font-size:0.85rem; color:var(--fg-soft);">Plan Institucional (notar&iacute;as, gobierno, empresas grandes) &mdash; cotizaci&oacute;n personalizada con deploy dedicado y SLA.</p>
-  </div>
+<div class="section">
+<h2>Aspecto negativo — que no es</h2>
+<div class="negative-card">
+  <p><strong>No es un PSC acreditado todavia.</strong> La acreditacion ante el MinEcon de Chile esta en tramite. Los documentos de acreditacion (17 docs EA-103) estan completos, pero la auditoria independiente y la constitucion legal estan en proceso.</p>
+  <p><strong>No reemplaza al Estado.</strong> La identidad del firmante depende de un proceso de verificacion (RUT, biometria). Goya no es un registro civil — es la infraestructura que le da prueba matematica a la firma.</p>
+  <p><strong>No permite borrar datos.</strong> La blockchain es inmutable. Si necesitas borrar datos personales (GDPR), la arquitectura de Goya no lo permite por diseno — ese es el precio de la inmutabilidad.</p>
+  <p><strong>Es nuevo.</strong> 9 meses de desarrollo. No tiene 20 anos de track record como E-certchile. La ventaja tecnica (PQC, BFT, CAVP) es demostrable; la confianza institucional se construye con el tiempo.</p>
+</div>
+</div>
+
+<div class="section">
+<h2>Numeros verificables</h2>
+<div class="compare"><table>
+  <tr><th>Metrica</th><th>Valor</th></tr>
+  <tr><td>Throughput con PQC real</td><td>10.260 TPS</td></tr>
+  <tr><td>Latencia por bloque</td><td>9,75 ms</td></tr>
+  <tr><td>Vectores NIST CAVP verificados</td><td>117 (byte-exact)</td></tr>
+  <tr><td>Tests automatizados</td><td>2.821 lib + 200+ integracion</td></tr>
+  <tr><td>Documentos regulatorios</td><td>44 (Chile + EU + UAE)</td></tr>
+  <tr><td>Estandares NIST PQC</td><td>3 de 3 (FIPS 203, 204, 205)</td></tr>
+  <tr><td>Tiempo de desarrollo</td><td>9 meses</td></tr>
+</table></div>
+</div>
 
 </div>
 
-<div class="cta-section">
-  <div class="wrap">
-    <h2>&iquest;Eres notar&iacute;a o estudio jur&iacute;dico en Santiago?</h2>
-    <p>Buscamos 5 pilotos para validar el producto con contratos reales. Sin costo durante el piloto.</p>
-    <a href="https://goya-explorer.fly.dev/signup" class="cta-btn">Quiero ser piloto</a>
-    <p class="cta-note">Sin compromiso. Te contactamos en 24 horas.</p>
+<!-- ═══════════════════ ENGLISH ═══════════════════ -->
+<div class="lang" id="lang-en">
+
+<h1>Goya Ledger is a <span>mathematical proof</span> that travels with your document.</h1>
+<p class="subtitle">In the digital world you cannot tell real from fake. Goya adds a cryptographic signature that anyone can verify, without depending on anyone, forever.</p>
+
+<div class="section">
+<h2>What it is</h2>
+<p>Goya Ledger is a blockchain infrastructure that lets you <strong>sign digital documents with legal validity</strong> and verify those signatures without relying on a third party. It works like an automatic digital notary: it records who signed, when, and that the document was not altered afterwards.</p>
+<p>Unlike a traditional electronic signature, a Goya signature does not depend on a company continuing to exist to remain valid. The mathematical proof is self-contained — it works today and will still work in 30 years.</p>
+</div>
+
+<div class="section">
+<h2>Why it exists</h2>
+<p>Today, to sign a document with legal validity you need a <strong>Trust Service Provider (TSP)</strong>. That means:</p>
+<p><strong>Dependency:</strong> If the TSP shuts down or its certificate expires, your signature loses verifiability. <strong>Cost:</strong> An advanced electronic signature costs $15–45 USD/year in Chile, more in Europe. <strong>Future vulnerability:</strong> All current providers use classical cryptography that quantum computers will break in 10–15 years.</p>
+<p>Goya exists because digital signatures should be <strong>independent, verifiable, and future-proof</strong>.</p>
+</div>
+
+<div class="section">
+<h2>Who it is for</h2>
+<p><strong>Notaries</strong> required by law to digitalize their processes. <strong>Companies</strong> signing contracts, purchase orders, and agreements that need permanent legal proof. <strong>Fintechs</strong> needing advanced electronic signatures to operate under financial regulation. <strong>Governments</strong> issuing certificates, licenses, or permits that must be verifiable. <strong>Any organization</strong> that needs a document signed today to remain verifiable in 2040.</p>
+</div>
+
+<div class="section">
+<h2>What it solves</h2>
+<h3>Problem 1 — Dependent verification</h3>
+<p>Today, verifying a signature requires contacting the TSP that issued it. If that TSP stops operating, the signature becomes unverifiable. Goya produces signatures verified by pure mathematics — you don't need to call anyone.</p>
+<h3>Problem 2 — Quantum vulnerability</h3>
+<p>Quantum computers will break current signatures (RSA, ECDSA, Ed25519). Goya uses all 3 NIST post-quantum standards (ML-DSA-65, ML-KEM-768, SLH-DSA-128s) — the same ones the U.S. government will mandate by 2035.</p>
+<h3>Problem 3 — Access cost</h3>
+<p>The counterparty to a contract should not need to buy their own electronic signature to sign. With Goya, the counterparty signs via a link — no installation, no payment.</p>
+</div>
+
+<div class="section">
+<h2>How it works</h2>
+<p>Each signed document receives a <strong>dual signature</strong>: a classical one (Ed25519, valid today) and a post-quantum one (ML-DSA-65, valid against quantum computers). Both must verify for the document to be valid.</p>
+<p>Signatures are recorded on an <strong>immutable blockchain</strong> with BFT consensus (Byzantine fault tolerance) — not even a malicious node can forge a record. RFC 3161 timestamping guarantees the exact date of the signature.</p>
+<p>The entire system is <strong>verified against official NIST test vectors</strong> (117 vectors, byte-exact match) and complies with recommendations from the German BSI and the French ANSSI.</p>
+</div>
+
+<div class="section">
+<h2>Concrete examples</h2>
+<div class="examples">
+  <div class="example">
+    <div class="example-label">Notary</div>
+    <p>A lawyer drafts a purchase agreement. Both parties sign from their phone with Goya. The notary receives the contract with two cryptographic signatures, a timestamp, and a hash on the blockchain. In 20 years, any judge can verify the contract was not altered — without contacting anyone.</p>
+  </div>
+  <div class="example">
+    <div class="example-label">Fintech</div>
+    <p>A regulated fintech needs clients to sign digital promissory notes with Advanced Electronic Signatures. With Goya, the note is signed with ML-DSA-65 and biometrics. The note has legal validity equivalent to a notarized signature — and is resistant to quantum attacks.</p>
+  </div>
+  <div class="example">
+    <div class="example-label">Government</div>
+    <p>A municipality issues digital business licenses. Each license is an X.509 certificate signed by Goya's CA with ML-DSA-65. The business owner can present it to any inspector, who verifies it by scanning a QR code — offline, with no server dependency.</p>
+  </div>
+  <div class="example">
+    <div class="example-label">Exporter</div>
+    <p>A Chilean company exports to the EU. Shipping documents are signed with Goya and receive an eIDAS-compatible seal. The European counterparty verifies the signature with their EUDIW wallet. One system, two continents, no intermediaries.</p>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h2>What it is not</h2>
+<div class="negative-card">
+  <p><strong>Not yet an accredited TSP.</strong> Accreditation is in progress. The 17 accreditation documents are complete, but the independent audit and legal incorporation are underway.</p>
+  <p><strong>Not a replacement for the State.</strong> Signer identity depends on a verification process (national ID, biometrics). Goya is not a civil registry — it is the infrastructure that gives mathematical proof to the signature.</p>
+  <p><strong>Cannot delete data.</strong> The blockchain is immutable. If you need to erase personal data (GDPR), Goya's architecture does not allow it by design — that is the price of immutability.</p>
+  <p><strong>It is new.</strong> 9 months of development. It does not have 20 years of track record. The technical advantage (PQC, BFT, CAVP) is demonstrable; institutional trust is built over time.</p>
+</div>
+</div>
+
+<div class="section">
+<h2>Verifiable numbers</h2>
+<div class="compare"><table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Throughput with real PQC</td><td>10,260 TPS</td></tr>
+  <tr><td>Block latency</td><td>9.75 ms</td></tr>
+  <tr><td>NIST CAVP vectors verified</td><td>117 (byte-exact)</td></tr>
+  <tr><td>Automated tests</td><td>2,821 lib + 200+ integration</td></tr>
+  <tr><td>Regulatory documents</td><td>44 (Chile + EU + UAE)</td></tr>
+  <tr><td>NIST PQC standards</td><td>3 of 3 (FIPS 203, 204, 205)</td></tr>
+  <tr><td>Development time</td><td>9 months</td></tr>
+</table></div>
+</div>
+
+</div>
+
+<!-- ═══════════════════ FRANCAIS ═══════════════════ -->
+<div class="lang" id="lang-fr">
+
+<h1>Goya Ledger est une <span>preuve mathematique</span> qui accompagne votre document.</h1>
+<p class="subtitle">Dans le monde numerique, on ne peut pas distinguer le vrai du faux. Goya ajoute une signature cryptographique que n'importe qui peut verifier, sans dependre de personne, pour toujours.</p>
+
+<div class="section">
+<h2>Ce que c'est</h2>
+<p>Goya Ledger est une infrastructure blockchain qui permet de <strong>signer des documents numeriques avec une validite juridique</strong> et de verifier ces signatures sans dependre d'un tiers. Cela fonctionne comme un notaire numerique automatique : il enregistre qui a signe, quand, et que le document n'a pas ete modifie apres.</p>
+<p>Contrairement a une signature electronique traditionnelle, la signature Goya ne depend pas de l'existence continue d'une entreprise. La preuve mathematique est autonome — elle fonctionne aujourd'hui et fonctionnera encore dans 30 ans.</p>
+</div>
+
+<div class="section">
+<h2>Pourquoi il existe</h2>
+<p>Aujourd'hui, pour signer un document avec une validite juridique, il faut un <strong>Prestataire de Services de Confiance (PSC)</strong>. Cela implique :</p>
+<p><strong>Dependance :</strong> Si le PSC ferme ou si son certificat expire, votre signature perd sa verifiabilite. <strong>Cout :</strong> Une signature electronique avancee coute entre 15 et 45 EUR par an. <strong>Vulnerabilite future :</strong> Tous les prestataires actuels utilisent une cryptographie classique que les ordinateurs quantiques pourront casser dans 10 a 15 ans.</p>
+<p>Goya existe parce que la signature numerique devrait etre <strong>independante, verifiable et resistante au futur</strong>.</p>
+</div>
+
+<div class="section">
+<h2>Pour qui</h2>
+<p><strong>Notaires</strong> tenus par la loi de numeriser leurs processus. <strong>Entreprises</strong> signant des contrats, bons de commande et accords necessitant une preuve juridique permanente. <strong>Fintechs</strong> necessitant des signatures electroniques avancees pour operer sous regulation financiere. <strong>Gouvernements</strong> emettant des certificats, licences ou permis devant etre verifiables. <strong>Toute organisation</strong> ayant besoin qu'un document signe aujourd'hui reste verifiable en 2040.</p>
+</div>
+
+<div class="section">
+<h2>Ce qu'il resout</h2>
+<h3>Probleme 1 — Verification dependante</h3>
+<p>Aujourd'hui, verifier une signature necessite de contacter le PSC qui l'a emise. Si ce PSC cesse ses activites, la signature devient inverifiable. Goya produit des signatures verifiees par les mathematiques pures — pas besoin d'appeler qui que ce soit.</p>
+<h3>Probleme 2 — Vulnerabilite quantique</h3>
+<p>Les ordinateurs quantiques casseront les signatures actuelles (RSA, ECDSA, Ed25519). Goya utilise les 3 standards post-quantiques du NIST (ML-DSA-65, ML-KEM-768, SLH-DSA-128s) — les memes que le gouvernement americain exigera d'ici 2035.</p>
+<h3>Probleme 3 — Cout d'acces</h3>
+<p>La contrepartie d'un contrat ne devrait pas avoir besoin d'acheter sa propre signature electronique pour signer. Avec Goya, la contrepartie signe via un lien — sans installation, sans paiement.</p>
+</div>
+
+<div class="section">
+<h2>Comment ca fonctionne</h2>
+<p>Chaque document signe recoit une <strong>double signature</strong> : une classique (Ed25519, valide aujourd'hui) et une post-quantique (ML-DSA-65, valide contre les ordinateurs quantiques). Les deux doivent etre verifiees pour que le document soit valide.</p>
+<p>Les signatures sont enregistrees sur une <strong>blockchain immuable</strong> avec consensus BFT (tolerance aux fautes byzantines) — meme un noeud malveillant ne peut pas falsifier un enregistrement. L'horodatage TSA (RFC 3161) garantit la date exacte de la signature.</p>
+<p>L'ensemble du systeme est <strong>verifie contre les vecteurs de test officiels du NIST</strong> (117 vecteurs, correspondance exacte octet par octet) et conforme aux recommandations du BSI allemand et de l'ANSSI francaise.</p>
+</div>
+
+<div class="section">
+<h2>Exemples concrets</h2>
+<div class="examples">
+  <div class="example">
+    <div class="example-label">Notaire</div>
+    <p>Un avocat redige un contrat de vente. Les deux parties le signent depuis leur telephone avec Goya. Le notaire recoit le contrat avec deux signatures cryptographiques, un horodatage et un hash sur la blockchain. Dans 20 ans, n'importe quel juge peut verifier que le contrat n'a pas ete modifie — sans contacter personne.</p>
+  </div>
+  <div class="example">
+    <div class="example-label">Fintech</div>
+    <p>Une fintech reglementee a besoin que ses clients signent des billets a ordre numeriques avec des Signatures Electroniques Avancees. Avec Goya, le billet est signe avec ML-DSA-65 et biometrie. Le billet a une validite juridique equivalente a une signature notariee — et est resistant aux attaques quantiques.</p>
+  </div>
+  <div class="example">
+    <div class="example-label">Gouvernement</div>
+    <p>Une municipalite emet des licences commerciales numeriques. Chaque licence est un certificat X.509 signe par la CA de Goya avec ML-DSA-65. Le commercant peut la presenter a n'importe quel inspecteur, qui la verifie en scannant un QR code — hors ligne, sans dependance serveur.</p>
+  </div>
+  <div class="example">
+    <div class="example-label">Exportateur</div>
+    <p>Une entreprise chilienne exporte vers l'UE. Les documents d'expedition sont signes avec Goya et recoivent un sceau compatible eIDAS. La contrepartie europeenne verifie la signature avec son portefeuille EUDIW. Un seul systeme, deux continents, sans intermediaires.</p>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h2>Ce que ce n'est pas</h2>
+<div class="negative-card">
+  <p><strong>Pas encore un PSC accredite.</strong> L'accreditation est en cours. Les 17 documents d'accreditation sont complets, mais l'audit independant et la constitution juridique sont en cours.</p>
+  <p><strong>Ne remplace pas l'Etat.</strong> L'identite du signataire depend d'un processus de verification (carte d'identite, biometrie). Goya n'est pas un registre civil — c'est l'infrastructure qui donne une preuve mathematique a la signature.</p>
+  <p><strong>Ne peut pas supprimer de donnees.</strong> La blockchain est immuable. Si vous devez effacer des donnees personnelles (RGPD), l'architecture de Goya ne le permet pas par conception — c'est le prix de l'immutabilite.</p>
+  <p><strong>C'est nouveau.</strong> 9 mois de developpement. Pas 20 ans d'historique. L'avantage technique (PQC, BFT, CAVP) est demontrable ; la confiance institutionnelle se construit avec le temps.</p>
+</div>
+</div>
+
+<div class="section">
+<h2>Chiffres verifiables</h2>
+<div class="compare"><table>
+  <tr><th>Metrique</th><th>Valeur</th></tr>
+  <tr><td>Debit avec PQC reel</td><td>10 260 TPS</td></tr>
+  <tr><td>Latence par bloc</td><td>9,75 ms</td></tr>
+  <tr><td>Vecteurs NIST CAVP verifies</td><td>117 (octet par octet)</td></tr>
+  <tr><td>Tests automatises</td><td>2 821 lib + 200+ integration</td></tr>
+  <tr><td>Documents reglementaires</td><td>44 (Chili + UE + EAU)</td></tr>
+  <tr><td>Standards NIST PQC</td><td>3 sur 3 (FIPS 203, 204, 205)</td></tr>
+  <tr><td>Temps de developpement</td><td>9 mois</td></tr>
+</table></div>
+</div>
+
+</div>
+
+<div class="foot">
+  Goya Ledger &middot; 2026
+  <div class="foot-links">
+    <a href="/pitch.html">Pitch</a>
+    <a href="/investors.html">Investors</a>
+    <a href="/cps.html">CPS</a>
+    <a href="/privacy.html">Privacy</a>
+    <a href="/terms.html">Terms</a>
   </div>
 </div>
 
-<footer>
-  <div class="wrap">
-    <p>Goya Ledger SpA &mdash; Santiago, Chile &mdash; 2026</p>
-  </div>
-</footer>
+</div>
 
+<script>
+function switchLang(lang) {
+  document.querySelectorAll('.lang').forEach(el => el.classList.remove('active'));
+  document.getElementById('lang-' + lang).classList.add('active');
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    const isActive = btn.textContent.toLowerCase().startsWith(lang === 'es' ? 'esp' : lang === 'en' ? 'eng' : 'fra');
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-pressed', isActive);
+  });
+}
+
+function toggleTheme() {
+  const root = document.documentElement;
+  const current = root.getAttribute('data-theme');
+  if (current === 'dark') {
+    root.setAttribute('data-theme', 'light');
+    localStorage.setItem('goya-theme', 'light');
+  } else {
+    root.setAttribute('data-theme', 'dark');
+    localStorage.setItem('goya-theme', 'dark');
+  }
+}
+
+(function() {
+  const saved = localStorage.getItem('goya-theme');
+  if (saved) document.documentElement.setAttribute('data-theme', saved);
+})();
+</script>
 </body>
 </html>
