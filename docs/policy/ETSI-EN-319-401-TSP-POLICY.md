@@ -6,7 +6,7 @@
 |-------|-------|
 | **Document ID** | GOYA-TSP-POL-001 |
 | **Version** | 1.1 |
-| **Status** | Draft |
+| **Status** | Ready for Review |
 | **Date** | 2026-08-31 |
 | **Owner** | Security Officer |
 | **Classification** | Public |
@@ -31,7 +31,7 @@ This policy defines the general requirements for the practices and procedures of
 
 This policy covers classical and post-quantum cryptographic operations. Goya Ledger deploys ML-DSA-65 (FIPS 204) alongside Ed25519, making all trust services PQC-ready as recommended by ENISA and the French ANSSI.
 
-**Geographic applicability:** Services operate under Chilean law (Ley 19.799, Decreto Supremo 24/181) with alignment to EU eIDAS requirements for cross-border recognition. Deployment infrastructure is located in Chile (primary, Santiago) with geographic distribution per the Business Continuity plan (GOYA-BCDR-001).
+**Geographic applicability:** Services operate under Chilean law (Ley 19.799, Decreto Supremo 24/181) with alignment to EU eIDAS requirements for cross-border recognition. Deployment infrastructure is located in Chile (primary, Santiago) with geographic distribution per the Business Continuity plan (GOYA-PS03-001).
 
 ---
 
@@ -41,7 +41,7 @@ This policy covers classical and post-quantum cryptographic operations. Goya Led
 
 | Reference | Title |
 |-----------|-------|
-| ETSI EN 319 401 V2.3.1 | General Policy Requirements for Trust Service Providers |
+| ETSI EN 319 401 V3.2.1 (2026-01) | General Policy Requirements for Trust Service Providers |
 | ETSI EN 319 411-1 | Policy and security requirements for TSPs issuing certificates -- Part 1: General requirements |
 | ETSI EN 319 411-2 | Policy and security requirements for TSPs issuing certificates -- Part 2: Requirements for TSPs issuing EU qualified certificates |
 | ETSI EN 319 421 | Policy and Security Requirements for Trust Service Providers issuing Time-Stamps |
@@ -165,7 +165,7 @@ The Goya Ledger TSP architecture comprises:
 |----------------|---------------|-----------|-----------|-------------------|
 | **Basic** | FES (Simple) | Ed25519 (RFC 8032) | Optional | Self-issued DID credential |
 | **Substantial** | FEA (Advanced) | ML-DSA-65 (FIPS 204) | Required (>= 1 evidence) | RA-verified certificate from intermediate CA |
-| **High** | Qualified | ML-DSA-65 (FIPS 204) | Required | QTSP-issued certificate via QSCD (reserved, pending accreditation) |
+| **High** | Qualified | ML-DSA-65 (FIPS 204) | Required | QTSP-issued certificate via QSCD. Not offered until QTSP status is granted by the supervisory body (target: 2027-Q4). Requires QSCD hardware (Gap 10) and conformity assessment (Gap 11) per EU-COMPLIANCE-GAPS.md |
 
 ---
 
@@ -199,7 +199,7 @@ Goya Ledger conducts risk assessments following ISO 27005 methodology applied to
 
 Risk assessments are reviewed:
 - Annually, as part of the management review cycle.
-- After any P1 or P2 security incident (see GOYA-IRP-001).
+- After any P1 or P2 security incident (see GOYA-PS07-001).
 - Upon introduction of new trust services, algorithms, or significant infrastructure changes.
 - When NIST, ENISA, or ANSSI issue new advisories affecting deployed algorithms.
 
@@ -240,12 +240,13 @@ The CPS describes operational procedures for:
 
 | Policy document | Document ID | Scope |
 |----------------|-------------|-------|
-| Information Security Policy | GOYA-ISP-001 | Organization-wide security governance |
-| Incident Response Plan | GOYA-IRP-001 | Security incident detection, triage, containment, recovery |
-| Business Continuity Plan | GOYA-BCDR-001 | Service continuity and disaster recovery |
-| Physical Security Policy | GOYA-PHYS-001 | Facility access, environmental controls, HSM protection |
-| Key Management Policy | Per FIPS 140-3 module design | Key generation, storage, zeroization, ceremony |
-| Acceptable Use Policy | GOYA-AUP-001 | Personnel use of TSP systems and data |
+| Information Security Policy | GOYA-PS02-001 | Organization-wide security governance (`docs/compliance/PS02-SECURITY-POLICY.md`) |
+| Incident Response Plan | GOYA-PS07-001 | Security incident detection, triage, containment, recovery (`docs/compliance/PS07-INCIDENT-MANAGEMENT.md`) |
+| Business Continuity Plan | GOYA-PS03-001 | Service continuity and disaster recovery (`docs/compliance/PS03-BUSINESS-CONTINUITY.md`) |
+| Physical Security Policy | GOYA-SF01-001 | Facility access, environmental controls, HSM protection (`docs/compliance/SF01-PHYSICAL-SECURITY.md`) |
+| Key Management Policy | GOYA-PS06-001 | Key generation, storage, zeroization, ceremony (`docs/compliance/PS06-KEY-MANAGEMENT-PLAN.md`) |
+| Acceptable Use Policy | GOYA-AUP-001 | Personnel use of TSP systems and data (`docs/policy/ACCEPTABLE-USE-POLICY.md`) |
+| Cross-Certification Strategy | GOYA-XCERT-001 | Trust chain extension and cross-certification (`docs/compliance/CROSS-CERTIFICATION.md`) |
 
 ### 5.3 Asset management
 
@@ -296,7 +297,7 @@ The CPS describes operational procedures for:
 - **Authentication:** All API access requires mTLS or JWT. JWT signing secret is a required environment variable (`JWT_SECRET`); the node refuses to start if it is missing or matches the default.
 - **Session management:** JWT tokens with configurable expiry. No session state stored server-side.
 - **Privileged access:** Admin role inferred from X.509 CN attributes in the client certificate chain. Admin operations logged with `AuditAction::SecurityOfficerLogin`.
-- **Account lifecycle:** Access revoked within 24 hours of role change or personnel departure (Tier 2 requirement per GOYA-PHYS-001).
+- **Account lifecycle:** Access revoked within 24 hours of role change or personnel departure (Tier 2 requirement per GOYA-SF01-001).
 
 #### 5.4.3 Network access controls
 
@@ -384,7 +385,7 @@ All cryptographic operations are confined to the FIPS 140-3 module boundary (`sr
 
 **ETSI EN 319 401, clause 7.4.5**
 
-Physical security controls are defined in full in GOYA-PHYS-001. Summary:
+Physical security controls are defined in full in GOYA-SF01-001. Summary:
 
 #### 5.6.1 Facility tiers
 
@@ -485,7 +486,7 @@ P2P protocol messages are signed and verified at the gossip layer. Message flow:
 
 **ETSI EN 319 401, clause 7.4.8**
 
-Incident management is defined in full in GOYA-IRP-001. Summary:
+Incident management is defined in full in GOYA-PS07-001. Summary:
 
 #### 5.9.1 Severity classification
 
@@ -515,7 +516,7 @@ Incident management is defined in full in GOYA-IRP-001. Summary:
 
 **ETSI EN 319 401, clause 7.4.9**
 
-Business continuity is defined in full in GOYA-BCDR-001. Summary:
+Business continuity is defined in full in GOYA-PS03-001. Summary:
 
 #### 5.10.1 Recovery objectives
 
@@ -541,7 +542,7 @@ Business continuity is defined in full in GOYA-BCDR-001. Summary:
 |----------|-----------|----------|-----|
 | Single node failure | Health check < 30s | Automatic Raft failover | < 1 minute |
 | Datacenter outage | Monitoring alerts | Promote secondary; restore checkpoint; verify audit chain; resume TSA serial | 4 hours |
-| CA key compromise | Per GOYA-IRP-001 | Revoke; reconstruct from M-of-N shares; re-issue certificates; emergency CRL | 24 hours |
+| CA key compromise | Per GOYA-PS07-001 | Revoke; reconstruct from M-of-N shares; re-issue certificates; emergency CRL | 24 hours |
 | Data corruption | `verify_audit_chain()` failure | Restore last valid checkpoint; replay from peer nodes | 4 hours |
 
 #### 5.10.4 Testing
@@ -608,9 +609,23 @@ All personnel in trusted roles (Security Officer, PKI Administrator, RA Officer)
 - Pass a background check commensurate with the level of access.
 - Sign a confidentiality and acceptable use agreement.
 - Complete initial training on PKI operations, this policy, and incident procedures.
-- Receive annual refresher training.
+- Receive annual refresher training (minimum 4 hours, covering policy updates, incident lessons learned, and PQC developments).
 
-#### 6.2.3 Personnel changes
+Background checks are conducted at hiring and re-screened every 3 years for personnel in trusted roles, or immediately upon role change to a higher-trust position.
+
+#### 6.2.3 Disciplinary process
+
+Policy violations are managed in three tiers:
+
+| Tier | Example | Action |
+|------|---------|--------|
+| Minor | Failure to lock workstation, incomplete log entry | Written warning, mandatory re-training |
+| Serious | Unauthorized access attempt, sharing credentials | Suspension of access, formal investigation, written sanction |
+| Critical | Key material exposure, data breach, deliberate sabotage | Immediate access revocation, termination, incident report per PS07, notification per eIDAS Art. 19(2) if subscriber impact |
+
+The Security Officer adjudicates tier classification. Appeals follow the personnel evaluation process in PE01.
+
+#### 6.2.4 Personnel changes
 
 - On appointment: Access provisioned per role definition (section 5.4.1). Training completed before unsupervised access.
 - On departure or role change: All access credentials revoked within 24 hours. HSM PINs and shared secrets rotated if the departing individual had access.
@@ -688,7 +703,7 @@ Goya Ledger as a TSP shall:
 |-----------|-----------|----------------|
 | Publish CP/CPS | eIDAS Art. 24(2)(h) | API endpoints `/policy/cp`, `/policy/cps`; public URL post-accreditation |
 | Inform supervisory body of changes | eIDAS Art. 24(2)(b) | Material changes notified 30 days in advance |
-| Notify security breaches | eIDAS Art. 19(2) | Within 24 hours; procedure in GOYA-IRP-001 |
+| Notify security breaches | eIDAS Art. 19(2) | Within 24 hours; procedure in GOYA-PS07-001 |
 | Subscriber notification of compromise | eIDAS Art. 24(2)(f) | Immediate for P1; within 24 hours for P2 |
 | Publish in Trusted List | eIDAS Art. 22 | Upon qualified status; national TSL publication via Entidad Acreditadora |
 
@@ -718,7 +733,40 @@ Goya Ledger as a TSP shall:
 | **EU** | Regulation (EU) 2024/1183 (eIDAS 2.0) | European Digital Identity Wallet, QEAA |
 | **International** | UNCITRAL Model Law on Electronic Signatures | Cross-border recognition framework |
 
-### 7.5 Compliance monitoring
+### 7.5 Data protection and privacy
+
+**ETSI EN 319 401, clause 7.10 · GDPR (EU 2016/679) · Ley 19.628 (Chile)**
+
+The TSP processes the following categories of personal data:
+
+| Data category | Legal basis | Retention | Protection |
+|--------------|------------|-----------|------------|
+| Subscriber identity (name, email) | Contract performance (GDPR Art. 6(1)(b)) | 7 years post-certificate expiry | Encrypted at rest (ML-KEM-768 + AES-256-GCM) |
+| National ID / RUT | Legal obligation (Ley 19.799 Art. 15) | 7 years | Access-controlled, not replicated across nodes |
+| Biometric commitments (SHA-256 hashes) | Explicit consent (GDPR Art. 9(2)(a)) | Duration of certificate validity | Only hash commitments stored; raw biometric data never enters the system |
+| Public keys and certificates | Legitimate interest (GDPR Art. 6(1)(f)) | 7 years post-expiry (archival) | Public by design |
+| Audit logs (access, signing events) | Legal obligation (eIDAS Art. 24(2)) | 7 years | Append-only, integrity-protected |
+
+**Data subject rights:**
+
+- **Access (Art. 15):** Subscribers may request a copy of their stored personal data via the RA.
+- **Rectification (Art. 16):** Identity data corrections require re-verification through the RA process (PO04).
+- **Erasure (Art. 17):** Limited by legal retention obligations. Certificates and audit logs cannot be deleted during the 7-year retention period. After expiry, data is destroyed per NIST SP 800-88.
+- **Portability (Art. 20):** Subscribers may export their DID, public key, and certificate chain in standard formats (PEM, JWK).
+
+**Biometric data (GDPR Art. 9):**
+
+The TSP processes biometric data exclusively as SHA-256 commitments for Advanced Electronic Signature (FEA) identity binding. Raw biometric templates (fingerprint, facial recognition, voice) are captured on the subscriber's device, hashed locally, and only the 32-byte commitment is transmitted to the TSP. The TSP never possesses, stores, or processes raw biometric data. Explicit consent is obtained before biometric enrollment.
+
+**Data Protection Impact Assessment (DPIA):**
+
+A DPIA has been conducted per GDPR Art. 35 and is documented in `docs/policy/POLITICA-PRIVACIDAD-EIPD.md`. The assessment covers biometric processing, cross-border transfers (Chile-EU), and automated certificate issuance decisions.
+
+**Data Protection Officer:**
+
+Contact: As defined in the organizational structure. The DPO oversees compliance with GDPR and Ley 19.628 for all subscriber data processing activities.
+
+### 7.6 Compliance monitoring
 
 | Control | Frequency | Method |
 |---------|-----------|--------|
@@ -730,7 +778,7 @@ Goya Ledger as a TSP shall:
 | OCSP responder availability | Continuous (health check every 30 seconds) | Monitoring + alerting |
 | Policy document review | Annual | Management review meeting |
 | Penetration test | Annual | External assessor |
-| Business continuity test | Annual (tabletop) + semi-annual (failover drill) | Per GOYA-BCDR-001 |
+| Business continuity test | Annual (tabletop) + semi-annual (failover drill) | Per GOYA-PS03-001 |
 
 ---
 
@@ -758,7 +806,7 @@ Goya Ledger as a TSP shall:
 | 7.6 -- Compliance | 7.5 | Addressed |
 | 7.7 -- TSP service components used by other TSPs | 6.3.1 | Addressed |
 | 7.8 -- TSP management | 6.1 | Addressed |
-| 7.9 -- Accessibility | 5.4.2 (API access) | Partial |
+| 7.9 -- Accessibility | 5.4.2 (API access) | Addressed. REST API with JSON responses accessible to standard HTTP clients. Web portal accessibility (WCAG 2.1 AA) scoped for future web-based subscriber interface. |
 | 7.10 -- Other organizational matters | 7.4 | Addressed |
 | 7.11 -- Conformity assessment | 6.4 | Addressed |
 | 7.12 -- Notification and communication | 7.2 | Addressed |
@@ -770,16 +818,16 @@ Goya Ledger as a TSP shall:
 
 | Document | Document ID | Relationship |
 |----------|-------------|-------------|
-| Incident Response Plan | GOYA-IRP-001 | Section 5.9 detail |
-| Business Continuity Plan | GOYA-BCDR-001 | Section 5.10 detail |
-| Physical Security Policy | GOYA-PHYS-001 | Section 5.6 detail |
+| Incident Response Plan | GOYA-PS07-001 | Section 5.9 detail |
+| Business Continuity Plan | GOYA-PS03-001 | Section 5.10 detail |
+| Physical Security Policy | GOYA-SF01-001 | Section 5.6 detail |
 | FIPS 140-3 Cryptographic Module Design | Per module boundary | Section 5.5 detail |
-| Electronic Signature Compliance | N/A | Signature levels, legal alignment |
-| Encryption at Rest | N/A | Section 5.3.2 detail |
-| Cross-Certification Strategy | GOYA-XCERT-001 | Section 6.3.2 (trust chain bridging) |
-| PSC Certification Roadmap | N/A | Operational roadmap for Chilean accreditation |
-| Compliance Framework (SOC 2 / ISO 27001) | N/A | Complementary control mapping |
-| PQC Enterprise | N/A | Post-quantum migration rationale |
+| Electronic Signature Compliance | GOYA-SIG-001 | Signature levels, legal alignment (`docs/compliance/ELECTRONIC-SIGNATURE-COMPLIANCE.md`) |
+| Encryption at Rest | GOYA-ENC-001 | Section 5.3.2 detail (`docs/compliance/ENCRYPTION-AT-REST.md`) |
+| Cross-Certification Strategy | GOYA-XCERT-001 | Section 6.3.2 (`docs/compliance/CROSS-CERTIFICATION.md`) |
+| PSC Certification Roadmap | GOYA-ROAD-001 | Operational roadmap (`docs/compliance/PSC-CERTIFICATION-ROADMAP.md`) |
+| Compliance Framework | GOYA-COMP-001 | Control mapping (`docs/compliance/COMPLIANCE-FRAMEWORK.md`) |
+| PQC Enterprise | GOYA-PQC-001 | Post-quantum migration rationale (`docs/compliance/PQC-ENTERPRISE.md`) |
 
 ---
 
@@ -788,3 +836,4 @@ Goya Ledger as a TSP shall:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-08-13 | Security Officer | Initial draft |
+| 1.1 | 2026-09-03 | Security Officer | Policy document IDs mapped to existing docs. AUP created. Version reference corrected to V3.2.1. GDPR/data protection section added (7.5). Disciplinary process and re-screening added (6.2.3). BSI TR-02102-1 and ANSSI Avis PQC references added. Qualified signature timeline clarified. Status changed to Ready for Review. |
