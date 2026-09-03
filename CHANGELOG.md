@@ -4,6 +4,63 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.16.2] — 2026-09-03
+
+### Added — CAVP Validation, Benchmarks, Certification Readiness
+
+#### CAVP emulation (NIST ACVP official test vectors)
+- `tests/cavp_validation.rs`: 117 NIST vectors verified byte-exact
+- ML-DSA-65: keyGen (25), sigGen deterministic (30), sigVer pure mode (12)
+- ML-KEM-768: keyGen (25), encapsulation (25)
+- Vectors sourced from github.com/usnistgov/ACVP-Server
+- Status: CAVP-READY (awaiting CMVP lab certification)
+
+#### PQC comparative benchmarks
+- `tests/pqc_benchmark.rs`: 5 benchmarks (sign/verify/keygen/hybrid/KEM)
+- Ed25519: sign 9.1us, verify 19.6us
+- ML-DSA-65: sign 90.5us (9.9x), verify 25.5us (1.3x)
+- SLH-DSA-128s: sign 352ms (backup only)
+- ML-KEM-768: encap 9.7us, decap 8.9us
+- Hybrid (Ed25519+ML-DSA-65): sign 85.4us (6.8x), verify 64.2us (3.4x)
+
+#### End-to-end throughput with real crypto
+- `tests/e2e_throughput.rs`: full pipeline BFT + signing + execution
+- Ed25519: 64,561 TPS | 1.55 ms/block
+- ML-DSA-65: 10,260 TPS | 9.75 ms/block (6.3x overhead)
+- Bottleneck: TX signing (83.2%), not verification (1.3x) nor execution (1.8%)
+- Scaling: TPS plateaus at ~11,000 with 500 txs/block
+
+#### Quantum papers mechanical verification
+- `tests/quantum_cost_spec.rs`: 3 new tests
+- Gidney & Ekera 2021: RSA-2048 = 20M qubits / 8h
+- Google Quantum AI 2026: secp256k1 = <500K qubits / 9 min
+- NIST IR 8547: classical deprecated 2030, prohibited 2035
+
+#### Certification emulation
+- `tests/certification_emulation.rs`: 16 tests emulating 3 certifications
+- FIPS 140-3 (9 tests): FSM, self-tests, pre-init rejection, error terminal, zeroization, KAT, boundary, approved algorithms
+- EA-103 Chile (3 tests): 17 docs present, standard references, 11 technical controls
+- QTSP eIDAS (4 tests): PKI components, Art.45i 6 dimensions, PQC algorithms, EUDIW wallet
+
+#### ETSI policy documents audit-ready
+- EN 319 401 (TSP): 10 gaps closed — phantom doc IDs mapped, AUP created, GDPR section added, HR disciplinary process, version mismatch fixed
+- EN 319 411 (CA): 14 gaps closed — cert extensions (AIA, CRLDP, SAN, EKU), QWAC profile completed, algorithm corrected, data protection added, financial responsibility quantified
+- EN 319 421 (TSA): 15 gaps closed — HSM gap acknowledged, key crypto-period defined, revocation mechanism, personnel roles, audit log hash chain, RPO/RTO, termination procedure
+- New: `docs/policy/ACCEPTABLE-USE-POLICY.md` (GOYA-AUP-001)
+
+#### Technical paper
+- `docs/paper/pqc-bft-performance.md` (English)
+- `docs/paper/pqc-bft-rendimiento-es.md` + PDF (Spanish)
+- First published data on PQC performance in production BFT consensus
+
+### Stats
+- 11,775 lines added across 20 files
+- 117 NIST CAVP vectors, 16 certification tests, 5 benchmarks, 3 quantum paper tests
+- 39 ETSI gaps closed across 3 policy documents
+- All clippy clean, all tests pass
+
+---
+
 ## [0.16.1] — 2026-09-02
 
 ### Added — PQC Testing & EU Compliance Documentation
