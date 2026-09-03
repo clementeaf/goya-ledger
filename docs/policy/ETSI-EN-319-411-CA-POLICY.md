@@ -13,7 +13,7 @@
 | Applicable standards | ETSI EN 319 411-1, ETSI EN 319 411-2, RFC 3647 |
 | Jurisdiction | Republic of Chile |
 | Governing law | Ley 19.799 (Firma Electronica), DS 181/2002, Decreto 24/2019 |
-| Effective date | 2024-01-01 |
+| Effective date | 2026-09-03 |
 
 ---
 
@@ -66,7 +66,7 @@ This policy applies to:
 |---|---|
 | CP OID | `1.3.6.1.4.1.99999.2.1` |
 | CPS OID | `1.3.6.1.4.1.99999.2.2` |
-| OID root namespace | `1.3.6.1.4.1.99999` (IANA PEN) |
+| OID root namespace | `1.3.6.1.4.1.99999` (placeholder — IANA PEN registration pending at https://pen.iana.org/pen/PenApplication.page; all OIDs in this document will be updated upon assignment) |
 | CPS URI | `https://goya.cl/pki/cp` |
 
 ---
@@ -82,6 +82,7 @@ This policy applies to:
 | ETSI EN 319 412-1 | Certificate profiles -- Part 1: Overview and common data structures |
 | ETSI EN 319 412-2 | Certificate profiles -- Part 2: Certificate profile for certificates issued to natural persons |
 | ETSI EN 319 412-3 | Certificate profiles -- Part 3: Certificate profile for certificates issued to legal persons |
+| ETSI EN 319 412-4 | Certificate profiles -- Part 4: Certificate profile for web site certificates (QWAC) |
 | ETSI EN 319 412-5 | Certificate profiles -- Part 5: QCStatements |
 | ETSI TS 102 042 | Policy requirements for certification authorities issuing public key certificates |
 | ETSI TS 101 903 | XML Advanced Electronic Signatures (XAdES) |
@@ -189,7 +190,7 @@ The CA accepts liability as defined by Ley 19.799 and its implementing regulatio
 
 ### 4.3 Financial Responsibility
 
-The CA shall maintain sufficient financial resources or insurance to cover its liability obligations as required by the applicable supervisory authority.
+The CA shall maintain professional indemnity insurance with minimum coverage of EUR 500,000 per claim and EUR 1,000,000 aggregate per year, covering errors and omissions in certificate issuance, revocation delays, and key compromise. For qualified certificates (AdES), the liability cap is EUR 100,000 per certificate as stated in the Subscriber Agreement (`docs/policy/ACUERDO-SUSCRIPTOR.md`). Insurance shall be obtained prior to commencing qualified trust services.
 
 ### 4.4 Interpretation and Enforcement
 
@@ -272,7 +273,7 @@ When the `hsm` feature gate is enabled, CA private keys shall be protected by a 
 
 | Key Type | Operational Period | Certificate Validity |
 |---|---|---|
-| Root CA | 10 years | 2024-01-01 to 2034-01-01 |
+| Root CA | 10 years | 2026-09-03 to 2034-01-01 |
 | Intermediate CA | 5 years | 5 years from issuance |
 | FES Subscriber | 365 days | 365 days |
 | FEA Subscriber | 365 days | 365 days |
@@ -290,7 +291,7 @@ The CA supports the following algorithms:
 
 | Algorithm | Standard | Use |
 |---|---|---|
-| ECDSA P-256 | NIST FIPS 186-4 | CA certificates, end-entity certificates (default) |
+| ECDSA P-256 | NIST FIPS 186-5 | CA certificates, end-entity certificates (default) |
 | Ed25519 | FIPS 186-5 | FES subscriber signatures |
 | ML-DSA-65 | FIPS 204 | FEA subscriber signatures (post-quantum) |
 
@@ -351,12 +352,17 @@ All issued certificates shall contain:
 |---|---|---|
 | Version | -- | v3 |
 | Serial Number | -- | Unique, cryptographically random |
-| Signature Algorithm | -- | ECDSA P-256 (SHA-256) |
+| Signature Algorithm | -- | ML-DSA-65 (FIPS 204) for FEA certificates; ECDSA P-256 (FIPS 186-5) for OID4VCI interoperability tokens; Ed25519 (RFC 8032) for FES certificates |
 | Issuer | -- | Intermediate CA distinguished name |
 | Validity | -- | Per profile (see Section 5.3) |
 | Subject | -- | Subscriber identity (node ID / DID) |
 | Basic Constraints | `2.5.29.19` | CA: FALSE |
 | Certificate Policies | `2.5.29.32` | CP OID `1.3.6.1.4.1.99999.2.1`, CPS URI `https://goya.cl/pki/cp` |
+| Key Usage | `2.5.29.15` | Per profile (digitalSignature, nonRepudiation) |
+| Extended Key Usage | `2.5.29.37` | Per profile (id-kp-serverAuth for QWAC, id-kp-timeStamping for TSA) |
+| Subject Alternative Name | `2.5.29.17` | Per profile (FQDN for QWAC, email for natural persons) |
+| Authority Information Access | `1.3.6.1.5.5.7.1.1` | OCSP: `https://goya.cl/pki/ocsp`, CA Issuers: `https://goya.cl/pki/ca.crt` |
+| CRL Distribution Points | `2.5.29.31` | `https://goya.cl/pki/crl.der` |
 | QCStatements | `1.3.6.1.5.5.7.1.3` | QcCompliance (`0.4.0.1862.1.1`) + QcType per profile |
 
 #### 6.2.3 Certificate Profiles
@@ -391,14 +397,18 @@ All issued certificates shall contain:
 | QcType | `id-etsi-qct-eseal` (`0.4.0.1862.1.6.2`) |
 | Validity | 365 days |
 
-**Website Authentication Certificate (QWAC)**
+**Website Authentication Certificate (QWAC) — per ETSI EN 319 412-4**
 
 | Attribute | Value |
 |---|---|
 | Profile type | WebAuthentication |
 | Assurance level | High |
-| Key usage | `digitalSignature` |
+| Key usage | `digitalSignature`, `keyEncipherment` |
+| Extended Key Usage | `id-kp-serverAuth` (`1.3.6.1.5.5.7.3.1`) |
+| Subject | O=Goya Ledger SpA, organizationIdentifier=NTRCL-{RUT}, C=CL |
+| Subject Alternative Name | FQDN(s) of the web service (e.g., `goya-node.fly.dev`) |
 | QcType | `id-etsi-qct-web` (`0.4.0.1862.1.6.3`) |
+| Domain validation | Per CA/Browser Forum Baseline Requirements section 3.2.2 |
 | Validity | 365 days |
 
 **TSA Signing Certificate**
@@ -407,7 +417,8 @@ All issued certificates shall contain:
 |---|---|
 | Profile type | NaturalPerson |
 | Assurance level | High |
-| Key usage | `digitalSignature`, `timeStamping` |
+| Key usage | `digitalSignature` |
+| Extended Key Usage | `id-kp-timeStamping` (`1.3.6.1.5.5.7.3.8`) |
 | Validity | 730 days |
 
 ### 6.3 Certificate Acceptance
@@ -608,6 +619,21 @@ Upon termination of CA operations:
 4. Archive records shall be transferred to a successor entity or the supervisory authority.
 5. Subscribers and relying parties shall be notified at least ninety (90) days prior to termination.
 
+### 7.9 Data Protection (EN 319 411-1 clause 6.4)
+
+The CA processes personal data of subscribers in accordance with GDPR (EU 2016/679) and Ley 19.628 (Chile).
+
+| Data category | Purpose | Retention | Legal basis |
+|--------------|---------|-----------|-------------|
+| Subscriber name, email | Certificate issuance | 7 years post-expiry | Contract (Art. 6(1)(b)) |
+| National ID / RUT | Identity verification (RA) | 7 years | Legal obligation (Ley 19.799) |
+| Biometric commitments (SHA-256) | FEA identity binding | Certificate validity | Explicit consent (Art. 9(2)(a)) |
+| Public keys, certificates | PKI operation | 7 years post-expiry | Legitimate interest |
+
+Raw biometric data is never transmitted to or stored by the CA. Only SHA-256 commitments are processed. A Data Protection Impact Assessment is documented in `docs/policy/POLITICA-PRIVACIDAD-EIPD.md`.
+
+Subscriber rights (access, rectification, erasure subject to retention obligations, portability) are exercised through the RA per PO04.
+
 ---
 
 ## 8. Qualified Certificate Specific Requirements (EN 319 411-2)
@@ -662,7 +688,7 @@ For qualified website authentication certificates, the RA shall verify:
 
 ### 8.4 Qualified Signature/Seal Creation Device (QSCD) Requirements
 
-For qualified certificates supporting advanced electronic signatures (FEA) or electronic seals, the private key should be generated and stored in a Qualified Signature/Seal Creation Device meeting the requirements of:
+For qualified certificates supporting advanced electronic signatures (FEA) or electronic seals, the private key shall be generated and stored in a Qualified Signature/Seal Creation Device (QSCD) meeting the requirements of:
 
 - ETSI EN 419 211 (Protection profiles for secure signature creation devices), or
 - An equivalent standard recognized by the supervisory authority.
@@ -739,4 +765,4 @@ Electronic signatures produced using certificates issued under this CP/CPS may r
 
 | Version | Date | Author | Description |
 |---|---|---|---|
-| 1.0.0 | 2024-01-01 | Goya Ledger CA | Initial publication |
+| 1.0.0 | 2026-09-03 | Goya Ledger CA | Initial publication |
