@@ -7,7 +7,7 @@
 | Document identifier | GOYA-TSA-POL-001 |
 | Version | 1.0 |
 | Classification | Public |
-| TSA Policy OID | `1.3.6.1.4.1.99999.1.1` |
+| TSA Policy OID | `1.3.6.1.4.1.99999.1.1` (placeholder — IANA PEN registration pending; OID will be updated upon assignment) |
 | Applicable standard | ETSI EN 319 421 V1.1.1 (2016-03) |
 | Supplementary standards | ETSI EN 319 422, RFC 3161, RFC 5816 |
 | Effective date | 2026-08-13 |
@@ -215,12 +215,15 @@ The TSA signing key shall be:
 - Protected against unauthorised access through the `SigningProvider` trait encapsulation.
 - Never exported or serialised to logs.
 - Stored in memory within an `Arc<dyn SigningProvider>` with no public accessor for the private key material.
+- Zeroized on process termination via the `zeroize` trait.
+
+**Current status:** Software-only key storage (in-process memory). This does not satisfy ETSI EN 319 421 Section 7.2.2 or ETSI EN 319 401 requirements for secure cryptographic device protection (FIPS 140-2 Level 2+ or equivalent). HSM integration is planned for 2027-Q1 per `docs/compliance/EU-COMPLIANCE-GAPS.md` Gap 10. Until HSM is deployed, the TSA operates at non-qualified assurance level.
 
 The public key is available via `SigningProvider::public_key()` and is hex-encoded in each token for verification purposes.
 
 #### 6.1.3 TSA key usage period
 
-The TSA signing key shall be replaced in accordance with the key lifecycle policy of the Goya Ledger node. When a key is replaced:
+The TSA signing key shall be replaced at intervals not exceeding 2 years (crypto-period), or immediately upon suspected compromise. Key lifecycle management follows PS06 (Key Management Plan, `docs/compliance/PS06-KEY-MANAGEMENT-PLAN.md`). When a key is replaced:
 
 - Existing tokens remain verifiable using the original public key.
 - New tokens are signed with the replacement key.
@@ -231,8 +234,9 @@ The TSA signing key shall be replaced in accordance with the key lifecycle polic
 When a TSA signing key reaches end of life:
 
 - The key shall no longer be used for signing new tokens.
-- The public key shall remain available for verification of previously issued tokens.
+- The public key shall remain available for verification of previously issued tokens for 7 years post-retirement.
 - The serial number file shall be preserved to prevent serial number reuse.
+- The TSA certificate associated with the retired key shall be revoked via CRL and OCSP status update. Relying parties can verify key status at `https://goya.cl/pki/ocsp` and `https://goya.cl/pki/crl.der`.
 
 #### 6.1.5 Cryptographic algorithm requirements
 
@@ -357,8 +361,10 @@ The TSA shall maintain an audit log recording at a minimum:
 When the node operates with `STORAGE_BACKEND=rocksdb`, audit logs are persisted to the RocksDB store. Audit log entries shall be:
 
 - Append-only; no entry shall be modified or deleted during the retention period.
+- Integrity-protected via hash chain: each log entry includes the SHA3-256 hash of the previous entry, forming a verifiable chain. Chain integrity is validated continuously (on each append) and via daily batch verification (`verify_audit_chain()`).
 - Protected by the same access controls as the TSA signing key.
 - Available for review by authorised auditors upon request.
+- Long-term archival: logs older than 1 year are exported to signed archive files (ML-DSA-65 signature over the archive hash) for offline retention, ensuring integrity verification survives RocksDB compaction or format changes.
 
 #### 6.4.3 Audit log retention
 
@@ -441,17 +447,24 @@ The following assets are classified as critical:
 
 All personnel with administrative access to systems hosting the TSA shall:
 
-- Be subject to background verification appropriate to their role.
-- Receive training on the TSA policy and operational procedures.
+- Be subject to background verification at hiring and re-screened every 3 years.
+- Hold a defined trusted role (TSA Administrator, Security Officer, or PKI Operator) per PE01 (`docs/compliance/PE01-PERSONNEL-EVALUATION.md`).
+- Receive initial training (minimum 4 hours) on this policy, PS06 key management procedures, and incident response per PS07.
+- Receive annual refresher training covering policy updates and operational lessons learned.
+- Sign the Acceptable Use Policy (GOYA-AUP-001, `docs/policy/ACCEPTABLE-USE-POLICY.md`).
 - Acknowledge their responsibilities under this policy.
+- Be subject to the disciplinary process defined in GOYA-PS02-001 section 6.2.3.
+
+Dual-control (two-person authorization) is required for TSA key generation, key destruction, and policy changes.
 
 ### 7.5 Physical security
 
-Systems hosting the TSA shall be protected by physical access controls commensurate with the classification of the assets they contain. For production deployments, this includes:
+Systems hosting the TSA are deployed on Fly.io infrastructure (region IAD) with provider-managed physical controls verified via SOC 2 Type II reports. The provider's data center certifications are reviewed annually by the Security Officer. Specific controls include:
 
-- Controlled access to server rooms or data centres.
-- Environmental controls (fire suppression, climate control, power redundancy).
+- Controlled access to server rooms with biometric + badge readers (provider-managed).
+- Environmental controls: fire suppression (FM-200), HVAC, redundant power with UPS and diesel generator (provider-managed).
 - Physical tamper detection and response for any hardware security modules in use.
+- Physical security policy documented in SF01 (`docs/compliance/SF01-PHYSICAL-SECURITY.md`).
 
 ### 7.6 Operations management
 
@@ -510,15 +523,25 @@ The TSA shall implement business continuity measures including:
 - Structured logging (`LOG_FORMAT=json`) for automated monitoring and alerting.
 - Deployment via Docker Compose with multi-node support for high availability.
 
+**Recovery objectives:**
+
+| Metric | Target |
+|--------|--------|
+| Recovery Time Objective (RTO) | 4 hours |
+| Recovery Point Objective (RPO) | 0 (serial number persisted on each issuance) |
+| Maximum tolerable downtime | 24 hours |
+
 ### 7.11 Termination
 
-Upon termination of the TSA service:
+Upon termination of the TSA service, the following procedure shall be executed with a minimum notice period of 90 days:
 
-- The TSA signing key shall be securely destroyed.
-- The serial number file shall be archived.
-- All audit logs shall be preserved for the retention period.
-- Relying parties shall be notified with reasonable advance notice.
-- Existing tokens remain verifiable using the archived public key.
+1. Publish termination notice on `https://goya.cl/pki/` and notify all known relying parties via email.
+2. Cease issuance of new tokens on the termination date.
+3. The TSA signing key shall be securely destroyed in a witnessed ceremony per PS06.
+4. The serial number file shall be archived.
+5. All audit logs shall be preserved for the full 7-year retention period and transferred to a successor entity or the supervisory authority.
+6. The public key shall remain available for verification of previously issued tokens for 7 years post-termination.
+7. Existing tokens remain verifiable using the archived public key.
 
 ---
 
