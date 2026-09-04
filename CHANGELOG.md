@@ -4,6 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.16.3] — 2026-09-04
+
+### Added — AI Disclosure & Dependency Audit
+
+- `docs/compliance/AI-DISCLOSURE.md`: declaración formal de uso de IA generativa para due diligence
+  - Herramienta, alcance, rol del autor humano, trazabilidad git
+  - Posición legal por jurisdicción (Chile, EU, US, Estonia)
+  - Metodología de desarrollo: IA como amplificador, contribución humana, replicabilidad
+  - Auditoría completa de licencias de dependencias (cero copyleft fuerte)
+  - Resumen ejecutivo para inversores
+
+---
+
 ## [0.16.2] — 2026-09-03
 
 ### Added — CAVP Validation, Benchmarks, Certification Readiness
