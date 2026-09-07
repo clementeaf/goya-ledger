@@ -211,6 +211,7 @@ pub async fn submit_notarization(
         notarized_at: now_secs(),
         block_height,
         signature: body.signature.clone(),
+        public_key: body.public_key.clone(),
         signature_algorithm: body.signature_algorithm,
         signature_level: body.signature_level,
         biometric_evidence: body.biometric_evidence.clone(),
@@ -378,6 +379,7 @@ pub async fn notarize_pdf(
         notarized_at: now_secs(),
         block_height,
         signature: sig_hex.clone(),
+        public_key: hex::encode(provider.public_key()),
         signature_algorithm: provider.algorithm(),
         signature_level: SignatureLevel::Advanced,
         biometric_evidence: body.biometric_evidence.clone(),
@@ -454,22 +456,42 @@ pub async fn verify_notarization(
     }
 
     match store.read_notarization_by_hash(&content_hash) {
-        Ok(entry) => Ok(HttpResponse::Ok().json(ApiResponse::success(
-            serde_json::json!({
-                "verified": true,
-                "id": entry.id,
-                "content_hash": entry.content_hash,
-                "signer": entry.signer,
-                "notarized_at": entry.notarized_at,
-                "block_height": entry.block_height,
-                "metadata": entry.metadata,
-                "signature": entry.signature,
-                "signature_algorithm": entry.signature_algorithm,
-                "signature_level": entry.signature_level,
-                "biometric_evidence": entry.biometric_evidence,
-            }),
-            trace,
-        ))),
+        Ok(entry) => {
+            let signature_verified = if entry.public_key.is_empty() {
+                None
+            } else {
+                let payload = build_notarize_payload(
+                    entry.signature_level,
+                    &entry.signer,
+                    &entry.content_hash,
+                    &entry.biometric_evidence,
+                );
+                Some(verify_signature(
+                    entry.signature_algorithm,
+                    &entry.public_key,
+                    payload.as_bytes(),
+                    &entry.signature,
+                ))
+            };
+
+            Ok(HttpResponse::Ok().json(ApiResponse::success(
+                serde_json::json!({
+                    "verified": true,
+                    "signature_verified": signature_verified,
+                    "id": entry.id,
+                    "content_hash": entry.content_hash,
+                    "signer": entry.signer,
+                    "notarized_at": entry.notarized_at,
+                    "block_height": entry.block_height,
+                    "metadata": entry.metadata,
+                    "signature": entry.signature,
+                    "signature_algorithm": entry.signature_algorithm,
+                    "signature_level": entry.signature_level,
+                    "biometric_evidence": entry.biometric_evidence,
+                }),
+                trace,
+            )))
+        }
         Err(_) => Ok(HttpResponse::NotFound().json(ApiResponse::<()>::error(
             err_dto("NOT_FOUND", "no notarization found for this document hash"),
             404,
@@ -967,6 +989,19 @@ pub async fn verify_document(
             }
         };
 
+    if !body
+        .fingerprint
+        .verify_integrity(crate::crypto::hasher::HashAlgorithm::Sha256)
+    {
+        return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+            err_dto(
+                "INTEGRITY_FAILED",
+                "candidate fingerprint canonical_hash does not match its dimension hashes",
+            ),
+            400,
+        )));
+    }
+
     let report = body.fingerprint.verify_against(&reference);
 
     let conclusion = match report.verdict {
@@ -1126,6 +1161,7 @@ pub async fn sign_fes_bulk(
             notarized_at: ts,
             block_height,
             signature: sig_hex.clone(),
+            public_key: hex::encode(provider.public_key()),
             signature_algorithm: provider.algorithm(),
             signature_level: SignatureLevel::Simple,
             biometric_evidence: vec![],
@@ -2341,7 +2377,7 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn verify_document_content_match_different_canonical() {
+    async fn verify_document_rejects_tampered_canonical_hash() {
         let app = verify_doc_app!();
         let fp = make_fingerprint(b"contract text", b"heading;paragraph;signature");
         let hash = notarize_fp!(app, fp);
@@ -2357,14 +2393,9 @@ mod tests {
             }))
             .to_request();
         let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), 200);
+        assert_eq!(resp.status(), 400);
         let body: serde_json::Value = test::read_body_json(resp).await;
-        assert_eq!(body["data"]["verdict"], "content_match");
-        assert_eq!(body["data"]["file_identical"], false);
-        assert!(body["data"]["conclusion"]
-            .as_str()
-            .unwrap()
-            .contains("corresponde fielmente"));
+        assert_eq!(body["error"]["code"], "INTEGRITY_FAILED");
     }
 
     #[actix_web::test]

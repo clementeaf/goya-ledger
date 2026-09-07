@@ -291,6 +291,9 @@ pub struct NotarizationEntry {
     /// - Simple:   `"fes:{signer}:{content_hash}"`
     /// - Advanced: `"fea:{signer}:{content_hash}:{biometrics_hash}"`
     pub signature: String,
+    /// Public key used to produce the signature (hex-encoded).
+    #[serde(default)]
+    pub public_key: String,
     /// Signing algorithm used.
     #[serde(default)]
     pub signature_algorithm: SigningAlgorithm,

@@ -312,6 +312,24 @@ impl SignedEnvelope {
         }
     }
 
+    pub fn verify(&self) -> Result<bool, SignatureError> {
+        self.validate_structure()?;
+        let payload = self.signing_payload();
+        let primary_valid = verify_signature(
+            self.signature_algorithm,
+            &self.public_key,
+            payload.as_bytes(),
+            &self.signature,
+        );
+        if !primary_valid {
+            return Ok(false);
+        }
+        if self.is_hybrid() {
+            return self.verify_hybrid();
+        }
+        Ok(true)
+    }
+
     pub fn validate_structure(&self) -> Result<(), SignatureError> {
         // Algorithm must satisfy level requirements
         if !self.level.algorithm_satisfies(self.signature_algorithm) {
@@ -1261,5 +1279,76 @@ mod tests {
             matches!(err, SignatureError::QualifiedNotSupported),
             "Qualified must be rejected with QualifiedNotSupported, got: {err}"
         );
+    }
+
+    #[test]
+    fn verify_atomic_passes_valid_simple() {
+        use crate::identity::signing::{SigningProvider, SoftwareSigningProvider};
+        let provider = SoftwareSigningProvider::generate();
+        let content = dummy_hash();
+        let signer = "did:goya:atomictest".to_string();
+        let payload = format!("fes:{signer}:{content}");
+        let sig = provider.sign(payload.as_bytes()).unwrap();
+
+        let env = SignedEnvelope {
+            level: SignatureLevel::Simple,
+            signer,
+            content_hash: content,
+            signature: hex::encode(&sig),
+            public_key: hex::encode(provider.public_key()),
+            signature_algorithm: SigningAlgorithm::Ed25519,
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
+        };
+
+        assert!(env.verify().unwrap());
+    }
+
+    #[test]
+    fn verify_atomic_fails_corrupted_signature() {
+        use crate::identity::signing::{SigningProvider, SoftwareSigningProvider};
+        let provider = SoftwareSigningProvider::generate();
+        let content = dummy_hash();
+        let signer = "did:goya:corrupt2".to_string();
+        let payload = format!("fes:{signer}:{content}");
+        let sig = provider.sign(payload.as_bytes()).unwrap();
+
+        let env = SignedEnvelope {
+            level: SignatureLevel::Simple,
+            signer,
+            content_hash: content,
+            signature: hex::encode(&sig).replace('a', "b"),
+            public_key: hex::encode(provider.public_key()),
+            signature_algorithm: SigningAlgorithm::Ed25519,
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
+        };
+
+        assert!(!env.verify().unwrap());
+    }
+
+    #[test]
+    fn verify_atomic_rejects_wrong_level() {
+        let env = SignedEnvelope {
+            level: SignatureLevel::Advanced,
+            signer: "did:goya:wronglvl".into(),
+            content_hash: dummy_hash(),
+            signature: "ff".repeat(32),
+            public_key: "ee".repeat(16),
+            signature_algorithm: SigningAlgorithm::Ed25519,
+            biometric_evidence: vec![],
+            signed_at: 1700000000,
+            secondary_signature: None,
+            secondary_public_key: None,
+            secondary_algorithm: None,
+        };
+
+        assert!(env.verify().is_err());
     }
 }
