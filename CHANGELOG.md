@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.16.4] — 2026-09-07
+
+### Added — Legal PDF Package
+
+- `docs/pdf/legal/`: 87 PDFs generated from compliance, policy, FIPS, and research Markdown sources
+- Automated AI-language cleanup applied before conversion (~40 substitutions: comprehensive→complete, robust→solid, leverage→use, etc.)
+- Deduplicated 4 title collisions (EUDI v1/v2, API Reference, Benchmarks, Audit Package) — kept the more complete version of each
+- Covers: EA-103 (17), FIPS 140-3 submission + pre-lab audit (19), ETSI/eIDAS policies (17), regulatory mappings (10), PQC crypto module (15), security operations (6), research papers (3)
+
+---
+
 ## [0.16.3] — 2026-09-04
 
 ### Added — AI Disclosure & Dependency Audit
