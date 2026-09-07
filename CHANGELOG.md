@@ -4,6 +4,43 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.17.0] — 2026-09-07
+
+### Added — FEA Integrity Hardening + Production Node
+
+#### Atomic signature verification
+- `SignedEnvelope::verify()`: single-call structural + cryptographic verification
+- `verify_notarization` endpoint re-verifies stored signature on every read
+- `verify_document` rejects candidate fingerprints with inconsistent canonical_hash
+- `NotarizationEntry` now persists `public_key` and `cades_der` (backwards compatible)
+
+#### CAdES-T timestamping
+- `sign_fea` and `notarize_pdf` now produce CAdES-T (timestamped) when TsaProvider configured
+- TSA token obtained via `obtain_tsa_token()` and embedded in CAdES unsigned attributes
+- CAdES envelope stored in `NotarizationEntry.cades_der` for later re-verification
+
+#### CRL + CAdES verification on read
+- `verify_notarization` re-verifies stored CAdES envelope via `verify_cades_with_context`
+- CRL revocation check via `AppState.crl_store` during CAdES verification
+- Timestamp token integrity validated on verify
+- Response includes `signature_verified` and `cades_verified` fields
+
+#### AWS production deployment
+- EC2 t3.micro node (`44.220.142.37`) running Goya with ML-DSA-65
+- TSA operational: RFC 3161, ML-DSA-65 signing, NTP-synced, policy OID `1.3.6.1.4.1.99999.1.1`
+- CRL endpoint serving DER-encoded revocation lists
+- OCSP responder active (DER + JSON)
+- TLS with self-signed cert, RocksDB storage, structured JSON logging
+- `deploy/aws/docker-compose.yml` + `deploy/aws/deploy.sh` for lifecycle management
+
+### Stats
+- 2824 tests pass, 0 failures, clippy clean
+- 5 files changed for FEA hardening (+153/-24 lines)
+- 4 files changed for CAdES-T + CRL wiring (+72/-14 lines)
+- Node cost: ~$8.50/month
+
+---
+
 ## [0.16.4] — 2026-09-07
 
 ### Added — Legal PDF Package

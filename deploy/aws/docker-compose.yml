@@ -1,0 +1,38 @@
+services:
+  goya:
+    image: goya-node:latest
+    container_name: goya-node
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      BIND_ADDR: "0.0.0.0"
+      API_PORT: "8080"
+      P2P_PORT: "8081"
+      RUST_LOG: "info"
+      RUST_BC_ENV: "production"
+      NETWORK_ID: "goya-prod"
+      ORG_ID: "goya-tsp"
+      NODE_ROLE: "peer_and_orderer"
+      STORAGE_BACKEND: "rocksdb"
+      STORAGE_PATH: "/app/data/rocksdb"
+      ACL_MODE: "strict"
+      SIGNING_ALGORITHM: "ml-dsa-65"
+      LOG_FORMAT: "json"
+      TLS_CERT_PATH: "/tls/node.crt"
+      TLS_KEY_PATH: "/tls/node.key"
+      TLS_CA_CERT_PATH: "/tls/ca.crt"
+      TLS_CA_KEY_PATH: "/tls/ca.key"
+    volumes:
+      - goya-data:/app/data
+      - /home/ubuntu/tls:/tls:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  goya-data:
