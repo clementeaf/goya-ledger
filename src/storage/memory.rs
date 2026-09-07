@@ -1207,6 +1207,7 @@ mod tests {
             block_height: 42,
             signature: "ff".repeat(32),
             public_key: "aa".repeat(1952),
+            cades_der: None,
             signature_algorithm: crate::identity::signing::SigningAlgorithm::MlDsa65,
             signature_level: SignatureLevel::Advanced,
             biometric_evidence: vec![
@@ -1252,6 +1253,7 @@ mod tests {
             block_height: 1,
             signature: "ee".repeat(32),
             public_key: "aa".repeat(32),
+            cades_der: None,
             signature_algorithm: Default::default(),
             signature_level: SignatureLevel::default(),
             biometric_evidence: vec![],
@@ -1299,6 +1301,7 @@ mod tests {
                 block_height: i,
                 signature: "ff".repeat(32),
                 public_key: "aa".repeat(1952),
+                cades_der: None,
                 signature_algorithm: crate::identity::signing::SigningAlgorithm::MlDsa65,
                 signature_level: SignatureLevel::Advanced,
                 biometric_evidence: vec![BiometricEvidence {
@@ -1334,6 +1337,7 @@ mod tests {
             block_height: 1,
             signature: "ff".repeat(32),
             public_key: "aa".repeat(32),
+            cades_der: None,
             signature_algorithm: Default::default(),
             signature_level: Default::default(),
             biometric_evidence: vec![],

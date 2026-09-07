@@ -294,6 +294,9 @@ pub struct NotarizationEntry {
     /// Public key used to produce the signature (hex-encoded).
     #[serde(default)]
     pub public_key: String,
+    /// CAdES DER envelope (hex-encoded, present for FEA signatures).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cades_der: Option<String>,
     /// Signing algorithm used.
     #[serde(default)]
     pub signature_algorithm: SigningAlgorithm,

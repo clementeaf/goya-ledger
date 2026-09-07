@@ -28,6 +28,21 @@ use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+fn obtain_tsa_token(state: &AppState, signature: &[u8]) -> Option<Vec<u8>> {
+    let tsa = state.tsa_provider.as_ref()?;
+    let imprint = hex::encode(crate::crypto::hasher::hash_with(
+        crate::crypto::hasher::HashAlgorithm::Sha256,
+        signature,
+    ));
+    let req = crate::tsa::TimeStampRequest {
+        hash_algorithm: crate::crypto::hasher::HashAlgorithm::Sha256,
+        message_imprint: imprint,
+        nonce: None,
+        require_ordering: false,
+    };
+    tsa.issue_der(&req).ok()
+}
+
 fn err_dto(code: &str, msg: &str) -> ErrorDto {
     ErrorDto {
         code: code.to_string(),
@@ -212,6 +227,7 @@ pub async fn submit_notarization(
         block_height,
         signature: body.signature.clone(),
         public_key: body.public_key.clone(),
+        cades_der: None,
         signature_algorithm: body.signature_algorithm,
         signature_level: body.signature_level,
         biometric_evidence: body.biometric_evidence.clone(),
@@ -351,6 +367,7 @@ pub async fn notarize_pdf(
 
     let content_bytes = hex::decode(&fingerprint.canonical_hash).unwrap_or_default();
     let signing_content = [content_bytes.as_slice(), bio_hash.as_bytes()].concat();
+    let tsa_token = obtain_tsa_token(&state, &signature);
     let cades_params = crate::signature::cades_der::CadesParams {
         content: &signing_content,
         provider: provider.as_ref(),
@@ -358,7 +375,7 @@ pub async fn notarize_pdf(
         signer_cert_der: None,
         commitment: crate::signature::cades_der::CadesCommitment::Fea,
         policy_oid: Some(crate::pki_policy::SIGNATURE_POLICY_OID),
-        tsa_token_der: None,
+        tsa_token_der: tsa_token.as_deref(),
     };
 
     let cades_der = crate::signature::cades_der::build_cades_der(&cades_params).map_err(|e| {
@@ -380,6 +397,7 @@ pub async fn notarize_pdf(
         block_height,
         signature: sig_hex.clone(),
         public_key: hex::encode(provider.public_key()),
+        cades_der: Some(hex::encode(&cades_der)),
         signature_algorithm: provider.algorithm(),
         signature_level: SignatureLevel::Advanced,
         biometric_evidence: body.biometric_evidence.clone(),
@@ -474,10 +492,41 @@ pub async fn verify_notarization(
                 ))
             };
 
+            let cades_verified = match (&entry.cades_der, &entry.public_key) {
+                (Some(cades_hex), pk) if !pk.is_empty() => {
+                    let bio_hash = compute_biometrics_hash(&entry.biometric_evidence);
+                    let content_bytes = hex::decode(&entry.content_hash).unwrap_or_default();
+                    let signing_content = [content_bytes.as_slice(), bio_hash.as_bytes()].concat();
+                    match hex::decode(cades_hex) {
+                        Ok(der) => {
+                            let crl_ref: Option<&dyn crate::msp::CrlStore> =
+                                state.crl_store.as_deref();
+                            let ctx = crate::signature::cades_der::VerifyContext {
+                                trusted_roots: &[],
+                                crl_store: crl_ref,
+                                verify_timestamp: true,
+                            };
+                            Some(
+                                crate::signature::cades_der::verify_cades_with_context(
+                                    &der,
+                                    &signing_content,
+                                    pk,
+                                    &ctx,
+                                )
+                                .is_ok(),
+                            )
+                        }
+                        Err(_) => Some(false),
+                    }
+                }
+                _ => None,
+            };
+
             Ok(HttpResponse::Ok().json(ApiResponse::success(
                 serde_json::json!({
                     "verified": true,
                     "signature_verified": signature_verified,
+                    "cades_verified": cades_verified,
                     "id": entry.id,
                     "content_hash": entry.content_hash,
                     "signer": entry.signer,
@@ -861,25 +910,6 @@ pub async fn sign_fea(
         .unwrap_or_default()
         .as_secs();
 
-    // Build CAdES DER with FEA commitment + biometric hash in content
-    let signing_content = [content_bytes.as_slice(), bio_hash.as_bytes()].concat();
-    let cades_params = crate::signature::cades_der::CadesParams {
-        content: &signing_content,
-        provider: provider.as_ref(),
-        signing_time: now,
-        signer_cert_der: None,
-        commitment: crate::signature::cades_der::CadesCommitment::Fea,
-        policy_oid: Some(crate::pki_policy::SIGNATURE_POLICY_OID),
-        tsa_token_der: None,
-    };
-
-    let cades_der = crate::signature::cades_der::build_cades_der(&cades_params).map_err(|e| {
-        crate::api::errors::ApiError::StorageError {
-            reason: format!("CAdES signing failed: {e}"),
-        }
-    })?;
-
-    // Also produce legacy JSON signature for backwards compat
     let payload = format!(
         "notarize_fea:{}:{}:{}",
         body.signer, body.content_hash, bio_hash
@@ -887,6 +917,24 @@ pub async fn sign_fea(
     let signature = provider.sign(payload.as_bytes()).map_err(|e| {
         crate::api::errors::ApiError::StorageError {
             reason: format!("signing failed: {e}"),
+        }
+    })?;
+
+    let signing_content = [content_bytes.as_slice(), bio_hash.as_bytes()].concat();
+    let tsa_token = obtain_tsa_token(&state, &signature);
+    let cades_params = crate::signature::cades_der::CadesParams {
+        content: &signing_content,
+        provider: provider.as_ref(),
+        signing_time: now,
+        signer_cert_der: None,
+        commitment: crate::signature::cades_der::CadesCommitment::Fea,
+        policy_oid: Some(crate::pki_policy::SIGNATURE_POLICY_OID),
+        tsa_token_der: tsa_token.as_deref(),
+    };
+
+    let cades_der = crate::signature::cades_der::build_cades_der(&cades_params).map_err(|e| {
+        crate::api::errors::ApiError::StorageError {
+            reason: format!("CAdES signing failed: {e}"),
         }
     })?;
 
@@ -1162,6 +1210,7 @@ pub async fn sign_fes_bulk(
             block_height,
             signature: sig_hex.clone(),
             public_key: hex::encode(provider.public_key()),
+            cades_der: None,
             signature_algorithm: provider.algorithm(),
             signature_level: SignatureLevel::Simple,
             biometric_evidence: vec![],
