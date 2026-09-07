@@ -1087,6 +1087,103 @@ pub async fn verify_document(
     )))
 }
 
+// ── Raw document verification ─────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct VerifyRawRequest {
+    pub document_base64: String,
+}
+
+#[post("/notarize/verify-raw")]
+pub async fn verify_raw_document(
+    state: web::Data<AppState>,
+    body: web::Json<VerifyRawRequest>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let trace = uuid::Uuid::new_v4().to_string();
+    let channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, channel)?;
+
+    let raw = match base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        &body.document_base64,
+    ) {
+        Ok(d) => d,
+        Err(_) => {
+            return Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
+                err_dto("INVALID_BASE64", "document_base64 is not valid base64"),
+                400,
+            )));
+        }
+    };
+
+    let computed_hash = hex::encode(crate::crypto::hasher::hash_with(
+        crate::crypto::hasher::HashAlgorithm::Sha256,
+        &raw,
+    ));
+
+    let entry = match store.read_notarization_by_hash(&computed_hash) {
+        Ok(e) => e,
+        Err(_) => {
+            return Ok(HttpResponse::Ok().json(ApiResponse::success(
+                serde_json::json!({
+                    "tampered": true,
+                    "computed_hash": computed_hash,
+                    "registered": false,
+                    "conclusion": "Este documento no tiene registro en Goya. \
+                        No se puede verificar su autenticidad.",
+                }),
+                trace,
+            )));
+        }
+    };
+
+    let signature_verified = if entry.public_key.is_empty() {
+        None
+    } else {
+        let payload = build_notarize_payload(
+            entry.signature_level,
+            &entry.signer,
+            &entry.content_hash,
+            &entry.biometric_evidence,
+        );
+        Some(verify_signature(
+            entry.signature_algorithm,
+            &entry.public_key,
+            payload.as_bytes(),
+            &entry.signature,
+        ))
+    };
+
+    let tampered = signature_verified == Some(false);
+
+    let conclusion = if tampered {
+        "La firma criptográfica no coincide. El documento o la firma han sido adulterados."
+    } else if signature_verified == Some(true) {
+        "Este documento es auténtico. Hash y firma criptográfica verificados \
+         matemáticamente contra el registro original en Goya."
+    } else {
+        "Documento registrado pero sin clave pública almacenada para verificación \
+         criptográfica (registro legacy)."
+    };
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        serde_json::json!({
+            "tampered": tampered,
+            "computed_hash": computed_hash,
+            "registered": true,
+            "signature_verified": signature_verified,
+            "signer": entry.signer,
+            "signature_algorithm": entry.signature_algorithm,
+            "signature_level": entry.signature_level,
+            "notarized_at": entry.notarized_at,
+            "block_height": entry.block_height,
+            "conclusion": conclusion,
+        }),
+        trace,
+    )))
+}
+
 // ── Bulk FES endpoint ──────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
