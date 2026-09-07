@@ -1122,66 +1122,103 @@ pub async fn verify_raw_document(
         &raw,
     ));
 
-    let entry = match store.read_notarization_by_hash(&computed_hash) {
-        Ok(e) => e,
-        Err(_) => {
-            return Ok(HttpResponse::Ok().json(ApiResponse::success(
+    let candidate_fingerprint = crate::document::pdf_parser::fingerprint_pdf(&raw).ok();
+
+    match store.read_notarization_by_hash(&computed_hash) {
+        Ok(entry) => {
+            let signature_verified = if entry.public_key.is_empty() {
+                None
+            } else {
+                let payload = build_notarize_payload(
+                    entry.signature_level,
+                    &entry.signer,
+                    &entry.content_hash,
+                    &entry.biometric_evidence,
+                );
+                Some(verify_signature(
+                    entry.signature_algorithm,
+                    &entry.public_key,
+                    payload.as_bytes(),
+                    &entry.signature,
+                ))
+            };
+
+            let tampered = signature_verified == Some(false);
+
+            let conclusion = if tampered {
+                "La firma criptográfica no coincide. El documento o la firma han sido adulterados."
+            } else if signature_verified == Some(true) {
+                "Este documento es auténtico. Hash y firma criptográfica verificados \
+                 matemáticamente contra el registro original en Goya."
+            } else {
+                "Documento registrado pero sin clave pública almacenada para verificación \
+                 criptográfica (registro legacy)."
+            };
+
+            Ok(HttpResponse::Ok().json(ApiResponse::success(
                 serde_json::json!({
-                    "tampered": true,
+                    "tampered": tampered,
                     "computed_hash": computed_hash,
-                    "registered": false,
-                    "conclusion": "Este documento no tiene registro en Goya. \
-                        No se puede verificar su autenticidad.",
+                    "registered": true,
+                    "hash_match": true,
+                    "signature_verified": signature_verified,
+                    "signer": entry.signer,
+                    "signature_algorithm": entry.signature_algorithm,
+                    "signature_level": entry.signature_level,
+                    "notarized_at": entry.notarized_at,
+                    "block_height": entry.block_height,
+                    "conclusion": conclusion,
                 }),
                 trace,
-            )));
+            )))
         }
-    };
+        Err(_) => {
+            let dimensional = candidate_fingerprint.as_ref().and_then(|candidate_fp| {
+                let all_entries = store.list_notarizations(None).ok()?;
+                for registered in &all_entries {
+                    let ref_fp: DocumentFingerprint = registered
+                        .metadata
+                        .as_ref()?
+                        .get("fingerprint")
+                        .and_then(|v| serde_json::from_value(v.clone()).ok())?;
+                    let report = candidate_fp.verify_against(&ref_fp);
+                    if report.match_ratio > 0.0 {
+                        return Some(serde_json::json!({
+                            "nearest_match": registered.id,
+                            "nearest_hash": registered.content_hash,
+                            "signer": registered.signer,
+                            "notarized_at": registered.notarized_at,
+                            "verdict": report.verdict,
+                            "match_ratio": report.match_ratio,
+                            "file_identical": report.file_identical,
+                            "dimensions": report.dimensions,
+                        }));
+                    }
+                }
+                None
+            });
 
-    let signature_verified = if entry.public_key.is_empty() {
-        None
-    } else {
-        let payload = build_notarize_payload(
-            entry.signature_level,
-            &entry.signer,
-            &entry.content_hash,
-            &entry.biometric_evidence,
-        );
-        Some(verify_signature(
-            entry.signature_algorithm,
-            &entry.public_key,
-            payload.as_bytes(),
-            &entry.signature,
-        ))
-    };
+            let conclusion = if dimensional.is_some() {
+                "El hash SHA-256 no coincide con ningún registro, pero el análisis dimensional \
+                 encontró un documento similar. Se detectaron modificaciones respecto al original."
+            } else {
+                "Este documento no tiene registro en Goya. \
+                 No se puede verificar su autenticidad."
+            };
 
-    let tampered = signature_verified == Some(false);
-
-    let conclusion = if tampered {
-        "La firma criptográfica no coincide. El documento o la firma han sido adulterados."
-    } else if signature_verified == Some(true) {
-        "Este documento es auténtico. Hash y firma criptográfica verificados \
-         matemáticamente contra el registro original en Goya."
-    } else {
-        "Documento registrado pero sin clave pública almacenada para verificación \
-         criptográfica (registro legacy)."
-    };
-
-    Ok(HttpResponse::Ok().json(ApiResponse::success(
-        serde_json::json!({
-            "tampered": tampered,
-            "computed_hash": computed_hash,
-            "registered": true,
-            "signature_verified": signature_verified,
-            "signer": entry.signer,
-            "signature_algorithm": entry.signature_algorithm,
-            "signature_level": entry.signature_level,
-            "notarized_at": entry.notarized_at,
-            "block_height": entry.block_height,
-            "conclusion": conclusion,
-        }),
-        trace,
-    )))
+            Ok(HttpResponse::Ok().json(ApiResponse::success(
+                serde_json::json!({
+                    "tampered": dimensional.is_some(),
+                    "computed_hash": computed_hash,
+                    "registered": false,
+                    "hash_match": false,
+                    "dimensional_analysis": dimensional,
+                    "conclusion": conclusion,
+                }),
+                trace,
+            )))
+        }
+    }
 }
 
 // ── Bulk FES endpoint ──────────────────────────────────────────────────────
