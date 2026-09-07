@@ -154,8 +154,12 @@ impl MlDsaSigningProvider {
         }
     }
 
-    #[allow(dead_code)]
-    /// Create a provider from existing key bytes.
+    pub fn export_key_bytes(&self) -> Vec<u8> {
+        let mut buf = self.public_key.as_bytes().to_vec();
+        buf.extend_from_slice(self.private_key.as_bytes());
+        buf
+    }
+
     pub fn from_keys(pk_bytes: &[u8], sk_bytes: &[u8]) -> Result<Self, SigningError> {
         let pk = pqc_crypto_module::types::MldsaPublicKey::from_bytes(pk_bytes).map_err(|e| {
             SigningError::KeyNotAvailable(format!("invalid ML-DSA-65 public key: {e}"))

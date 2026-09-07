@@ -408,9 +408,29 @@ async fn async_main_inner() -> std::io::Result<()> {
     let signing_provider: Arc<dyn crate::identity::signing::SigningProvider> = {
         use crate::identity::signing::SigningProvider as _;
         let algo = std::env::var("SIGNING_ALGORITHM").unwrap_or_default();
+        let key_dir = std::env::var("STORAGE_PATH").unwrap_or_else(|_| "/app/data".into());
         match algo.to_lowercase().as_str() {
             "" | "ml-dsa-65" | "mldsa65" => {
-                let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+                let key_path = std::path::Path::new(&key_dir).join("signing_key_mldsa65.bin");
+                let provider = if key_path.exists() {
+                    let data = std::fs::read(&key_path).expect("failed to read signing key");
+                    let pk_len = 1952;
+                    crate::identity::signing::MlDsaSigningProvider::from_keys(
+                        &data[..pk_len],
+                        &data[pk_len..],
+                    )
+                    .expect("failed to load ML-DSA-65 key from disk")
+                } else {
+                    let provider = crate::identity::signing::MlDsaSigningProvider::generate();
+                    let key_bytes = provider.export_key_bytes();
+                    if let Some(parent) = key_path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    std::fs::write(&key_path, &key_bytes)
+                        .expect("failed to persist ML-DSA-65 signing key");
+                    log::info!("ML-DSA-65 signing key persisted to {}", key_path.display());
+                    provider
+                };
                 log::info!(
                     "Signing algorithm: ML-DSA-65 (FIPS 204, post-quantum) | pubkey_len={} bytes",
                     provider.public_key().len()
