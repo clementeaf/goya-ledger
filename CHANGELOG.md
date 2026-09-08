@@ -4,6 +4,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.17.1] — 2026-09-08
+
+### Added — Atomic Document Tamper Detection
+
+#### verify-raw endpoint
+- `POST /api/v1/notarize/verify-raw`: accepts raw document bytes (base64), computes SHA-256 server-side, verifies signature, and runs dimensional analysis — all in one atomic call
+- Three verification levels: hash match (byte-exact), ML-DSA-65 signature (cryptographic), dimensional fingerprint (content/structure/tables/images/metadata)
+- When hash doesn't match, searches registered documents by dimensional similarity and reports which dimensions changed
+- Human-readable conclusion in Spanish for legal proceedings
+
+#### ML-DSA-65 key persistence
+- Signing key persisted to `STORAGE_PATH/signing_key_mldsa65.bin` on first generation
+- Loaded from disk on subsequent restarts — DID and public key remain stable
+- `MlDsaSigningProvider::export_key_bytes()` for key serialization
+
+#### Production node redeployed
+- EC2 node (`44.220.142.37`) rebuilt with all v0.17.x changes
+- Verified: health, TSA, verify-raw, key persistence, structured logging
+
+### Stats
+- 2824 tests pass, clippy clean
+- Node key: `did:goya:7a74e5fa59b71dfd` (ML-DSA-65, persistent)
+
+---
+
 ## [0.17.0] — 2026-09-07
 
 ### Added — FEA Integrity Hardening + Production Node
