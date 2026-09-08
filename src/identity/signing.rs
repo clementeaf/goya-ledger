@@ -946,4 +946,22 @@ mod tests {
             sig_hex,
         ));
     }
+
+    #[test]
+    fn mldsa65_key_persistence_roundtrip() {
+        let original = MlDsaSigningProvider::generate();
+        let msg = b"persistence roundtrip";
+        let sig = original.sign(msg).unwrap();
+
+        let exported = original.export_key_bytes();
+        assert_eq!(exported.len(), 1952 + 4032);
+
+        let restored =
+            MlDsaSigningProvider::from_keys(&exported[..1952], &exported[1952..]).unwrap();
+        assert_eq!(restored.public_key(), original.public_key());
+        assert!(restored.verify(msg, &sig).unwrap());
+
+        let sig2 = restored.sign(b"new message").unwrap();
+        assert!(original.verify(b"new message", &sig2).unwrap());
+    }
 }

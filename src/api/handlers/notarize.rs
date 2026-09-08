@@ -2690,4 +2690,125 @@ mod tests {
         let body: serde_json::Value = test::read_body_json(resp).await;
         assert_eq!(body["error"]["code"], "NO_FINGERPRINT");
     }
+
+    // ── verify-raw ──────────────────────────────────────────────────
+
+    #[actix_web::test]
+    async fn verify_raw_unregistered_document() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new()
+                .app_data(state)
+                .service(web::scope("/api/v1").service(verify_raw_document)),
+        )
+        .await;
+
+        let doc = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            b"unknown document",
+        );
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/verify-raw")
+            .set_json(serde_json::json!({ "document_base64": doc }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["registered"], false);
+        assert_eq!(body["data"]["hash_match"], false);
+    }
+
+    #[actix_web::test]
+    async fn verify_raw_registered_document_matches() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(verify_raw_document),
+            ),
+        )
+        .await;
+
+        let document = b"contract for verify-raw test";
+        let hash = hex::encode(crate::crypto::hasher::hash_with(
+            crate::crypto::hasher::HashAlgorithm::Sha256,
+            document,
+        ));
+        let (did, pk_hex, provider) = ed25519_identity();
+        let payload = format!("notarize:{did}:{hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 201);
+
+        let doc_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, document);
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/verify-raw")
+            .set_json(serde_json::json!({ "document_base64": doc_b64 }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["registered"], true);
+        assert_eq!(body["data"]["hash_match"], true);
+        assert_eq!(body["data"]["signature_verified"], true);
+        assert_eq!(body["data"]["tampered"], false);
+    }
+
+    #[actix_web::test]
+    async fn verify_raw_tampered_document_not_found() {
+        let state = make_app_data();
+        let app = test::init_service(
+            App::new().app_data(state).service(
+                web::scope("/api/v1")
+                    .service(submit_notarization)
+                    .service(verify_raw_document),
+            ),
+        )
+        .await;
+
+        let original = b"original document content";
+        let hash = hex::encode(crate::crypto::hasher::hash_with(
+            crate::crypto::hasher::HashAlgorithm::Sha256,
+            original,
+        ));
+        let (did, pk_hex, provider) = ed25519_identity();
+        let payload = format!("notarize:{did}:{hash}");
+        let sig = hex::encode(provider.sign(payload.as_bytes()).unwrap());
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize")
+            .set_json(serde_json::json!({
+                "content_hash": hash,
+                "signer": did,
+                "public_key": pk_hex,
+                "signature": sig,
+            }))
+            .to_request();
+        test::call_service(&app, req).await;
+
+        let tampered = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            b"TAMPERED document content",
+        );
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notarize/verify-raw")
+            .set_json(serde_json::json!({ "document_base64": tampered }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), 200);
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["data"]["registered"], false);
+        assert_eq!(body["data"]["hash_match"], false);
+    }
 }
