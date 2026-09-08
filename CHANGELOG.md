@@ -4,6 +4,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.17.2] — 2026-09-08
+
+### Research — NOTA Token Thesis: Federated PSC Governance
+
+Documented the architectural discovery that Goya's multi-jurisdictional
+PSC model (Chile/Estonia/UAE) naturally requires a governance token —
+not as speculative cryptocurrency, but as operational settlement and
+decentralized governance mechanism for a federated network of Trust
+Service Providers.
+
+#### Key findings
+- DLT permissioned network eliminates PoW/mining — validators are accredited PSCs
+- Each jurisdiction requires a separate legal entity + accreditation → independent PSCs sharing infrastructure
+- Token solves inter-jurisdictional settlement (no shared bank/currency between PSCs)
+- Decentralized governance is essential: DID sovereignty requires that no single entity controls identity
+- Existing code supports this: `src/governance/voting.rs`, `src/governance/params.rs`, `src/staking/`, DPoS consensus
+- Tokenomics module (`src/tokenomics/`) has supply cap (100M), halving, fee burn — but is not yet wired to block production
+
+#### NOTA token thesis
+> NOTA is the governance mechanism of a federated network of post-quantum
+> Trust Service Providers, where digital identity depends on multi-jurisdictional
+> consensus of accredited PSCs, not on any single government or corporation.
+
+#### Gap identified
+- `EconomicsEngine` and `SupplyState` exist but are not connected to the block production runtime
+- Activation requires ~50 lines wiring rewards to validators and fee burns to transactions
+
+---
+
 ## [0.17.1] — 2026-09-08
 
 ### Added — Atomic Document Tamper Detection
