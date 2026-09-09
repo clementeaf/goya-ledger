@@ -12,6 +12,7 @@ fn make_tx(id: &str, from: &str, to: &str, amount: u64) -> Transaction {
         input_did: from.to_string(),
         output_recipient: to.to_string(),
         amount,
+        fee: 0,
         state: "pending".to_string(),
     }
 }

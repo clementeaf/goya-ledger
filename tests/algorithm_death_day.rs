@@ -29,6 +29,7 @@ fn make_tx(label: &str) -> Transaction {
         input_did: "did:goya:test".to_string(),
         output_recipient: "did:goya:recv".to_string(),
         amount: 0,
+        fee: 0,
         state: "pending".to_string(),
     }
 }

@@ -281,6 +281,7 @@ pub fn archive(store: &LexChainStore, contract_id: &str) -> Result<LexContract, 
         output_recipient: "lexchain:archive".to_string(),
         amount: 0,
         state: "confirmed".to_string(),
+        fee: 0,
     };
 
     backend

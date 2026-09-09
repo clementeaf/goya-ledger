@@ -100,6 +100,8 @@ pub struct Transaction {
     pub output_recipient: String,
     pub amount: u64,
     pub state: String,
+    #[serde(default)]
+    pub fee: u64,
 }
 
 /// Identity record structure

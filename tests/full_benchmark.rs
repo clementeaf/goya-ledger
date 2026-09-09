@@ -47,6 +47,7 @@ fn make_endorsed(id: &str, key: &str, version: u64) -> EndorsedTransaction {
                 input_did: "did:bc:sender".into(),
                 output_recipient: "did:bc:recv".into(),
                 amount: 1,
+                fee: 0,
                 state: "pending".into(),
             },
             creator_did: "did:bc:creator".into(),

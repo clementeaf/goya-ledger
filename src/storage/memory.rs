@@ -909,6 +909,7 @@ mod tests {
             output_recipient: "did:goya:receiver".to_string(),
             amount: 42,
             state: "confirmed".to_string(),
+            fee: 0,
         }
     }
 

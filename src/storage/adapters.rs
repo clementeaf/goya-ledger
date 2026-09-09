@@ -2581,6 +2581,7 @@ mod tests {
             output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
+            fee: 0,
         }
     }
 
@@ -2781,6 +2782,7 @@ mod tests {
             output_recipient: "did:goya:out".to_string(),
             amount: 1,
             state: "confirmed".to_string(),
+            fee: 0,
         }
     }
 

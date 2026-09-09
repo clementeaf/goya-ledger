@@ -57,6 +57,7 @@ mod storage;
 mod stress;
 mod time_source;
 mod tls;
+mod tokenomics;
 mod transaction;
 mod transaction_validation;
 mod tsa;
@@ -769,6 +770,10 @@ async fn async_main_inner() -> std::io::Result<()> {
         vs
     };
 
+    let economics_state = std::sync::Arc::new(std::sync::Mutex::new(
+        crate::tokenomics::economics::EconomicsState::default(),
+    ));
+
     let app_state = AppState {
         node: Some(node_arc.clone()),
         balance_cache: balance_cache.clone(),
@@ -889,7 +894,8 @@ async fn async_main_inner() -> std::io::Result<()> {
         )),
         mining_service: Some(Arc::new(
             mining::MiningService::new(gateway_store.clone(), mining::MiningConfig::default())
-                .with_signer(signing_provider.clone()),
+                .with_signer(signing_provider.clone())
+                .with_economics(economics_state.clone()),
         )),
         signing_provider: Some(signing_provider.clone()),
         tx_pool: Arc::new(std::sync::Mutex::new(
@@ -951,6 +957,10 @@ async fn async_main_inner() -> std::io::Result<()> {
             Some(Arc::new(lm))
         },
         lexchain_store: crate::lexchain::store::LexChainStore::with_backend(gateway_store.clone()),
+        economics_state: economics_state.clone(),
+        deposit_ledger: std::sync::Arc::new(
+            crate::tokenomics::storage_deposit::DepositLedger::new(),
+        ),
     };
     log::info!("LexChain engine initialized");
 

@@ -285,6 +285,7 @@ impl Gateway {
                     output_recipient: tx.output_recipient.clone(),
                     amount: tx.amount,
                     state: "committed".to_string(),
+                    fee: 0,
                 }
             } else {
                 Transaction {
@@ -295,6 +296,7 @@ impl Gateway {
                     output_recipient: String::new(),
                     amount: 0,
                     state: "committed".to_string(),
+                    fee: 0,
                 }
             };
             let _ = self.store.write_transaction(&indexed_tx);
@@ -469,6 +471,7 @@ impl Gateway {
                         output_recipient: String::new(),
                         amount: 0,
                         state: String::new(),
+                        fee: 0,
                     },
                     creator_did: String::new(),
                     creator_signature: vec![0u8; 64],
@@ -606,6 +609,7 @@ mod tests {
             output_recipient: "did:goya:bob".to_string(),
             amount: 10,
             state: "pending".to_string(),
+            fee: 0,
         }
     }
 

@@ -24,6 +24,7 @@ fn make_tx(id: usize) -> Transaction {
         output_recipient: "did:bc:receiver".to_string(),
         amount: 1,
         state: "endorsed".to_string(),
+        fee: 0,
     }
 }
 

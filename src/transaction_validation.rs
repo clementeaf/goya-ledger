@@ -608,6 +608,7 @@ mod tests {
             block_height: 0,
             timestamp: now_secs(),
             state: "pending".to_string(),
+            fee: 0,
         }
     }
 
@@ -654,6 +655,7 @@ mod tests {
             block_height: 0,
             timestamp: now_secs(),
             state: "pending".to_string(),
+            fee: 0,
         };
 
         let result = validator.validate(&tx);
@@ -690,6 +692,7 @@ mod tests {
             block_height: 0,
             timestamp: now_secs(),
             state: "pending".to_string(),
+            fee: 0,
         };
 
         let result = validator.validate(&tx);

@@ -2904,6 +2904,7 @@ mod tests {
             output_recipient: "did:goya:bob".to_string(),
             amount: 10,
             state: "pending".to_string(),
+            fee: 0,
         }
     }
 

@@ -55,6 +55,7 @@ pub mod stats;
 pub mod stress;
 pub mod stripe;
 pub mod tokenization;
+pub mod tokenomics;
 pub mod transactions;
 pub mod tsa;
 pub mod tsl;

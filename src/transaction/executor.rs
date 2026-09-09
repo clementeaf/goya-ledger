@@ -254,6 +254,7 @@ mod tests {
             output_recipient: "did:test:recv".to_string(),
             amount: 0,
             state: "pending".to_string(),
+            fee: 0,
         }
     }
 

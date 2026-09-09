@@ -27,6 +27,8 @@ use crate::private_data::{CollectionRegistry, PrivateDataStore};
 use crate::smart_contracts::ContractManager;
 use crate::staking::StakingManager;
 use crate::storage::traits::BlockStore;
+use crate::tokenomics::economics::EconomicsState;
+use crate::tokenomics::storage_deposit::DepositLedger;
 use crate::transaction_validation::TransactionValidator;
 
 /// Shared application state for the HTTP API layer.
@@ -119,6 +121,8 @@ pub struct AppState {
     pub lifecycle_manager: Option<Arc<crate::pki_lifecycle::LifecycleManager>>,
     /// LexChain contract store.
     pub lexchain_store: crate::lexchain::store::LexChainStore,
+    pub economics_state: Arc<Mutex<EconomicsState>>,
+    pub deposit_ledger: Arc<DepositLedger>,
 }
 
 impl AppState {
@@ -189,6 +193,8 @@ impl AppState {
             ocsp_responder: None,
             lifecycle_manager: None,
             lexchain_store: crate::lexchain::store::LexChainStore::new(),
+            economics_state: Arc::new(Mutex::new(EconomicsState::default())),
+            deposit_ledger: Arc::new(DepositLedger::new()),
         }
     }
 }

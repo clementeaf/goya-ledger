@@ -62,6 +62,7 @@ fn make_endorsed_with_sig(
                 input_did: "did:goya:sender".into(),
                 output_recipient: "did:goya:recv".into(),
                 amount: 1,
+                fee: 0,
                 state: "pending".into(),
             },
             creator_did: "did:goya:creator".into(),

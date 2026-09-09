@@ -58,6 +58,7 @@ pub async fn create_transaction(
         output_recipient: req.to.clone(),
         amount: req.amount,
         state: "pending".to_string(),
+        fee: 0,
     };
 
     // Nonce replay protection for non-coinbase transactions

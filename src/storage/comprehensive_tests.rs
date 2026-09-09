@@ -59,6 +59,7 @@ mod comprehensive_storage_tests {
             output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
+            fee: 0,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -205,6 +206,7 @@ mod comprehensive_storage_tests {
             output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
+            fee: 0,
         };
         assert!(store.write_batch(&[], &[tx]).is_ok());
     }
@@ -237,6 +239,7 @@ mod comprehensive_storage_tests {
             output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
+            fee: 0,
         };
         assert!(store.write_batch(&[block], &[tx]).is_ok());
     }
@@ -284,6 +287,7 @@ mod comprehensive_storage_tests {
                 output_recipient: "did:goya:output".to_string(),
                 amount: 100 * i as u64,
                 state: "confirmed".to_string(),
+                fee: 0,
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&[], &txs).is_ok());
@@ -342,6 +346,7 @@ mod comprehensive_storage_tests {
             output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "confirmed".to_string(),
+            fee: 0,
         }];
         assert!(store.write_batch(&blocks, &txs).is_ok());
     }
@@ -634,6 +639,7 @@ mod comprehensive_storage_tests {
             output_recipient: "did:goya:output".to_string(),
             amount: 0,
             state: "confirmed".to_string(),
+            fee: 0,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -649,6 +655,7 @@ mod comprehensive_storage_tests {
             output_recipient: "did:goya:output".to_string(),
             amount: u64::MAX,
             state: "confirmed".to_string(),
+            fee: 0,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -664,6 +671,7 @@ mod comprehensive_storage_tests {
             output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "pending".to_string(),
+            fee: 0,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -679,6 +687,7 @@ mod comprehensive_storage_tests {
             output_recipient: "did:goya:output".to_string(),
             amount: 100,
             state: "failed".to_string(),
+            fee: 0,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -849,6 +858,7 @@ mod comprehensive_storage_tests {
                 output_recipient: "did:goya:output".to_string(),
                 amount: 100,
                 state: "confirmed".to_string(),
+                fee: 0,
             };
             let _ = store.write_transaction(&tx);
         }

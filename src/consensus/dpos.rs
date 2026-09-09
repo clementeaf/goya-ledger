@@ -142,6 +142,23 @@ pub fn expected_leader_distribution(
     counts
 }
 
+pub fn committee_from_staking_manager(
+    staking: &crate::staking::StakingManager,
+    config: &DposConfig,
+    epoch: u64,
+) -> ValidatorCommittee {
+    let candidates: Vec<ValidatorStake> = staking
+        .get_active_validators()
+        .into_iter()
+        .map(|v| ValidatorStake {
+            address: v.address,
+            stake: v.staked_amount,
+            active: v.is_active,
+        })
+        .collect();
+    select_committee(&candidates, config, epoch)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

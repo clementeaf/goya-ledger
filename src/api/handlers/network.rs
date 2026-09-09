@@ -177,7 +177,16 @@ pub async fn mine_block(
             reason: format!("Mining error: {e}"),
         })?;
 
-    let reward = 50u64;
+    let reward = {
+        let econ = state
+            .economics_state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        crate::tokenomics::economics::capped_block_reward(
+            econ.height.saturating_sub(1),
+            econ.total_minted,
+        )
+    };
 
     // Staking: record validation
     if let Some(ref validator_addr) = validator_address {

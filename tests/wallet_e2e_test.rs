@@ -57,6 +57,7 @@ fn stored_tx(id: &str, from: &str, to: &str, amount: u64, height: u64) -> Transa
         input_did: from.to_string(),
         output_recipient: to.to_string(),
         amount,
+        fee: 0,
         state: "confirmed".to_string(),
     }
 }

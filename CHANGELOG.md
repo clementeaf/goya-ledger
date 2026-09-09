@@ -4,6 +4,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.17.4] — 2026-09-09
+
+### Added — Tokenomics Wiring
+
+Connected the existing tokenomics engine (`EconomicsState`, `DepositLedger`,
+`StakingRewardContract`) to the runtime — previously all code existed in
+isolation with zero integration.
+
+#### EconomicsState → runtime (7 gaps closed)
+1. `EconomicsState` added to `AppState` — shared via `Arc<Mutex<_>>`
+2. `MiningService::mine_block()` calls `process_block()` — updates total_minted, base_fee, epoch
+3. API mine handler reads reward from `EconomicsState` instead of hardcoded `50u64`
+4. `fee: u64` field added to `Transaction` (serde default, backwards-compatible)
+5. `mine_block()` sums transaction fees → `process_block(total_fees)` → 80% burn / 20% proposer
+6. `DepositLedger` added to `AppState`
+7. `committee_from_staking_manager()` bridges `StakingManager` → DPoS `ValidatorCommittee`
+
+#### Tokenomics API endpoints
+- `GET /api/v1/tokenomics/supply` — max_supply, total_minted, total_burned, circulating_supply
+- `GET /api/v1/tokenomics/fee` — base_fee, min_tx_fee, burn/proposer split
+- `GET /api/v1/tokenomics/inflation` — annual rate, epoch, block reward, next halving
+
+### Stats
+- ~60 Transaction constructors updated with `fee: 0`
+- 2829 tests pass, clippy clean
+
+---
+
 ## [0.17.3] — 2026-09-09
 
 ### Added — Digital Identity Hardening

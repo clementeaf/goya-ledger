@@ -91,6 +91,7 @@ pub async fn stake(
         output_recipient: "STAKING".to_string(),
         amount: body.amount,
         state: "pending".to_string(),
+        fee: 0,
     };
     {
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
@@ -178,6 +179,7 @@ pub async fn complete_unstake(
         output_recipient: body.address.clone(),
         amount,
         state: "pending".to_string(),
+        fee: 0,
     };
     {
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());

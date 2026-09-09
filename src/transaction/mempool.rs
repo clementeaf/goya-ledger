@@ -127,6 +127,7 @@ mod tests {
             output_recipient: to.to_string(),
             amount,
             state: "pending".to_string(),
+            fee: 0,
         }
     }
 

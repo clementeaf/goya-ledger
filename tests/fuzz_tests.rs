@@ -67,6 +67,7 @@ proptest! {
             input_did,
             output_recipient: output,
             amount,
+            fee: 0,
             state,
         };
         let _ = rust_bc::api::handlers::validation::validate_store_transaction(&tx);
@@ -166,6 +167,7 @@ proptest! {
             input_did: from,
             output_recipient: to,
             amount,
+            fee: 0,
             state: "pending".to_string(),
         };
         prop_assert_eq!(tx.amount, amount);
@@ -190,6 +192,7 @@ proptest! {
             input_did: from,
             output_recipient: to,
             amount,
+            fee: 0,
             state: "pending".to_string(),
         };
 
@@ -287,6 +290,7 @@ proptest! {
             input_did: "did:bc:fuzz-in".to_string(),
             output_recipient: "did:bc:fuzz-out".to_string(),
             amount,
+            fee: 0,
             state: "committed".to_string(),
         };
 

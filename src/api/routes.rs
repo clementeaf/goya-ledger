@@ -8,8 +8,8 @@ use crate::api::handlers::{
     gateway, governance, governance_entities, identity, inference, intelligence, interop,
     invitations, legal_oracle, lexchain, msp, network, notarize, ocsp, oid4vci, oid4vp, oracle,
     organizations, pentest, pin, policy, private_data, proposals, ra, registry, regulatory,
-    snapshots, staking, stats, stress, stripe, tokenization, transactions, tsa, tsl, utilities,
-    vault, wallets, zkp,
+    snapshots, staking, stats, stress, stripe, tokenization, tokenomics, transactions, tsa, tsl,
+    utilities, vault, wallets, zkp,
 };
 
 /// API routes configuration
@@ -238,6 +238,10 @@ impl ApiRoutes {
             .service(staking::get_validators)
             .service(staking::get_validator)
             .service(staking::get_my_stake);
+        // Tokenomics (supply, fees, inflation)
+        cfg.service(tokenomics::supply)
+            .service(tokenomics::fee)
+            .service(tokenomics::inflation);
         // Alias registry (zero-knowledge alias system)
         cfg.service(alias::alias_register)
             .service(alias::alias_resolve)
@@ -416,6 +420,10 @@ impl LightRoutes {
             .service(identity::migrate_did)
             .service(identity::auth_challenge)
             .service(identity::auth_verify);
+        // Tokenomics
+        cfg.service(tokenomics::supply)
+            .service(tokenomics::fee)
+            .service(tokenomics::inflation);
         // Credentials (VCs)
         cfg.service(credentials::store_write_credential)
             .service(credentials::store_list_credentials)

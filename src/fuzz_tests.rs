@@ -331,6 +331,7 @@ mod tests {
                 output_recipient: output_recipient.clone(),
                 amount,
                 state: state.to_string(),
+                fee: 0,
             };
 
             let json = serde_json::to_string(&tx).unwrap();

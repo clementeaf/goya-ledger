@@ -7,7 +7,8 @@ use crate::crypto::hasher::{hash, HashAlgorithm};
 use crate::identity::signing::{SigningAlgorithm, SigningProvider};
 use crate::ordering::block_hash_for_signing;
 use crate::storage::traits::{Block, BlockStore, Transaction};
-use std::sync::Arc;
+use crate::tokenomics::economics::EconomicsState;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Configuration for the mining service.
@@ -36,6 +37,7 @@ pub struct MiningService {
     config: MiningConfig,
     signer: Option<Arc<dyn SigningProvider>>,
     secondary_signer: Option<Arc<dyn SigningProvider>>,
+    economics: Option<Arc<Mutex<EconomicsState>>>,
 }
 
 impl MiningService {
@@ -45,7 +47,13 @@ impl MiningService {
             config,
             signer: None,
             secondary_signer: None,
+            economics: None,
         }
+    }
+
+    pub fn with_economics(mut self, economics: Arc<Mutex<EconomicsState>>) -> Self {
+        self.economics = Some(economics);
+        self
     }
 
     /// Attach a signing provider for block signatures.
@@ -75,9 +83,20 @@ impl MiningService {
             0
         };
 
-        // Calculate rewards (fees not tracked in storage::Transaction — reward only)
-        let reward = self.calculate_reward(new_height);
-        let total_reward = reward;
+        let total_fees: u64 = transactions.iter().map(|tx| tx.fee).sum();
+        let (reward, proposer_fees) = if let Some(ref econ) = self.economics {
+            let mut state = econ.lock().unwrap_or_else(|e| e.into_inner());
+            let (new_state, fee_split, reward) = crate::tokenomics::economics::process_block(
+                &state,
+                transactions.len() as u64,
+                total_fees,
+            );
+            *state = new_state;
+            (reward, fee_split.proposer)
+        } else {
+            (self.calculate_reward(new_height), 0)
+        };
+        let total_reward = reward + proposer_fees;
 
         // Build coinbase transaction
         let coinbase = Transaction {
@@ -88,6 +107,7 @@ impl MiningService {
             output_recipient: miner_address.to_string(),
             amount: total_reward,
             state: "confirmed".to_string(),
+            fee: 0,
         };
 
         // Get parent hash
@@ -247,6 +267,7 @@ mod tests {
             output_recipient: "bob".to_string(),
             amount: 10,
             state: "pending".to_string(),
+            fee: 0,
         };
 
         let height = service.mine_block("miner1", vec![tx]).unwrap();

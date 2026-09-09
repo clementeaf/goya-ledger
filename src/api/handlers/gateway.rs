@@ -103,6 +103,7 @@ pub async fn gateway_submit(
         output_recipient: req.transaction.output_recipient,
         amount: req.transaction.amount,
         state: "pending".to_string(),
+        fee: 0,
     };
 
     let result = gw
