@@ -971,6 +971,7 @@ mod tests {
             updated_at: 200,
             status: "active".to_string(),
             migrated_from: None,
+            signature_algorithm: None,
         };
         store.write_identity(&id).unwrap();
         let fetched = store.read_identity("did:goya:alice").unwrap();

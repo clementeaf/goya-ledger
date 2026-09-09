@@ -475,6 +475,7 @@ pub fn stress_identity(ops: u64) -> ModuleStressResult {
             updated_at: 1000 + i,
             status: "active".into(),
             migrated_from: None,
+            signature_algorithm: None,
         };
 
         if store.write_identity(&record).is_err() {
@@ -527,6 +528,7 @@ pub fn stress_credential(ops: u64) -> ModuleStressResult {
             updated_at: 1000,
             status: "active".into(),
             migrated_from: None,
+            signature_algorithm: None,
         })
         .unwrap();
 
@@ -759,6 +761,7 @@ mod tests {
                             updated_at: i,
                             status: "active".into(),
                             migrated_from: None,
+                            signature_algorithm: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             errors += 1;
@@ -815,6 +818,7 @@ mod tests {
                 updated_at: 0,
                 status: "active".into(),
                 migrated_from: None,
+                signature_algorithm: None,
             })
             .unwrap();
 
@@ -1068,6 +1072,7 @@ mod tests {
                             updated_at: i,
                             status: "active".into(),
                             migrated_from: None,
+                            signature_algorithm: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1479,6 +1484,7 @@ mod tests {
                             updated_at: i,
                             status: "active".into(),
                             migrated_from: None,
+                            signature_algorithm: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             errors += 1;
@@ -1521,6 +1527,7 @@ mod tests {
                 updated_at: 0,
                 status: "active".into(),
                 migrated_from: None,
+                signature_algorithm: None,
             })
             .unwrap();
 
@@ -1644,6 +1651,7 @@ mod tests {
                             updated_at: i,
                             status: "active".into(),
                             migrated_from: None,
+                            signature_algorithm: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

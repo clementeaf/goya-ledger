@@ -41,6 +41,7 @@ async fn create_identity(
         updated_at: now,
         status: "active".to_string(),
         migrated_from: None,
+        signature_algorithm: Some(format!("{:?}", algorithm)),
     };
     store
         .write_identity(&record)
@@ -336,6 +337,170 @@ pub async fn store_list_identities(
     Ok(HttpResponse::Ok().json(ApiResponse::success(page, trace_id)))
 }
 
+// ── DID Auth: challenge-response ────────────────────────────────────────────
+
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+static AUTH_CHALLENGES: std::sync::LazyLock<Mutex<HashMap<String, AuthChallenge>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+
+struct AuthChallenge {
+    did: String,
+    nonce: String,
+    expires_at: u64,
+}
+
+#[derive(serde::Deserialize)]
+pub struct ChallengeRequest {
+    pub did: String,
+}
+
+#[derive(serde::Serialize)]
+struct ChallengeResponse {
+    challenge: String,
+    did: String,
+    expires_in_secs: u64,
+}
+
+#[derive(serde::Deserialize)]
+pub struct AuthenticateRequest {
+    pub did: String,
+    pub challenge: String,
+    pub signature: String,
+}
+
+#[derive(serde::Serialize)]
+struct AuthenticateResponse {
+    authenticated: bool,
+    did: String,
+    algorithm: Option<String>,
+}
+
+const CHALLENGE_TTL_SECS: u64 = 300;
+
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+#[post("/identity/auth/challenge")]
+pub async fn auth_challenge(
+    state: web::Data<AppState>,
+    body: web::Json<ChallengeRequest>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, channel)?;
+
+    store
+        .read_identity(&body.did)
+        .map_err(|_| ApiError::NotFound {
+            resource: format!("identity {}", body.did),
+        })?;
+
+    let nonce = uuid::Uuid::new_v4().to_string();
+    let expires_at = now_secs() + CHALLENGE_TTL_SECS;
+
+    AUTH_CHALLENGES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(
+            nonce.clone(),
+            AuthChallenge {
+                did: body.did.clone(),
+                nonce: nonce.clone(),
+                expires_at,
+            },
+        );
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        ChallengeResponse {
+            challenge: nonce,
+            did: body.did.clone(),
+            expires_in_secs: CHALLENGE_TTL_SECS,
+        },
+        trace_id,
+    )))
+}
+
+#[post("/identity/auth/verify")]
+pub async fn auth_verify(
+    state: web::Data<AppState>,
+    body: web::Json<AuthenticateRequest>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, channel)?;
+
+    let challenge = AUTH_CHALLENGES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&body.challenge);
+
+    let challenge = match challenge {
+        Some(c) if c.did == body.did && c.expires_at > now_secs() => c,
+        _ => {
+            return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
+                ErrorDto {
+                    code: "AUTH_FAILED".into(),
+                    message: "invalid or expired challenge".into(),
+                    field: None,
+                },
+                401,
+            )));
+        }
+    };
+
+    let identity = store
+        .read_identity(&body.did)
+        .map_err(|_| ApiError::NotFound {
+            resource: format!("identity {}", body.did),
+        })?;
+
+    let algorithm = identity
+        .signature_algorithm
+        .as_deref()
+        .and_then(|a| match a {
+            "Ed25519" => Some(crate::identity::signing::SigningAlgorithm::Ed25519),
+            "MlDsa65" => Some(crate::identity::signing::SigningAlgorithm::MlDsa65),
+            _ => None,
+        })
+        .unwrap_or(crate::identity::signing::SigningAlgorithm::Ed25519);
+
+    let valid = crate::signature::verify_signature(
+        algorithm,
+        &identity.public_key,
+        challenge.nonce.as_bytes(),
+        &body.signature,
+    );
+
+    if !valid {
+        return Ok(HttpResponse::Unauthorized().json(ApiResponse::<()>::error(
+            ErrorDto {
+                code: "AUTH_FAILED".into(),
+                message: "signature verification failed".into(),
+                field: None,
+            },
+            401,
+        )));
+    }
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        AuthenticateResponse {
+            authenticated: true,
+            did: body.did.clone(),
+            algorithm: identity.signature_algorithm,
+        },
+        trace_id,
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -343,5 +508,38 @@ mod tests {
     #[test]
     fn store_identity_handlers_are_public() {
         let _ = (store_write_identity, store_get_identity);
+    }
+
+    #[test]
+    fn challenge_store_insert_and_remove() {
+        let nonce = "test-nonce-123".to_string();
+        AUTH_CHALLENGES.lock().unwrap().insert(
+            nonce.clone(),
+            AuthChallenge {
+                did: "did:goya:abc123".into(),
+                nonce: nonce.clone(),
+                expires_at: now_secs() + 60,
+            },
+        );
+        let removed = AUTH_CHALLENGES.lock().unwrap().remove(&nonce);
+        assert!(removed.is_some());
+        assert_eq!(removed.unwrap().did, "did:goya:abc123");
+        assert!(AUTH_CHALLENGES.lock().unwrap().remove(&nonce).is_none());
+    }
+
+    #[test]
+    fn expired_challenge_rejected() {
+        let nonce = "expired-nonce".to_string();
+        AUTH_CHALLENGES.lock().unwrap().insert(
+            nonce.clone(),
+            AuthChallenge {
+                did: "did:goya:abc123".into(),
+                nonce: nonce.clone(),
+                expires_at: 0,
+            },
+        );
+        let challenge = AUTH_CHALLENGES.lock().unwrap().remove(&nonce);
+        let c = challenge.unwrap();
+        assert!(c.expires_at <= now_secs());
     }
 }

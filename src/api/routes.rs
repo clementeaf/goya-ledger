@@ -53,6 +53,8 @@ impl ApiRoutes {
             .service(identity::store_write_identity)
             .service(identity::store_list_identities)
             .service(identity::store_get_identity)
+            .service(identity::auth_challenge)
+            .service(identity::auth_verify)
             .service(credentials::store_write_credential)
             .service(credentials::store_list_credentials)
             .service(credentials::store_get_credential)
@@ -411,7 +413,9 @@ impl LightRoutes {
         cfg.service(identity::store_write_identity)
             .service(identity::store_list_identities)
             .service(identity::store_get_identity)
-            .service(identity::migrate_did);
+            .service(identity::migrate_did)
+            .service(identity::auth_challenge)
+            .service(identity::auth_verify);
         // Credentials (VCs)
         cfg.service(credentials::store_write_credential)
             .service(credentials::store_list_credentials)

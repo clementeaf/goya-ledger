@@ -553,6 +553,7 @@ mod tests {
                 updated_at: 0,
                 status: "active".to_string(),
                 migrated_from: None,
+                signature_algorithm: None,
             })
             .unwrap();
     }

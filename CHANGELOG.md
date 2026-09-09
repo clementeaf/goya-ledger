@@ -4,6 +4,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.17.3] — 2026-09-09
+
+### Added — Digital Identity Hardening
+
+#### W3C DID Document compliance (6 fixes)
+- `resolve_did` returns real public key from `IdentityRecord`, not truncated DID suffix
+- `assertionMethod` added to DID Document (W3C DID Core requirement for VC issuance)
+- `authentication` and `assertionMethod` as string references to `verificationMethod` (W3C pattern)
+- `@context` dynamic per algorithm: `ed25519-2020/v1`, `multikey/v1`, `jws-2020/v1`
+- `signature_algorithm` field added to `IdentityRecord` (backwards-compatible, `serde(default)`)
+- `get_credential_as_vc` proof type resolved from issuer's algorithm, not hardcoded Ed25519
+
+#### DID Auth challenge-response
+- `POST /identity/auth/challenge`: server issues UUID v4 nonce with 5-minute TTL
+- `POST /identity/auth/verify`: client signs nonce, server verifies against registered public key
+- Single-use nonces, algorithm-aware (Ed25519, ML-DSA-65)
+
+#### Key recovery (Shamir Secret Sharing)
+- `identity/key_recovery.rs`: Shamir SSS over GF(256), zero new dependencies
+- `split(secret, threshold, total)` → N shares, any K reconstruct
+- SHA-256 checksum detects corrupted shares
+- Tested with Ed25519 (32B) and ML-DSA-65 (4032B) key sizes
+
+#### Identity architecture document
+- `docs/architecture/IDENTITY.md`: complete identity subsystem reference
+- Module map, DID scheme, 5 algorithms, key lifecycle, credential formats
+- DID Auth flow, W3C interop, RA multi-jurisdiction, EUDI ARF v3.0
+
+### Removed — Dead code cleanup
+- `DidDocument`, `DidStatus`, `DidMetadata` structs (unused, replaced by `interop.rs` W3C version)
+- `IdentityConfig` struct and Default impl (never consumed by runtime)
+- ~280 lines and 13 tests of dead code eliminated
+
+### Stats
+- 14 identity source files, ~7000 lines
+- 285 identity unit tests, clippy clean
+- 9 new key recovery tests, 2 new DID Auth tests
+
+---
+
 ## [0.17.2] — 2026-09-08
 
 ### Research — NOTA Token Thesis: Federated PSC Governance

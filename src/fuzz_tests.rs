@@ -369,6 +369,7 @@ mod tests {
                 updated_at,
                 status: status.to_string(),
                 migrated_from: migrated_from.clone(),
+                signature_algorithm: None,
             };
 
             let json = serde_json::to_string(&record).unwrap();

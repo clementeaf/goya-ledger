@@ -113,6 +113,8 @@ pub struct IdentityRecord {
     pub status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub migrated_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature_algorithm: Option<String>,
 }
 
 /// Credential structure

@@ -10,6 +10,47 @@ use actix_web::{get, web, HttpRequest, HttpResponse};
 use serde::Serialize;
 use serde_json::json;
 
+fn verification_method_type(algorithm: Option<&str>, public_key_hex: &str) -> String {
+    if let Some(algo) = algorithm {
+        return match algo {
+            "Ed25519" => "Ed25519VerificationKey2020",
+            "MlDsa65" | "SlhDsa128s" => "Multikey",
+            "EcdsaP256" => "EcdsaSecp256r1VerificationKey2019",
+            "Rsa" => "JsonWebKey2020",
+            _ => "Multikey",
+        }
+        .to_string();
+    }
+    let byte_len = public_key_hex.len() / 2;
+    match byte_len {
+        32 => "Ed25519VerificationKey2020",
+        1952 => "Multikey",
+        33 | 65 => "EcdsaSecp256r1VerificationKey2019",
+        _ => "Multikey",
+    }
+    .to_string()
+}
+
+fn proof_type_from_algorithm(algorithm: Option<&str>, signature_hex: &str) -> String {
+    if let Some(algo) = algorithm {
+        return match algo {
+            "Ed25519" => "Ed25519Signature2020",
+            "MlDsa65" | "SlhDsa128s" => "DataIntegrityProof",
+            "EcdsaP256" => "EcdsaSecp256r1Signature2019",
+            "Rsa" => "JsonWebSignature2020",
+            _ => "DataIntegrityProof",
+        }
+        .to_string();
+    }
+    let sig_bytes = signature_hex.len() / 2;
+    match sig_bytes {
+        64 => "Ed25519Signature2020",
+        3309 => "DataIntegrityProof",
+        _ => "DataIntegrityProof",
+    }
+    .to_string()
+}
+
 fn err_dto(msg: &str) -> ErrorDto {
     ErrorDto {
         code: "INTEROP_ERROR".to_string(),
@@ -25,7 +66,9 @@ struct DidDocument {
     #[serde(rename = "@context")]
     context: Vec<String>,
     id: String,
-    authentication: Vec<DidVerificationMethod>,
+    authentication: Vec<String>,
+    #[serde(rename = "assertionMethod")]
+    assertion_method: Vec<String>,
     #[serde(rename = "verificationMethod")]
     verification_method: Vec<DidVerificationMethod>,
     service: Vec<DidService>,
@@ -85,17 +128,23 @@ pub async fn resolve_did(
         }
     };
 
-    let public_key = identity
-        .did
-        .split(':')
-        .next_back()
-        .unwrap_or("")
-        .to_string();
+    let public_key = if identity.public_key.is_empty() {
+        identity
+            .did
+            .split(':')
+            .next_back()
+            .unwrap_or("")
+            .to_string()
+    } else {
+        identity.public_key.clone()
+    };
 
     let vm_id = format!("{}#key-1", identity.did);
+    let method_type =
+        verification_method_type(identity.signature_algorithm.as_deref(), &public_key);
     let vm = DidVerificationMethod {
-        id: vm_id,
-        method_type: "Ed25519VerificationKey2020".to_string(),
+        id: vm_id.clone(),
+        method_type,
         controller: identity.did.clone(),
         public_key_hex: Some(public_key),
     };
@@ -103,13 +152,25 @@ pub async fn resolve_did(
     let api_port = std::env::var("API_PORT").unwrap_or_else(|_| "8080".to_string());
     let bind = std::env::var("BIND_ADDR").unwrap_or_else(|_| "127.0.0.1".to_string());
 
+    let mut contexts = vec!["https://www.w3.org/ns/did/v1".to_string()];
+    match vm.method_type.as_str() {
+        "Ed25519VerificationKey2020" => {
+            contexts.push("https://w3id.org/security/suites/ed25519-2020/v1".to_string());
+        }
+        "Multikey" => {
+            contexts.push("https://w3id.org/security/multikey/v1".to_string());
+        }
+        "EcdsaSecp256r1VerificationKey2019" => {
+            contexts.push("https://w3id.org/security/suites/jws-2020/v1".to_string());
+        }
+        _ => {}
+    }
+
     let doc = DidDocument {
-        context: vec![
-            "https://www.w3.org/ns/did/v1".to_string(),
-            "https://w3id.org/security/suites/ed25519-2020/v1".to_string(),
-        ],
+        context: contexts,
         id: identity.did.clone(),
-        authentication: vec![vm.clone()],
+        authentication: vec![vm_id.clone()],
+        assertion_method: vec![vm_id],
         verification_method: vec![vm],
         service: vec![DidService {
             id: format!("{}#api", identity.did),
@@ -157,6 +218,12 @@ pub async fn get_credential_as_vc(
         }
     };
 
+    let issuer_algo = store
+        .read_identity(&cred.issuer_did)
+        .ok()
+        .and_then(|id| id.signature_algorithm);
+    let proof_type = proof_type_from_algorithm(issuer_algo.as_deref(), &cred.signature);
+
     let vc = json!({
         "@context": [
             "https://www.w3.org/ns/credentials/v2",
@@ -172,7 +239,7 @@ pub async fn get_credential_as_vc(
             "claims": cred.claims,
         },
         "proof": {
-            "type": "Ed25519Signature2020",
+            "type": proof_type,
             "created": cred.issued_at,
             "verificationMethod": format!("{}#key-1", cred.issuer_did),
             "proofPurpose": "assertionMethod",

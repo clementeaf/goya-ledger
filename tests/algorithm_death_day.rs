@@ -63,6 +63,7 @@ fn register_did(store: &dyn BlockStore, id: &Identity) {
             updated_at: 0,
             status: "active".to_string(),
             migrated_from: None,
+            signature_algorithm: None,
         })
         .unwrap();
 }
@@ -1339,6 +1340,7 @@ fn phase7_migration_during_partition_then_rejoin() {
                 updated_at: 0,
                 status: "active".to_string(),
                 migrated_from: None,
+                signature_algorithm: None,
             })
             .unwrap();
     }

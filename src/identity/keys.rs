@@ -159,6 +159,7 @@ pub fn migrate_identity(
         updated_at: timestamp,
         status: "migrated".to_string(),
         migrated_from: None,
+        signature_algorithm: old_record.signature_algorithm,
     })?;
 
     store.write_identity(&IdentityRecord {
@@ -168,6 +169,7 @@ pub fn migrate_identity(
         updated_at: timestamp,
         status: "active".to_string(),
         migrated_from: Some(old_did.to_string()),
+        signature_algorithm: Some(format!("{:?}", new_algorithm)),
     })?;
 
     Ok(MigrationResult {
@@ -300,6 +302,7 @@ mod tests {
                 updated_at: 1000,
                 status: "active".into(),
                 migrated_from: None,
+                signature_algorithm: None,
             })
             .unwrap();
 
@@ -331,6 +334,7 @@ mod tests {
                 updated_at: 1000,
                 status: "active".into(),
                 migrated_from: None,
+                signature_algorithm: None,
             })
             .unwrap();
 
@@ -355,6 +359,7 @@ mod tests {
                 updated_at: 1000,
                 status: "active".into(),
                 migrated_from: None,
+                signature_algorithm: None,
             })
             .unwrap();
 
@@ -377,6 +382,7 @@ mod tests {
                 updated_at: 1000,
                 status: "active".into(),
                 migrated_from: None,
+                signature_algorithm: None,
             })
             .unwrap();
 

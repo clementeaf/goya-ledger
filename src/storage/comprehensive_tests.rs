@@ -73,6 +73,7 @@ mod comprehensive_storage_tests {
             updated_at: 2000,
             status: "active".to_string(),
             migrated_from: None,
+            signature_algorithm: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -161,6 +162,7 @@ mod comprehensive_storage_tests {
             updated_at: 2000,
             status: "active".to_string(),
             migrated_from: None,
+            signature_algorithm: None,
         };
         assert!(store.write_identity(&identity).is_ok());
         identity.status = "revoked".to_string();
@@ -539,6 +541,7 @@ mod comprehensive_storage_tests {
             updated_at: 2000,
             status: "active".to_string(),
             migrated_from: None,
+            signature_algorithm: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -690,6 +693,7 @@ mod comprehensive_storage_tests {
             updated_at: 2000,
             status: "suspended".to_string(),
             migrated_from: None,
+            signature_algorithm: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -704,6 +708,7 @@ mod comprehensive_storage_tests {
             updated_at: 2000,
             status: "revoked".to_string(),
             migrated_from: None,
+            signature_algorithm: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
