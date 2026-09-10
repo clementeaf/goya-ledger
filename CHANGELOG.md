@@ -27,8 +27,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - OID4VCI `issue_sd_jwt_credential` wires `status_ref` → Token Status List URI + index
 - Wallet/verifier can now discover revocation endpoint from the credential itself
 
+#### GDPR/Ley 21.719 data separation (on-chain privacy)
+- `PrivateClaimsStore` — off-chain store for personal claims (in-memory, deletable)
+- Credential issuance: personal claims stored off-chain, on-chain only `claims_commitment = H(claims || salt)`
+- `POST /credentials/{id}/erase-claims` — GDPR Art. 17 right of erasure: destroys off-chain claims, commitment remains orphaned on-chain
+- `Credential.claims_commitment` and `claims_salt` fields added (serde default, backwards-compatible)
+- Read path reconstitutes claims from off-chain store when available
+- Legal basis: EDPB blockchain guidelines, GDPR Art. 17, Ley 21.719 (Chile)
+
 ### Stats
-- 56 OID4VCI tests, 25 SD-JWT tests, 7 EUDI interop tests pass, clippy clean
+- 56 OID4VCI tests, 25 SD-JWT tests, 7 EUDI interop tests, 5 privacy tests pass, clippy clean
 
 ---
 

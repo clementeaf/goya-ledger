@@ -129,15 +129,16 @@ pub struct Credential {
     pub issued_at: u64,
     pub expires_at: u64,
     pub revoked_at: Option<u64>,
-    /// Free-form metadata: file hash, description, vote data, asset info, etc.
     #[serde(default)]
     pub claims: serde_json::Value,
-    /// Issuer's cryptographic signature over the credential content (hex-encoded).
     #[serde(default)]
     pub signature: String,
-    /// Lifecycle status: active, revoked, suspended.
     #[serde(default = "default_credential_status")]
     pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claims_commitment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claims_salt: Option<String>,
 }
 
 fn default_credential_status() -> String {
@@ -175,6 +176,8 @@ impl Default for Credential {
             claims: serde_json::Value::Null,
             signature: String::new(),
             status: default_credential_status(),
+            claims_commitment: None,
+            claims_salt: None,
         }
     }
 }

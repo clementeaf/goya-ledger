@@ -34,7 +34,8 @@ async fn issue_credential(
         });
     }
 
-    // Persist to store
+    let (commitment, salt) = state.private_claims.store(&credential_id, &body.claims);
+
     let record = crate::storage::traits::Credential {
         id: credential_id.clone(),
         issuer_did: body.issuer_did.clone(),
@@ -43,9 +44,11 @@ async fn issue_credential(
         issued_at: now,
         expires_at: body.expires_at.map(|dt| dt.timestamp() as u64).unwrap_or(0),
         revoked_at: None,
-        claims: body.claims.clone(),
+        claims: serde_json::json!({}),
         signature: String::new(),
         status: "active".to_string(),
+        claims_commitment: Some(commitment),
+        claims_salt: Some(salt),
     };
     store
         .write_credential(&record)
@@ -93,11 +96,16 @@ async fn get_credential(
         resource: format!("credential {id}"),
     })?;
 
+    let claims = state
+        .private_claims
+        .retrieve(&cred.id)
+        .unwrap_or(cred.claims);
+
     let response = CredentialResponse {
         id: cred.id,
         issuer_did: cred.issuer_did,
         subject_did: cred.subject_did,
-        claims: cred.claims,
+        claims,
         issued_at: chrono::DateTime::from_timestamp(cred.issued_at as i64, 0)
             .unwrap_or_else(Utc::now),
         expires_at: if cred.expires_at > 0 {
@@ -325,6 +333,50 @@ pub async fn store_list_credentials(
         .collect();
     Ok(HttpResponse::Ok().json(ApiResponse::success(
         crate::api::pagination::PaginatedResponse::new(page, total, &query),
+        trace_id,
+    )))
+}
+
+#[derive(serde::Serialize)]
+struct ErasureResponse {
+    credential_id: String,
+    claims_erased: bool,
+    commitment_preserved: bool,
+}
+
+#[post("/credentials/{id}/erase-claims")]
+pub async fn erase_claims(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let id = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let _channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, _channel)?;
+
+    store.read_credential(&id).map_err(|_| ApiError::NotFound {
+        resource: format!("credential {id}"),
+    })?;
+
+    let erased = state.private_claims.erase(&id);
+
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::CredentialRevoked,
+        req.headers()
+            .get("X-Org-Id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown"),
+        Some(format!("gdpr_erasure credential_id={id}")),
+    );
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        ErasureResponse {
+            credential_id: id,
+            claims_erased: erased,
+            commitment_preserved: true,
+        },
         trace_id,
     )))
 }

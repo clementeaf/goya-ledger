@@ -49,6 +49,8 @@ fn identity_then_credential_produces_audit_trail() {
         claims: serde_json::json!({"degree": "Computer Science"}),
         signature: String::new(),
         status: "active".to_string(),
+        claims_commitment: None,
+        claims_salt: None,
     };
     store.write_credential(&credential).unwrap();
     rust_bc::audit::emit_domain_event(
@@ -202,6 +204,8 @@ fn credential_to_commitment_range_proof_end_to_end() {
         claims: serde_json::json!({"age": 25}),
         signature: String::new(),
         status: "active".to_string(),
+        claims_commitment: None,
+        claims_salt: None,
     };
     store.write_credential(&credential).unwrap();
 
@@ -233,6 +237,8 @@ fn credential_revocation_invalidates_validity_proof() {
         claims: serde_json::json!({}),
         signature: String::new(),
         status: "active".to_string(),
+        claims_commitment: None,
+        claims_salt: None,
     };
     store.write_credential(&credential).unwrap();
 

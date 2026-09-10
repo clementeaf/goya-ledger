@@ -177,6 +177,8 @@ mod tests {
                 revoked_at,
                 signature: sig_hex.clone(),
                 status: status.to_string(),
+                claims_commitment: None,
+                claims_salt: None,
             };
             let json = serde_json::to_string(&cred).unwrap();
             let back: crate::storage::traits::Credential = serde_json::from_str(&json).unwrap();

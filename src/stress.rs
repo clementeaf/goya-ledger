@@ -551,6 +551,8 @@ pub fn stress_credential(ops: u64) -> ModuleStressResult {
             claims: serde_json::json!({"degree": "engineering", "index": i}),
             signature: String::new(),
             status: "active".into(),
+            claims_commitment: None,
+            claims_salt: None,
         };
 
         if store.write_credential(&cred).is_err() {
@@ -839,6 +841,8 @@ mod tests {
                             claims: serde_json::json!({"thread": t, "op": i}),
                             signature: String::new(),
                             status: "active".into(),
+                            claims_commitment: None,
+                            claims_salt: None,
                         };
                         if s.write_credential(&cred).is_err() {
                             errors += 1;
@@ -1099,6 +1103,8 @@ mod tests {
                         claims: serde_json::Value::Null,
                         signature: String::new(),
                         status: "active".into(),
+                        claims_commitment: None,
+                        claims_salt: None,
                     };
                     if s.write_credential(&cred).is_err() {
                         e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1549,6 +1555,8 @@ mod tests {
                             claims: serde_json::json!({"t": t, "i": i}),
                             signature: String::new(),
                             status: "active".into(),
+                            claims_commitment: None,
+                            claims_salt: None,
                         };
                         if s.write_credential(&cred).is_err() {
                             errors += 1;
@@ -1678,6 +1686,8 @@ mod tests {
                         claims: serde_json::Value::Null,
                         signature: String::new(),
                         status: "active".into(),
+                        claims_commitment: None,
+                        claims_salt: None,
                     };
                     if s.write_credential(&cred).is_err() {
                         e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

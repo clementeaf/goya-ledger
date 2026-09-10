@@ -434,7 +434,8 @@ impl LightRoutes {
             .service(credentials::store_list_credentials)
             .service(credentials::store_get_credential)
             .service(credentials::store_get_credentials_by_subject)
-            .service(credentials::store_get_credentials_by_issuer);
+            .service(credentials::store_get_credentials_by_issuer)
+            .service(credentials::erase_claims);
         // Notarization (Proof of Existence)
         cfg.service(notarize::notarize_pdf)
             .service(notarize::submit_notarization)
