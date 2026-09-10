@@ -71,6 +71,7 @@ pub struct VerifiedMdoc {
     pub valid_until: u64,
     pub disclosed_elements: BTreeMap<String, Vec<(String, serde_json::Value)>>,
     pub algorithm: SigningAlgorithm,
+    pub device_key: Option<String>,
 }
 
 // ── Device Authentication (ISO 18013-5 §9.1.3) ─────────────────────────
@@ -297,6 +298,7 @@ pub fn verify_mdoc(mdoc: &Mdoc) -> Result<VerifiedMdoc, String> {
         valid_until: mso.valid_until,
         disclosed_elements,
         algorithm: mdoc.algorithm,
+        device_key: mso.device_key,
     })
 }
 

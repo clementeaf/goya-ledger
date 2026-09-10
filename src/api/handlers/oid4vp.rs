@@ -413,7 +413,7 @@ pub async fn submit_response(
     let result = if body.vp_token.contains('~') {
         verify_sd_jwt_presentation(&body.vp_token, &request.nonce, &store)
     } else {
-        verify_mdoc_presentation(&body.vp_token)
+        verify_mdoc_presentation(&body.vp_token, &request.nonce)
     };
 
     let vr = match result {
@@ -525,10 +525,32 @@ fn verify_sd_jwt_presentation(
     })
 }
 
-fn verify_mdoc_presentation(vp_token: &str) -> Result<VerificationResult, String> {
-    let mdoc: crate::identity::mdoc::Mdoc =
-        serde_json::from_str(vp_token).map_err(|e| format!("invalid mdoc JSON: {e}"))?;
-    let verified = crate::identity::mdoc::verify_mdoc(&mdoc)?;
+fn verify_mdoc_presentation(vp_token: &str, nonce: &str) -> Result<VerificationResult, String> {
+    let response: crate::identity::mdoc::DeviceResponse = serde_json::from_str(vp_token)
+        .unwrap_or_else(|_| {
+            let mdoc: crate::identity::mdoc::Mdoc = serde_json::from_str(vp_token).unwrap();
+            crate::identity::mdoc::DeviceResponse {
+                version: "1.0".into(),
+                documents: vec![crate::identity::mdoc::Document {
+                    doc_type: mdoc.doc_type.clone(),
+                    issuer_signed: mdoc,
+                    device_auth: None,
+                }],
+                status: 0,
+            }
+        });
+
+    let doc = response.documents.first().ok_or("empty DeviceResponse")?;
+    let verified = crate::identity::mdoc::verify_mdoc(&doc.issuer_signed)?;
+
+    let mut nonce_verified = false;
+    if let Some(ref auth) = doc.device_auth {
+        if let Some(ref device_key) = verified.device_key {
+            nonce_verified =
+                crate::identity::mdoc::verify_device_auth(auth, device_key, nonce.as_bytes())
+                    .is_ok();
+        }
+    }
 
     let mut claims = serde_json::Map::new();
     for (ns, elements) in &verified.disclosed_elements {
@@ -543,7 +565,7 @@ fn verify_mdoc_presentation(vp_token: &str) -> Result<VerificationResult, String
         valid: true,
         format: "mso_mdoc".to_string(),
         claims: serde_json::Value::Object(claims),
-        nonce_verified: false,
+        nonce_verified,
     })
 }
 
