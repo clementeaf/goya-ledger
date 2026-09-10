@@ -376,9 +376,39 @@ struct AuthenticateResponse {
     authenticated: bool,
     did: String,
     algorithm: Option<String>,
+    session_token: Option<String>,
+    session_expires_at: Option<u64>,
 }
 
 const CHALLENGE_TTL_SECS: u64 = 300;
+
+fn b64url_encode(data: &[u8]) -> String {
+    base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, data)
+}
+
+fn mint_session_jwt(
+    did: &str,
+    exp: u64,
+    signer: Option<&dyn crate::identity::signing::SigningProvider>,
+) -> String {
+    let now = now_secs();
+    let header = serde_json::json!({"alg": "EdDSA", "typ": "JWT"});
+    let payload = serde_json::json!({
+        "sub": did,
+        "iat": now,
+        "exp": exp,
+        "iss": "goya-ledger",
+        "type": "session",
+    });
+    let h = b64url_encode(&serde_json::to_vec(&header).unwrap_or_default());
+    let p = b64url_encode(&serde_json::to_vec(&payload).unwrap_or_default());
+    let signing_input = format!("{h}.{p}");
+    let sig = signer
+        .and_then(|s| s.sign(signing_input.as_bytes()).ok())
+        .unwrap_or_default();
+    let s = b64url_encode(&sig);
+    format!("{signing_input}.{s}")
+}
 
 fn now_secs() -> u64 {
     SystemTime::now()
@@ -491,11 +521,17 @@ pub async fn auth_verify(
         )));
     }
 
+    let session_ttl = 3600u64;
+    let session_exp = now_secs() + session_ttl;
+    let session_token = mint_session_jwt(&body.did, session_exp, state.signing_provider.as_deref());
+
     Ok(HttpResponse::Ok().json(ApiResponse::success(
         AuthenticateResponse {
             authenticated: true,
             did: body.did.clone(),
             algorithm: identity.signature_algorithm,
+            session_token: Some(session_token),
+            session_expires_at: Some(session_exp),
         },
         trace_id,
     )))
@@ -541,5 +577,28 @@ mod tests {
         let challenge = AUTH_CHALLENGES.lock().unwrap().remove(&nonce);
         let c = challenge.unwrap();
         assert!(c.expires_at <= now_secs());
+    }
+
+    #[test]
+    fn session_jwt_has_correct_structure() {
+        let provider = crate::identity::signing::SoftwareSigningProvider::generate();
+        let token = mint_session_jwt("did:goya:test1234", now_secs() + 3600, Some(&provider));
+        let parts: Vec<&str> = token.split('.').collect();
+        assert_eq!(parts.len(), 3);
+
+        let payload_bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, parts[1])
+                .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&payload_bytes).unwrap();
+        assert_eq!(payload["sub"], "did:goya:test1234");
+        assert_eq!(payload["iss"], "goya-ledger");
+        assert_eq!(payload["type"], "session");
+        assert!(payload["iat"].as_u64().unwrap() > 0);
+        assert!(payload["exp"].as_u64().unwrap() > payload["iat"].as_u64().unwrap());
+
+        let sig_bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, parts[2])
+                .unwrap();
+        assert_eq!(sig_bytes.len(), 64);
     }
 }
