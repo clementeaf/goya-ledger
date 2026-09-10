@@ -205,6 +205,7 @@ fn sd_jwt_vc_has_required_claims() {
             ),
         ],
         cnf: None,
+        status: None,
     };
     let sd_jwt = issue_sd_jwt_vc(&claims, &provider).unwrap();
     assert!(sd_jwt.compact.contains('~'));

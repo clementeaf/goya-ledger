@@ -4,6 +4,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.17.5] — 2026-09-10
+
+### Fixed — EUDI Wallet Critical Security + Route Gaps
+
+#### Proof JWT signature verification (CRITICAL)
+- `verify_proof_jwt` now cryptographically verifies the JWT signature against the embedded JWK
+- Previously only validated claims (nonce, aud, iat) — an attacker could forge a proof with correct claims but bogus signature
+- Supports ES256, EdDSA, RS256 — same pattern as the already-secure `verify_dpop_proof`
+- Returns parsed header (with JWK) for downstream key binding
+
+#### OID4VCI route registration (5 endpoints were 404 in production)
+- `GET /.well-known/oauth-authorization-server` — OAuth AS metadata (RFC 8414)
+- `GET /.well-known/jwt-vc-issuer` — issuer JWKS for SD-JWT VC verification
+- `POST /as/par` — Pushed Authorization Request (RFC 9126)
+- `GET /authorize` — authorization code flow
+- `GET /credential_offer` — credential offer by reference
+
+#### Status claim in SD-JWT VC
+- `VcClaims.status` field added (optional, `serde(default)`)
+- `issue_sd_jwt_vc` embeds `status` in JWT payload when present
+- OID4VCI `issue_sd_jwt_credential` wires `status_ref` → Token Status List URI + index
+- Wallet/verifier can now discover revocation endpoint from the credential itself
+
+### Stats
+- 56 OID4VCI tests, 25 SD-JWT tests, 7 EUDI interop tests pass, clippy clean
+
+---
+
 ## [0.17.4] — 2026-09-09
 
 ### Added — Tokenomics Wiring

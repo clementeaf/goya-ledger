@@ -297,10 +297,15 @@ impl ApiRoutes {
         cfg.service(tsl::get_tsl);
         // OpenID4VCI (EUDI Wallet credential issuance)
         cfg.service(oid4vci::issuer_metadata)
+            .service(oid4vci::oauth_as_metadata)
+            .service(oid4vci::jwt_vc_issuer_metadata)
+            .service(oid4vci::par_endpoint)
+            .service(oid4vci::authorize_endpoint)
             .service(oid4vci::token_endpoint)
             .service(oid4vci::credential_endpoint)
             .service(oid4vci::nonce_endpoint)
             .service(oid4vci::credential_offer_endpoint)
+            .service(oid4vci::credential_offer_get)
             .service(oid4vci::status_list_endpoint);
         // OpenID4VP (EUDI Wallet credential presentation)
         cfg.service(oid4vp::register_rp)

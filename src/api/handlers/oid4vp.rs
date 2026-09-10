@@ -719,6 +719,7 @@ mod tests {
                 vct: "IdentityCredential".into(),
                 claims: vec![("given_name".into(), serde_json::json!("Juan"))],
                 cnf: None,
+                status: None,
             },
             &provider,
         )
@@ -834,6 +835,7 @@ mod tests {
                 vct: "IdentityCredential".into(),
                 claims: vec![("age_over_18".into(), serde_json::json!(true))],
                 cnf: None,
+                status: None,
             },
             &provider,
         )

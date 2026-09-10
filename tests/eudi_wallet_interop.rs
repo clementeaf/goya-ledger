@@ -38,6 +38,7 @@ fn eudi_pid_sd_jwt_full_flow() {
             ("age_over_65".into(), serde_json::json!(false)),
         ],
         cnf: None,
+        status: None,
     };
     let sd_jwt = issue_sd_jwt_vc(&claims, &issuer).unwrap();
 
@@ -63,6 +64,7 @@ fn eudi_pid_sd_jwt_no_disclosure() {
         vct: "IdentityCredential".into(),
         claims: vec![("secret".into(), serde_json::json!("hidden"))],
         cnf: None,
+        status: None,
     };
     let sd_jwt = issue_sd_jwt_vc(&claims, &issuer).unwrap();
     let presentation = present_sd_jwt(&sd_jwt, &[]);
@@ -167,6 +169,7 @@ fn credential_with_uae_claims() {
             ("nationality".into(), serde_json::json!("AE")),
         ],
         cnf: None,
+        status: None,
     };
     let sd_jwt = issue_sd_jwt_vc(&claims, &issuer).unwrap();
     let verified = verify_sd_jwt_vc(&sd_jwt.compact, &issuer_pk).unwrap();
@@ -190,6 +193,7 @@ fn credential_with_chilean_claims() {
             ("nationality".into(), serde_json::json!("CL")),
         ],
         cnf: None,
+        status: None,
     };
     let sd_jwt = issue_sd_jwt_vc(&claims, &issuer).unwrap();
     let verified = verify_sd_jwt_vc(&sd_jwt.compact, &issuer_pk).unwrap();

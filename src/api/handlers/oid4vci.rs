@@ -456,7 +456,7 @@ fn verify_proof_jwt(
     proof_jwt: &str,
     expected_nonce: &str,
     expected_aud: &str,
-) -> Result<(), String> {
+) -> Result<serde_json::Value, String> {
     let parts: Vec<&str> = proof_jwt.split('.').collect();
     if parts.len() != 3 {
         return Err("proof JWT must have 3 parts".into());
@@ -472,19 +472,16 @@ fn verify_proof_jwt(
         return Err("proof typ must be openid4vci-proof+jwt".into());
     }
 
-    // nonce must match c_nonce from token response
     let nonce = payload.get("nonce").and_then(|v| v.as_str()).unwrap_or("");
     if nonce != expected_nonce {
         return Err("proof nonce does not match c_nonce".into());
     }
 
-    // aud should match credential issuer
     let aud = payload.get("aud").and_then(|v| v.as_str()).unwrap_or("");
     if !aud.is_empty() && !expected_aud.is_empty() && aud != expected_aud {
         return Err(format!("proof aud mismatch: expected {expected_aud}"));
     }
 
-    // iat must be present and within 5 minutes
     let iat = payload
         .get("iat")
         .and_then(|v| v.as_u64())
@@ -494,7 +491,30 @@ fn verify_proof_jwt(
         return Err("proof iat outside acceptable window".into());
     }
 
-    Ok(())
+    let alg_str = header.get("alg").and_then(|v| v.as_str()).unwrap_or("");
+    if let Some(jwk) = header.get("jwk") {
+        if let Some(pubkey_hex) = extract_pubkey_from_jwk(jwk, alg_str) {
+            let sig_bytes = base64url_decode(parts[2])?;
+            let signing_input = format!("{}.{}", parts[0], parts[1]);
+            let sig_hex = hex::encode(&sig_bytes);
+            let algorithm = match alg_str {
+                "EdDSA" => crate::identity::signing::SigningAlgorithm::Ed25519,
+                "RS256" => crate::identity::signing::SigningAlgorithm::Rsa,
+                "ES256" => crate::identity::signing::SigningAlgorithm::EcdsaP256,
+                _ => return Err(format!("unsupported proof alg: {alg_str}")),
+            };
+            if !crate::signature::verify_signature(
+                algorithm,
+                &pubkey_hex,
+                signing_input.as_bytes(),
+                &sig_hex,
+            ) {
+                return Err("proof JWT signature verification failed".into());
+            }
+        }
+    }
+
+    Ok(header)
 }
 
 // ── Nonce Endpoint (OID4VCI 1.0 Final) ───────────────────────────────────
@@ -1596,6 +1616,9 @@ fn issue_sd_jwt_credential(
         .unwrap_or("localhost:8080");
     let issuer_url = format!("https://{host}");
 
+    let status =
+        _status_ref.map(|(uri, idx)| crate::identity::status_list::status_claim(uri, *idx));
+
     let vc_claims = VcClaims {
         iss: issuer_url,
         sub: "holder".to_string(),
@@ -1604,6 +1627,7 @@ fn issue_sd_jwt_credential(
         vct: vct.to_string(),
         claims: claim_pairs,
         cnf,
+        status,
     };
 
     let effective_provider: &dyn crate::identity::signing::SigningProvider =

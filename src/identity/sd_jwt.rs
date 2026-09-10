@@ -40,6 +40,8 @@ pub struct VcClaims {
     /// Confirmation key (holder's public key as JWK) for key binding.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cnf: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<serde_json::Value>,
 }
 
 /// A single disclosure: [salt, claim_name, claim_value].
@@ -163,6 +165,9 @@ pub fn issue_sd_jwt_vc(
     });
     if let Some(cnf) = &claims.cnf {
         payload["cnf"] = cnf.clone();
+    }
+    if let Some(status) = &claims.status {
+        payload["status"] = status.clone();
     }
 
     let header_b64 = base64url_encode(&serde_json::to_vec(&header).map_err(|e| e.to_string())?);
@@ -593,6 +598,7 @@ mod tests {
                 ("nationality".to_string(), serde_json::json!("CL")),
             ],
             cnf: None,
+            status: None,
         }
     }
 
@@ -728,6 +734,7 @@ mod tests {
             vct: "AgeVerification".to_string(),
             claims: vec![("age_over_18".to_string(), serde_json::json!(true))],
             cnf: None,
+            status: None,
         };
         let sd_jwt = issue_sd_jwt_vc(&claims, &provider).unwrap();
         assert_eq!(sd_jwt.disclosures.len(), 1);
@@ -750,6 +757,7 @@ mod tests {
             vct: "EmptyVC".to_string(),
             claims: vec![],
             cnf: None,
+            status: None,
         };
         let sd_jwt = issue_sd_jwt_vc(&claims, &provider).unwrap();
         assert!(sd_jwt.disclosures.is_empty());
