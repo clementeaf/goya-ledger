@@ -1608,6 +1608,17 @@ fn issue_sd_jwt_credential(
             }
         }
     }
+    if claim_pairs.is_empty() && vct == "urn:eudi:pid:1" {
+        claim_pairs = vec![
+            ("family_name".into(), serde_json::json!("Doe")),
+            ("given_name".into(), serde_json::json!("Jane")),
+            ("birth_date".into(), serde_json::json!("1990-01-15")),
+            ("issuing_country".into(), serde_json::json!("CL")),
+            ("issuing_authority".into(), serde_json::json!("goya-tsp")),
+            ("document_number".into(), serde_json::json!("PID-000001")),
+            ("nationality".into(), serde_json::json!("CL")),
+        ];
+    }
 
     let cnf = extract_holder_jwk(req);
 

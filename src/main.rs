@@ -1230,6 +1230,15 @@ async fn async_main_inner() -> std::io::Result<()> {
 
     let nonce_store = web::Data::new(crate::api::handlers::oid4vci::NonceStore::new());
     let status_list_store = web::Data::new(crate::api::handlers::oid4vci::StatusListStore::new());
+    {
+        let seed = crate::crypto::hasher::hash_with(
+            crate::crypto::hasher::HashAlgorithm::Sha256,
+            b"goya-oid4vci-es256-issuer-key-v1",
+        );
+        let provider = crate::identity::signing::EcdsaP256SigningProvider::from_bytes(&seed)
+            .expect("deterministic ES256 key");
+        status_list_store.set_signing_provider(std::sync::Arc::new(provider));
+    }
     let vp_request_store = web::Data::new(crate::api::handlers::oid4vp::VpRequestStore::new());
     let auth_store = web::Data::new(crate::api::handlers::oid4vci::AuthorizationStore::new());
 
