@@ -727,12 +727,13 @@ pub async fn oauth_as_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("localhost:8080");
     let base = format!("https://{host}");
+    let api = format!("{base}/api/v1");
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "issuer": base,
-        "authorization_endpoint": format!("{base}/authorize"),
-        "token_endpoint": format!("{base}/token"),
-        "pushed_authorization_request_endpoint": format!("{base}/as/par"),
+        "authorization_endpoint": format!("{api}/authorize"),
+        "token_endpoint": format!("{api}/token"),
+        "pushed_authorization_request_endpoint": format!("{api}/as/par"),
         "response_types_supported": ["code"],
         "grant_types_supported": [
             "urn:ietf:params:oauth:grant-type:pre-authorized_code",
@@ -757,13 +758,14 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("localhost:8080");
     let base = format!("https://{host}");
+    let api = format!("{base}/api/v1");
 
     let metadata = serde_json::json!({
         "credential_issuer": base,
-        "credential_endpoint": format!("{base}/credential"),
-        "nonce_endpoint": format!("{base}/nonce"),
-        "token_endpoint": format!("{base}/token"),
-        "credential_offer_endpoint": format!("{base}/credential_offer"),
+        "credential_endpoint": format!("{api}/credential"),
+        "nonce_endpoint": format!("{api}/nonce"),
+        "token_endpoint": format!("{api}/token"),
+        "credential_offer_endpoint": format!("{api}/credential_offer"),
         "grant_types_supported": [
             "urn:ietf:params:oauth:grant-type:pre-authorized_code",
             "authorization_code"
