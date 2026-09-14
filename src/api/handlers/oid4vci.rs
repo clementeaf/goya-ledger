@@ -11,6 +11,43 @@ use crate::crypto::hasher::{hash_with, HashAlgorithm};
 use actix_web::{get, post, web, HttpRequest, HttpResponse};
 use serde::{Deserialize, Serialize};
 
+pub struct CredentialOfferStore {
+    offers: std::sync::RwLock<std::collections::HashMap<String, (CredentialOffer, u64)>>,
+}
+
+impl CredentialOfferStore {
+    pub fn new() -> Self {
+        Self {
+            offers: std::sync::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+
+    pub fn store(&self, session_id: &str, offer: CredentialOffer) {
+        let ttl = now_secs() + 600;
+        self.offers
+            .write()
+            .unwrap()
+            .insert(session_id.to_string(), (offer, ttl));
+    }
+
+    pub fn get(&self, session_id: &str) -> Option<CredentialOffer> {
+        let offers = self.offers.read().unwrap();
+        offers.get(session_id).and_then(|(offer, ttl)| {
+            if now_secs() <= *ttl {
+                Some(offer.clone())
+            } else {
+                None
+            }
+        })
+    }
+}
+
+impl Default for CredentialOfferStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn err_dto(code: &str, msg: &str) -> ErrorDto {
     ErrorDto {
         code: code.to_string(),
@@ -833,6 +870,35 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                         "proof_signing_alg_values_supported": ["ES256"]
                     }
                 },
+            },
+            "goya_identity_jwt_vc_json_ld": {
+                "format": "jwt_vc_json-ld",
+                "credential_definition": {
+                    "@context": [
+                        "https://www.w3.org/ns/credentials/v2"
+                    ],
+                    "type": ["VerifiableCredential", "IdentityCredential"]
+                },
+                "cryptographic_binding_methods_supported": ["did:jwk", "jwk"],
+                "credential_signing_alg_values_supported": ["ES256", "EdDSA"],
+                "proof_types_supported": {
+                    "jwt": {
+                        "proof_signing_alg_values_supported": ["ES256"]
+                    }
+                },
+                "display": [{
+                    "name": "Identity Credential",
+                    "locale": "en",
+                    "description": "W3C Verifiable Credential (JSON-LD)",
+                    "background_color": "#1A9E8F",
+                    "text_color": "#FFFFFF"
+                }],
+                "claims": [
+                    { "path": ["credentialSubject", "given_name"], "mandatory": false, "display": [{"name": "Given Name", "locale": "en"}] },
+                    { "path": ["credentialSubject", "family_name"], "mandatory": false, "display": [{"name": "Family Name", "locale": "en"}] },
+                    { "path": ["credentialSubject", "birth_date"], "mandatory": false, "display": [{"name": "Birth Date", "locale": "en"}] },
+                    { "path": ["credentialSubject", "nationality"], "mandatory": false, "display": [{"name": "Nationality", "locale": "en"}] }
+                ]
             }
         },
         "display": [{
@@ -1073,6 +1139,9 @@ impl CredentialRequest {
         if let Some(cid) = &self.credential_configuration_id {
             if cid.contains("mdoc") || cid.contains("mso") {
                 return "mso_mdoc";
+            }
+            if cid.contains("jwt_vc_json_ld") {
+                return "jwt_vc_json-ld";
             }
             return "dc+sd-jwt";
         }
@@ -1396,11 +1465,14 @@ pub async fn credential_endpoint(
         "dc+sd-jwt" | "vc+sd-jwt" => {
             issue_sd_jwt_credential(provider.as_ref(), &body, status_ref.as_ref(), &req)
         }
+        "jwt_vc_json-ld" => issue_jwt_vc_jsonld(provider.as_ref(), &body, &req),
         "mso_mdoc" => issue_mdoc_credential(provider.as_ref(), &body, status_ref.as_ref()),
         other => Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto(
                 "unsupported_credential_format",
-                &format!("format '{other}' not supported; use dc+sd-jwt or mso_mdoc"),
+                &format!(
+                    "format '{other}' not supported; use dc+sd-jwt, jwt_vc_json-ld, or mso_mdoc"
+                ),
             ),
             400,
         ))),
@@ -1416,10 +1488,13 @@ pub struct CredentialOfferRequest {
 }
 
 /// Generate a credential offer (OpenID4VCI §4.1).
+/// Stores the offer by session ID and returns a by-reference URI
+/// compatible with Partisia wallet and EUDI wallets.
 #[post("/credential_offer")]
 pub async fn credential_offer_endpoint(
     body: web::Json<CredentialOfferRequest>,
     req: HttpRequest,
+    offer_store: web::Data<CredentialOfferStore>,
 ) -> ApiResult<HttpResponse> {
     let host = req
         .headers()
@@ -1433,6 +1508,8 @@ pub async fn credential_offer_endpoint(
     } else {
         body.credential_configuration_ids.clone()
     };
+
+    let session_id = uuid::Uuid::new_v4().to_string();
 
     let pre_auth_code = hex::encode(hash_with(
         HashAlgorithm::Sha256,
@@ -1449,57 +1526,35 @@ pub async fn credential_offer_endpoint(
         }),
     };
 
-    let offer_json = serde_json::to_string(&offer).unwrap_or_default();
+    offer_store.store(&session_id, offer.clone());
+
     let offer_uri = format!(
-        "openid-credential-offer://?credential_offer={}",
-        urlencoding::encode(&offer_json)
+        "openid-credential-offer://?credential_offer_uri={}",
+        urlencoding::encode(&format!("{base}/api/v1/credential_offer/{session_id}"))
     );
 
     Ok(HttpResponse::Created().json(serde_json::json!({
         "credential_offer": offer,
         "credential_offer_uri": offer_uri,
+        "session_id": session_id,
     })))
 }
 
-#[derive(Deserialize)]
-pub struct OfferByRefQuery {
-    #[serde(default)]
-    credential_configuration_ids: Option<String>,
-}
-
-#[get("/credential_offer")]
+/// Retrieve a stored credential offer by session ID (OID4VCI by-reference).
+/// Partisia wallet fetches this after scanning the QR code.
+#[get("/credential_offer/{session_id}")]
 pub async fn credential_offer_get(
-    query: web::Query<OfferByRefQuery>,
-    req: HttpRequest,
+    path: web::Path<String>,
+    offer_store: web::Data<CredentialOfferStore>,
 ) -> ApiResult<HttpResponse> {
-    let host = req
-        .headers()
-        .get("host")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("localhost:8080");
-    let base = format!("https://{host}");
-
-    let config_id = query
-        .credential_configuration_ids
-        .as_deref()
-        .unwrap_or("eudi_pid_sd_jwt");
-
-    let pre_auth_code = hex::encode(hash_with(
-        HashAlgorithm::Sha256,
-        uuid::Uuid::new_v4().as_bytes(),
-    ));
-
-    let offer = serde_json::json!({
-        "credential_issuer": base,
-        "credential_configuration_ids": [config_id],
-        "grants": {
-            "urn:ietf:params:oauth:grant-type:pre-authorized_code": {
-                "pre-authorized_code": pre_auth_code,
-            }
-        }
-    });
-
-    Ok(HttpResponse::Ok().json(offer))
+    let session_id = path.into_inner();
+    match offer_store.get(&session_id) {
+        Some(offer) => Ok(HttpResponse::Ok().json(offer)),
+        None => Ok(HttpResponse::NotFound().json(ApiResponse::<()>::error(
+            err_dto("NOT_FOUND", "credential offer expired or not found"),
+            404,
+        ))),
+    }
 }
 
 fn oid4vci_es256_provider() -> &'static crate::identity::signing::EcdsaP256SigningProvider {
@@ -1672,6 +1727,90 @@ fn issue_sd_jwt_credential(
     }
 }
 
+fn issue_jwt_vc_jsonld(
+    _provider: &dyn crate::identity::signing::SigningProvider,
+    req: &CredentialRequest,
+    http_req: &HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let now = now_secs();
+    let host = http_req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:8080");
+    let issuer_url = format!("https://{host}");
+    let credential_id = format!("urn:uuid:{}", uuid::Uuid::new_v4());
+
+    let mut subject = serde_json::Map::new();
+    if let Some(claims_obj) = &req.claims {
+        if let Some(map) = claims_obj.as_object() {
+            for (k, v) in map {
+                subject.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    if subject.is_empty() {
+        subject.insert("given_name".into(), serde_json::json!("Jane"));
+        subject.insert("family_name".into(), serde_json::json!("Doe"));
+        subject.insert("birth_date".into(), serde_json::json!("1990-01-15"));
+        subject.insert("nationality".into(), serde_json::json!("CL"));
+    }
+
+    let cnf = extract_holder_jwk(req);
+
+    let vc_payload = serde_json::json!({
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        "type": ["VerifiableCredential", "IdentityCredential"],
+        "id": credential_id,
+        "issuer": issuer_url,
+        "issuanceDate": chrono_iso(now),
+        "expirationDate": chrono_iso(now + 365 * 86400),
+        "credentialSubject": subject,
+        "cnf": cnf,
+    });
+
+    let header = serde_json::json!({
+        "alg": "ES256",
+        "typ": "jwt_vc_json-ld",
+        "kid": format!("{}#key-1", issuer_url),
+    });
+
+    let effective_provider: &dyn crate::identity::signing::SigningProvider =
+        oid4vci_es256_provider();
+
+    let h = base64url_encode(&serde_json::to_vec(&header).unwrap_or_default());
+    let p = base64url_encode(&serde_json::to_vec(&vc_payload).unwrap_or_default());
+    let signing_input = format!("{h}.{p}");
+
+    match effective_provider.sign(signing_input.as_bytes()) {
+        Ok(sig) => {
+            let s = base64url_encode(&sig);
+            let jwt = format!("{signing_input}.{s}");
+            log::info!(
+                "OID4VCI issued jwt_vc_json-ld: len={} has_cnf={}",
+                jwt.len(),
+                cnf.is_some()
+            );
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "credential": jwt,
+                "credentials": [{ "credential": jwt }],
+            })))
+        }
+        Err(e) => Ok(
+            HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
+                err_dto("issuance_failed", &format!("{e:?}")),
+                500,
+            )),
+        ),
+    }
+}
+
+fn chrono_iso(epoch: u64) -> String {
+    let secs = epoch as i64;
+    let dt = chrono::DateTime::from_timestamp(secs, 0).unwrap_or_default();
+    dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
 fn issue_mdoc_credential(
     provider: &dyn crate::identity::signing::SigningProvider,
     req: &CredentialRequest,
@@ -1762,11 +1901,13 @@ mod tests {
                 App::new()
                     .app_data($state)
                     .app_data($nonce)
+                    .app_data(web::Data::new(CredentialOfferStore::new()))
                     .service(issuer_metadata)
                     .service(oauth_as_metadata)
                     .service(token_endpoint)
                     .service(credential_endpoint)
                     .service(credential_offer_endpoint)
+                    .service(credential_offer_get)
                     .service(nonce_endpoint)
                     .service(status_list_endpoint),
             )
@@ -1779,11 +1920,13 @@ mod tests {
                     .app_data($nonce)
                     .app_data($sl)
                     .app_data($att)
+                    .app_data(web::Data::new(CredentialOfferStore::new()))
                     .service(issuer_metadata)
                     .service(oauth_as_metadata)
                     .service(token_endpoint)
                     .service(credential_endpoint)
                     .service(credential_offer_endpoint)
+                    .service(credential_offer_get)
                     .service(nonce_endpoint)
                     .service(status_list_endpoint),
             )
@@ -2550,10 +2693,13 @@ mod tests {
     #[actix_web::test]
     async fn e2e_credential_offer() {
         let state = make_state();
+        let offer_store = web::Data::new(CredentialOfferStore::new());
         let app = test::init_service(
             App::new()
                 .app_data(state)
-                .service(credential_offer_endpoint),
+                .app_data(offer_store.clone())
+                .service(credential_offer_endpoint)
+                .service(credential_offer_get),
         )
         .await;
         let req = test::TestRequest::post()
@@ -2570,6 +2716,20 @@ mod tests {
             .is_some());
         let uri = body["credential_offer_uri"].as_str().unwrap();
         assert!(uri.starts_with("openid-credential-offer://"));
+        assert!(uri.contains("credential_offer_uri="));
+        let session_id = body["session_id"].as_str().unwrap();
+        assert!(!session_id.is_empty());
+
+        let get_req = test::TestRequest::get()
+            .uri(&format!("/credential_offer/{session_id}"))
+            .to_request();
+        let get_resp = test::call_service(&app, get_req).await;
+        assert_eq!(get_resp.status(), 200);
+        let get_body: serde_json::Value = test::read_body_json(get_resp).await;
+        assert_eq!(
+            get_body["credential_issuer"],
+            body["credential_offer"]["credential_issuer"]
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -2591,11 +2751,13 @@ mod tests {
         let sl_store = make_sl_store();
         sl_store.set_signing_provider(Arc::new(EcdsaP256SigningProvider::generate())
             as Arc<dyn crate::identity::signing::SigningProvider>);
+        let offer_store = web::Data::new(CredentialOfferStore::new());
         let app = test::init_service(
             App::new()
                 .app_data(state)
                 .app_data(nonce_store.clone())
                 .app_data(sl_store.clone())
+                .app_data(offer_store)
                 .service(issuer_metadata)
                 .service(token_endpoint)
                 .service(credential_endpoint)

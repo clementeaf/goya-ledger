@@ -1239,6 +1239,8 @@ async fn async_main_inner() -> std::io::Result<()> {
             .expect("deterministic ES256 key");
         status_list_store.set_signing_provider(std::sync::Arc::new(provider));
     }
+    let credential_offer_store =
+        web::Data::new(crate::api::handlers::oid4vci::CredentialOfferStore::new());
     let vp_request_store = web::Data::new(crate::api::handlers::oid4vp::VpRequestStore::new());
     let auth_store = web::Data::new(crate::api::handlers::oid4vci::AuthorizationStore::new());
 
@@ -1276,6 +1278,7 @@ async fn async_main_inner() -> std::io::Result<()> {
             .app_data(web::Data::new(app_state.clone()))
             .app_data(nonce_store.clone())
             .app_data(status_list_store.clone())
+            .app_data(credential_offer_store.clone())
             .app_data(vp_request_store.clone())
             .app_data(auth_store.clone());
         #[cfg(feature = "evm")]

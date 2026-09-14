@@ -1,6 +1,11 @@
 {$DEPLOY_DOMAIN} {
 	# TLS is automatic via Let's Encrypt
 
+	# OID4VCI well-known endpoints (Partisia/EUDI wallet standard paths)
+	handle /.well-known/* {
+		reverse_proxy node:8080
+	}
+
 	# Node API
 	handle /api/* {
 		reverse_proxy node:8080
