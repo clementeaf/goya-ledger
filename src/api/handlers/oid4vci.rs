@@ -1796,7 +1796,7 @@ fn issue_jwt_vc_jsonld(
     match effective_provider.sign(signing_input.as_bytes()) {
         Ok(sig) => {
             let s = base64url_encode(&sig);
-            let jwt = format!("{signing_input}.{s}");
+            let jwt = format!("{signing_input}.{s}~");
             log::info!(
                 "OID4VCI issued jwt_vc_json-ld: len={} has_cnf={}",
                 jwt.len(),
