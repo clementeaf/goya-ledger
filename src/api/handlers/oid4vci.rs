@@ -1767,7 +1767,7 @@ fn issue_jwt_vc_jsonld(req: &CredentialRequest, http_req: &HttpRequest) -> ApiRe
     }
 
     let holder_did = extract_holder_did(req).unwrap_or_else(|| "holder".to_string());
-    let cnf = extract_holder_jwk(req);
+    let cnf = extract_holder_jwk(req).or_else(|| extract_cnf_from_did_jwk(req));
 
     let vc_claims = VcClaims {
         iss: issuer_url,
@@ -1804,6 +1804,14 @@ fn extract_holder_did(req: &CredentialRequest) -> Option<String> {
     let header = base64url_decode(parts[0]).ok()?;
     let header: serde_json::Value = serde_json::from_slice(&header).ok()?;
     header.get("kid").and_then(|v| v.as_str()).map(String::from)
+}
+
+fn extract_cnf_from_did_jwk(req: &CredentialRequest) -> Option<serde_json::Value> {
+    let did = extract_holder_did(req)?;
+    let jwk_b64 = did.strip_prefix("did:jwk:")?;
+    let jwk_bytes = base64url_decode(jwk_b64).ok()?;
+    let jwk: serde_json::Value = serde_json::from_slice(&jwk_bytes).ok()?;
+    Some(serde_json::json!({"jwk": jwk}))
 }
 
 fn issue_mdoc_credential(
