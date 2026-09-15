@@ -195,6 +195,75 @@ pub fn issue_sd_jwt_vc(
     })
 }
 
+/// Issue an SD-JWT VC with W3C vc wrapper (Partisia wallet format).
+/// Claims go inside `vc.credentialSubject._sd`, not flat in the payload.
+pub fn issue_sd_jwt_vc_w3c(
+    claims: &VcClaims,
+    provider: &dyn SigningProvider,
+) -> Result<SdJwtVc, String> {
+    let mut disclosures = Vec::new();
+    let mut sd_hashes = Vec::new();
+
+    for (name, value) in &claims.claims {
+        let salt = generate_salt();
+        let d = make_disclosure(&salt, name, value);
+        sd_hashes.push(serde_json::Value::String(d.hash.clone()));
+        disclosures.push(d);
+    }
+
+    let header = serde_json::json!({
+        "alg": alg_to_jwt(provider.algorithm()),
+        "typ": "vc+sd-jwt",
+        "kid": compute_kid(provider),
+    });
+
+    let mut payload = serde_json::json!({
+        "iss": claims.iss,
+        "sub": claims.sub,
+        "nbf": claims.iat,
+        "iat": claims.iat,
+        "exp": claims.exp,
+        "_sd_alg": "sha-256",
+        "vc": {
+            "type": ["VerifiableCredential", claims.vct],
+            "credentialSubject": {
+                "id": claims.sub,
+                "_sd": sd_hashes,
+            }
+        }
+    });
+    if let Some(cnf) = &claims.cnf {
+        payload["cnf"] = cnf.clone();
+    }
+    if let Some(status) = &claims.status {
+        payload["vc"]["status"] = status.clone();
+    }
+
+    let header_b64 = base64url_encode(&serde_json::to_vec(&header).map_err(|e| e.to_string())?);
+    let payload_b64 = base64url_encode(&serde_json::to_vec(&payload).map_err(|e| e.to_string())?);
+    let signing_input = format!("{header_b64}.{payload_b64}");
+    let sig = provider
+        .sign(signing_input.as_bytes())
+        .map_err(|e| e.to_string())?;
+    let sig_b64 = base64url_encode(&sig);
+
+    let jwt = format!("{signing_input}.{sig_b64}");
+    let disclosure_strs: Vec<String> = disclosures.iter().map(|d| d.encoded.clone()).collect();
+
+    let mut compact = jwt.clone();
+    for d in &disclosure_strs {
+        compact.push('~');
+        compact.push_str(d);
+    }
+    compact.push('~');
+
+    Ok(SdJwtVc {
+        compact,
+        disclosures: disclosure_strs,
+        jwt,
+    })
+}
+
 /// Create a presentation with only selected disclosures.
 pub fn present_sd_jwt(sd_jwt: &SdJwtVc, disclosed_indices: &[usize]) -> String {
     let mut presentation = sd_jwt.jwt.clone();

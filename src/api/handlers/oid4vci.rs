@@ -1739,6 +1739,8 @@ fn issue_sd_jwt_credential(
 }
 
 fn issue_jwt_vc_jsonld(req: &CredentialRequest, http_req: &HttpRequest) -> ApiResult<HttpResponse> {
+    use crate::identity::sd_jwt::{issue_sd_jwt_vc_w3c, VcClaims};
+
     let now = now_secs();
     let host = http_req
         .headers()
@@ -1747,57 +1749,61 @@ fn issue_jwt_vc_jsonld(req: &CredentialRequest, http_req: &HttpRequest) -> ApiRe
         .unwrap_or("localhost:8080");
     let issuer_url = format!("https://{host}");
 
-    let mut subject = serde_json::Map::new();
+    let mut claim_pairs = Vec::new();
     if let Some(claims_obj) = &req.claims {
         if let Some(map) = claims_obj.as_object() {
             for (k, v) in map {
-                subject.insert(k.clone(), v.clone());
+                claim_pairs.push((k.clone(), v.clone()));
             }
         }
     }
-    if subject.is_empty() {
-        subject.insert("given_name".into(), serde_json::json!("Jane"));
-        subject.insert("family_name".into(), serde_json::json!("Doe"));
-        subject.insert("birth_date".into(), serde_json::json!("1990-01-15"));
-        subject.insert("nationality".into(), serde_json::json!("CL"));
+    if claim_pairs.is_empty() {
+        claim_pairs = vec![
+            ("given_name".into(), serde_json::json!("Jane")),
+            ("family_name".into(), serde_json::json!("Doe")),
+            ("birth_date".into(), serde_json::json!("1990-01-15")),
+            ("nationality".into(), serde_json::json!("CL")),
+        ];
     }
 
-    let mut payload = serde_json::json!({
-        "iss": issuer_url,
-        "iat": now,
-        "exp": now + 365 * 86400,
-        "vc": {
-            "@context": ["https://www.w3.org/ns/credentials/v2"],
-            "type": ["VerifiableCredential", "IdentityCredential"],
-            "credentialSubject": subject
-        }
-    });
+    let holder_did = extract_holder_did(req).unwrap_or_else(|| "holder".to_string());
+    let cnf = extract_holder_jwk(req);
 
-    if let Some(cnf) = extract_holder_jwk(req) {
-        payload["cnf"] = cnf;
-    }
-
-    let header = serde_json::json!({"alg": "ES256", "typ": "vc+sd-jwt"});
+    let vc_claims = VcClaims {
+        iss: issuer_url,
+        sub: holder_did,
+        iat: now,
+        exp: now + 365 * 86400,
+        vct: "IdentityCredential".to_string(),
+        claims: claim_pairs,
+        cnf,
+        status: None,
+    };
 
     let provider: &dyn crate::identity::signing::SigningProvider = oid4vci_es256_provider();
-    let h = base64url_encode(&serde_json::to_vec(&header).unwrap_or_default());
-    let p = base64url_encode(&serde_json::to_vec(&payload).unwrap_or_default());
-    let signing_input = format!("{h}.{p}");
 
-    match provider.sign(signing_input.as_bytes()) {
-        Ok(sig) => {
-            let jwt = format!("{signing_input}.{}~", base64url_encode(&sig));
-            Ok(HttpResponse::Ok().json(serde_json::json!({
-                "credentials": [{"credential": jwt}]
-            })))
-        }
+    match issue_sd_jwt_vc_w3c(&vc_claims, provider) {
+        Ok(sd_jwt) => Ok(HttpResponse::Ok().json(serde_json::json!({
+            "credentials": [{"credential": sd_jwt.compact}]
+        }))),
         Err(e) => Ok(
             HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
-                err_dto("issuance_failed", &format!("{e:?}")),
+                err_dto("issuance_failed", &e),
                 500,
             )),
         ),
     }
+}
+
+fn extract_holder_did(req: &CredentialRequest) -> Option<String> {
+    let jwt_str = req.first_proof_jwt()?;
+    let parts: Vec<&str> = jwt_str.split('.').collect();
+    if parts.is_empty() {
+        return None;
+    }
+    let header = base64url_decode(parts[0]).ok()?;
+    let header: serde_json::Value = serde_json::from_slice(&header).ok()?;
+    header.get("kid").and_then(|v| v.as_str()).map(String::from)
 }
 
 fn issue_mdoc_credential(
