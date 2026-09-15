@@ -1777,7 +1777,7 @@ fn issue_jwt_vc_jsonld(req: &CredentialRequest, http_req: &HttpRequest) -> ApiRe
         payload["cnf"] = cnf;
     }
 
-    let header = serde_json::json!({"alg": "ES256"});
+    let header = serde_json::json!({"alg": "ES256", "typ": "vc+sd-jwt"});
 
     let provider: &dyn crate::identity::signing::SigningProvider = oid4vci_es256_provider();
     let h = base64url_encode(&serde_json::to_vec(&header).unwrap_or_default());
