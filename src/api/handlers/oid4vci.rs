@@ -1151,6 +1151,9 @@ impl CredentialRequest {
             if cid.contains("mdoc") || cid.contains("mso") {
                 return "mso_mdoc";
             }
+            if cid.contains("jwt_vc_json_ld") {
+                return "jwt_vc_json-ld";
+            }
             return "dc+sd-jwt";
         }
         self.format.as_deref().unwrap_or("dc+sd-jwt")
@@ -1473,11 +1476,14 @@ pub async fn credential_endpoint(
         "dc+sd-jwt" | "vc+sd-jwt" => {
             issue_sd_jwt_credential(provider.as_ref(), &body, status_ref.as_ref(), &req)
         }
+        "jwt_vc_json-ld" => issue_jwt_vc_jsonld(&body, &req),
         "mso_mdoc" => issue_mdoc_credential(provider.as_ref(), &body, status_ref.as_ref()),
         other => Ok(HttpResponse::BadRequest().json(ApiResponse::<()>::error(
             err_dto(
                 "unsupported_credential_format",
-                &format!("format '{other}' not supported; use dc+sd-jwt or mso_mdoc"),
+                &format!(
+                    "format '{other}' not supported; use dc+sd-jwt, jwt_vc_json-ld, or mso_mdoc"
+                ),
             ),
             400,
         ))),
@@ -1726,6 +1732,68 @@ fn issue_sd_jwt_credential(
                     message: e,
                     field: None,
                 },
+                500,
+            )),
+        ),
+    }
+}
+
+fn issue_jwt_vc_jsonld(req: &CredentialRequest, http_req: &HttpRequest) -> ApiResult<HttpResponse> {
+    let now = now_secs();
+    let host = http_req
+        .headers()
+        .get("host")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("localhost:8080");
+    let issuer_url = format!("https://{host}");
+
+    let mut subject = serde_json::Map::new();
+    if let Some(claims_obj) = &req.claims {
+        if let Some(map) = claims_obj.as_object() {
+            for (k, v) in map {
+                subject.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    if subject.is_empty() {
+        subject.insert("given_name".into(), serde_json::json!("Jane"));
+        subject.insert("family_name".into(), serde_json::json!("Doe"));
+        subject.insert("birth_date".into(), serde_json::json!("1990-01-15"));
+        subject.insert("nationality".into(), serde_json::json!("CL"));
+    }
+
+    let mut payload = serde_json::json!({
+        "iss": issuer_url,
+        "iat": now,
+        "exp": now + 365 * 86400,
+        "vc": {
+            "@context": ["https://www.w3.org/ns/credentials/v2"],
+            "type": ["VerifiableCredential", "IdentityCredential"],
+            "credentialSubject": subject
+        }
+    });
+
+    if let Some(cnf) = extract_holder_jwk(req) {
+        payload["cnf"] = cnf;
+    }
+
+    let header = serde_json::json!({"alg": "ES256"});
+
+    let provider: &dyn crate::identity::signing::SigningProvider = oid4vci_es256_provider();
+    let h = base64url_encode(&serde_json::to_vec(&header).unwrap_or_default());
+    let p = base64url_encode(&serde_json::to_vec(&payload).unwrap_or_default());
+    let signing_input = format!("{h}.{p}");
+
+    match provider.sign(signing_input.as_bytes()) {
+        Ok(sig) => {
+            let jwt = format!("{signing_input}.{}", base64url_encode(&sig));
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "credentials": [{"credential": jwt}]
+            })))
+        }
+        Err(e) => Ok(
+            HttpResponse::InternalServerError().json(ApiResponse::<()>::error(
+                err_dto("issuance_failed", &format!("{e:?}")),
                 500,
             )),
         ),
