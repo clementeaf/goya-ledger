@@ -1786,7 +1786,7 @@ fn issue_jwt_vc_jsonld(req: &CredentialRequest, http_req: &HttpRequest) -> ApiRe
 
     match provider.sign(signing_input.as_bytes()) {
         Ok(sig) => {
-            let jwt = format!("{signing_input}.{}", base64url_encode(&sig));
+            let jwt = format!("{signing_input}.{}~", base64url_encode(&sig));
             Ok(HttpResponse::Ok().json(serde_json::json!({
                 "credentials": [{"credential": jwt}]
             })))
