@@ -213,17 +213,14 @@ pub fn issue_sd_jwt_vc_w3c(
 
     let header = serde_json::json!({
         "alg": alg_to_jwt(provider.algorithm()),
-        "typ": "vc+sd-jwt",
-        "kid": compute_kid(provider),
+        "typ": "JWT",
     });
 
     let mut payload = serde_json::json!({
         "iss": claims.iss,
         "sub": claims.sub,
         "nbf": claims.iat,
-        "iat": claims.iat,
         "exp": claims.exp,
-        "_sd_alg": "sha-256",
         "vc": {
             "type": ["VerifiableCredential", claims.vct],
             "credentialSubject": {
@@ -232,9 +229,6 @@ pub fn issue_sd_jwt_vc_w3c(
             }
         }
     });
-    if let Some(cnf) = &claims.cnf {
-        payload["cnf"] = cnf.clone();
-    }
     if let Some(status) = &claims.status {
         payload["vc"]["status"] = status.clone();
     }
