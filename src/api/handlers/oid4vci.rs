@@ -799,6 +799,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
 
     let metadata = serde_json::json!({
         "credential_issuer": base,
+        "authorization_servers": [&base],
         "credential_endpoint": format!("{api}/credential"),
         "nonce_endpoint": format!("{api}/nonce"),
         "token_endpoint": format!("{api}/token"),
