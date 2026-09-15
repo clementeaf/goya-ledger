@@ -4,6 +4,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.17.6] — 2026-09-15
+
+### Added — OID4VCI Credential Offer by Reference + Partisia Interop
+
+#### Credential offer by-reference with session ID
+- `CredentialOfferStore` persists offers in memory (10min TTL)
+- `POST /credential_offer` returns `credential_offer_uri=` (by-reference, not inline)
+- `GET /credential_offer/{session_id}` serves stored offer — standard OID4VCI wallet fetch
+- QR codes encode the by-reference URI for wallet scanning
+
+#### jwt_vc_json-ld credential configuration
+- `goya_identity_jwt_vc_json_ld` added to issuer metadata
+- W3C VC Data Model v2 with `@context`, `credentialSubject`, ES256/EdDSA
+- `issue_sd_jwt_vc_w3c` — SD-JWT with `vc` wrapper (claims in `vc.credentialSubject._sd`)
+- Payload matches W3C JWT encoding: `iss`, `sub`, `nbf`, `exp`, `vc`
+
+#### Metadata hardening for wallet compatibility
+- `authorization_servers` added to issuer metadata (self-referencing)
+- `credential_definition` with `@context` on all credential configurations
+- `credential_definition.type` as array on all configs
+- `did:jwk` extraction from proof `kid` header for holder binding
+
+#### Deployment
+- Caddyfile: `/.well-known/*` routed to node backend (was falling through to explorer SPA)
+- nginx: `/.well-known/openid-credential-issuer`, `oauth-authorization-server`, `jwt-vc-issuer` proxied to node
+- Dockerfile.prebuilt base upgraded to `debian:trixie-slim` (glibc 2.40 compat)
+
+### Research — Partisia Wallet Interop Analysis
+- Partisia ID Wallet is a closed client of `registry.gitlab.com/secata/platform/did/release/issuer-backend`
+- Wallet uses strict Kotlin deserialization — unknown JWT fields crash the parser
+- Full OID4VCI protocol flow verified end-to-end (metadata → token → credential)
+- Credential format requires Partisia's own issuance service Docker container for wallet acceptance
+- Goya OID4VCI remains fully compatible with standard wallets (EUDI Reference, Sphereon, Walt.id)
+
+### Stats
+- 56 OID4VCI tests pass, clippy clean
+- Live at goyaledger.com with all endpoints operational
+
+---
+
 ## [0.17.5] — 2026-09-10
 
 ### Fixed — EUDI Wallet Critical Security + Route Gaps

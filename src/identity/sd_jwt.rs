@@ -1059,4 +1059,35 @@ mod tests {
         let jkt2 = jwk_thumbprint(&pk_hex, SigningAlgorithm::EcdsaP256);
         assert_eq!(jkt, jkt2);
     }
+
+    #[test]
+    fn w3c_format_output() {
+        let provider = SoftwareSigningProvider::generate();
+        let claims = VcClaims {
+            iss: "https://goyaledger.com".to_string(),
+            sub: "did:jwk:eyJjcnYiOiJQLTI1NiJ9".to_string(),
+            iat: 1726401039,
+            exp: 1757937039,
+            vct: "IdentityCredential".to_string(),
+            claims: vec![
+                ("given_name".into(), serde_json::json!("Jane")),
+                ("family_name".into(), serde_json::json!("Doe")),
+            ],
+            cnf: None,
+            status: None,
+        };
+        let result = issue_sd_jwt_vc_w3c(&claims, &provider).unwrap();
+        let parts: Vec<&str> = result.jwt.split('.').collect();
+        let header: serde_json::Value =
+            serde_json::from_slice(&base64url_decode(parts[0]).unwrap()).unwrap();
+        let payload: serde_json::Value =
+            serde_json::from_slice(&base64url_decode(parts[1]).unwrap()).unwrap();
+        println!("HEADER: {}", serde_json::to_string_pretty(&header).unwrap());
+        println!(
+            "PAYLOAD: {}",
+            serde_json::to_string_pretty(&payload).unwrap()
+        );
+        println!("COMPACT: {}", &result.compact[..80]);
+        println!("DISCLOSURES: {}", result.disclosures.len());
+    }
 }
