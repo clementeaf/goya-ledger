@@ -1770,14 +1770,21 @@ fn issue_jwt_vc_jsonld(
     let cnf = extract_holder_jwk(req);
 
     let vc_payload = serde_json::json!({
-        "@context": ["https://www.w3.org/ns/credentials/v2"],
-        "type": ["VerifiableCredential", "IdentityCredential"],
-        "id": credential_id,
-        "issuer": issuer_url,
-        "issuanceDate": chrono_iso(now),
-        "expirationDate": chrono_iso(now + 365 * 86400),
-        "credentialSubject": subject,
+        "iss": issuer_url,
+        "sub": "holder",
+        "iat": now,
+        "exp": now + 365 * 86400,
+        "jti": credential_id,
         "cnf": cnf,
+        "vc": {
+            "@context": ["https://www.w3.org/ns/credentials/v2"],
+            "type": ["VerifiableCredential", "IdentityCredential"],
+            "id": credential_id,
+            "issuer": issuer_url,
+            "issuanceDate": chrono_iso(now),
+            "expirationDate": chrono_iso(now + 365 * 86400),
+            "credentialSubject": subject,
+        }
     });
 
     let header = serde_json::json!({
