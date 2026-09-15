@@ -847,7 +847,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                 },
                 "credential_definition": {
                     "@context": ["https://www.w3.org/ns/credentials/v2"],
-                    "type": "urn:eudi:pid:1",
+                    "type": ["VerifiableCredential", "EudiPid"],
                     "claims": {
                         "family_name": { "mandatory": true, "display": [{"name": "Family Name", "locale": "en"}] },
                         "given_name": { "mandatory": true, "display": [{"name": "Given Name", "locale": "en"}] },
