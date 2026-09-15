@@ -811,6 +811,9 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
             "IdentityCredential_sd_jwt": {
                 "format": "vc+sd-jwt",
                 "vct": "IdentityCredential",
+                "credential_definition": {
+                    "type": ["VerifiableCredential", "IdentityCredential"]
+                },
                 "cryptographic_binding_methods_supported": ["jwk"],
                 "credential_signing_alg_values_supported": ["ES256", "EdDSA", "ML-DSA-65"],
                 "proof_types_supported": {
@@ -863,6 +866,10 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
             "eudi_pid_mdoc": {
                 "format": "mso_mdoc",
                 "doctype": "eu.europa.ec.eudi.pid.1",
+                "credential_definition": {
+                    "type": ["VerifiableCredential"],
+                    "doctype": "eu.europa.ec.eudi.pid.1"
+                },
                 "cryptographic_binding_methods_supported": ["cose_key"],
                 "credential_signing_alg_values_supported": ["ES256", "EdDSA"],
                 "proof_types_supported": {
