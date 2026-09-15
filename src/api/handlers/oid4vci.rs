@@ -812,6 +812,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                 "format": "vc+sd-jwt",
                 "vct": "IdentityCredential",
                 "credential_definition": {
+                    "@context": ["https://www.w3.org/ns/credentials/v2"],
                     "type": ["VerifiableCredential", "IdentityCredential"]
                 },
                 "cryptographic_binding_methods_supported": ["jwk"],
@@ -845,6 +846,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                     }
                 },
                 "credential_definition": {
+                    "@context": ["https://www.w3.org/ns/credentials/v2"],
                     "type": "urn:eudi:pid:1",
                     "claims": {
                         "family_name": { "mandatory": true, "display": [{"name": "Family Name", "locale": "en"}] },
@@ -867,6 +869,7 @@ pub async fn issuer_metadata(req: HttpRequest) -> ApiResult<HttpResponse> {
                 "format": "mso_mdoc",
                 "doctype": "eu.europa.ec.eudi.pid.1",
                 "credential_definition": {
+                    "@context": ["https://www.w3.org/ns/credentials/v2"],
                     "type": ["VerifiableCredential"],
                     "doctype": "eu.europa.ec.eudi.pid.1"
                 },
