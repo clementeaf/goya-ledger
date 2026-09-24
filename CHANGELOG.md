@@ -6,7 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ## [0.18.0] — 2026-09-24
 
-### Changed — DID Hardening + Identity Federation (P0–P3)
+### Changed — DID Hardening + Identity Federation (P0–P6)
 
 #### P0: DID derivation hardened
 - `did_from_pubkey_hex` upgraded from truncated `pubkey_hex[..16]` (64-bit) to SHA3-512 (512-bit, 256-bit quantum security)
@@ -37,10 +37,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - BFT `commit_block` applies payloads at commit time
 - State sync automatic — `StateResponse` blocks carry tx data
 
+#### P4: Cross-node dedup via civil anchor
+- All 4 commit paths (mining, BFT, network, API) mark duplicate-anchor tx as `invalid_payload`
+- API returns `409 Conflict` when civil anchor already registered
+
+#### P5: State sync applies identity payloads
+- Both `request_state_sync` and `start_pull_sync_loop` replay tx payloads from received blocks
+- New node reconstructs full identity store by replaying historical blocks
+
+#### P6: Legacy DID migration
+- `migrate_legacy_dids(store)` — idempotent migration of 16-char DIDs to SHA3-512
+- Detects legacy by suffix length (!= 128 hex chars)
+- Sets `migrated_from` to preserve lineage, migrates civil anchor index
+- Skips if new DID already exists, reports errors for empty public keys
+- Historical data (transactions, credentials, blocks) left intact
+
 ### Stats
 - `hash_sha3_512` added to crypto hasher (FIPS 202)
-- 2843 tests pass, clippy clean
-- 4 commit paths wired to `apply_tx_payload`: mining, BFT, network, API
+- 2849 tests pass, clippy clean
+- 6 commit paths wired to `apply_tx_payload`: mining, BFT, OrderedBlock, 2x state sync, API
 
 ---
 
