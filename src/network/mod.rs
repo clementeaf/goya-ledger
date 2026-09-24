@@ -2268,6 +2268,10 @@ impl Node {
             if let Some(s) = &self.store {
                 for block in &blocks {
                     let _ = s.write_block(block);
+                    for tx in &block.transaction_data {
+                        let _ = crate::transaction::apply_tx_payload(s.as_ref(), tx);
+                        let _ = s.write_transaction(tx);
+                    }
                 }
                 println!(
                     "✅ State sync from {address}: {} blocks written",
@@ -2797,6 +2801,10 @@ impl Node {
                     if let Message::StateResponse { blocks } = resp {
                         for block in blocks.into_iter().take(gossip::STATE_BATCH_SIZE) {
                             let _ = store.write_block(&block);
+                            for tx in &block.transaction_data {
+                                let _ = crate::transaction::apply_tx_payload(store.as_ref(), tx);
+                                let _ = store.write_transaction(tx);
+                            }
                         }
                     }
                 }
