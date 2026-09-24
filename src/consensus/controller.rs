@@ -374,8 +374,12 @@ async fn commit_block(
     match store.write_block(&block) {
         Ok(()) => {
             for tx in &block.transaction_data {
-                let _ = crate::transaction::apply_tx_payload(store.as_ref(), tx);
-                let _ = store.write_transaction(tx);
+                let mut committed_tx = tx.clone();
+                if let Err(e) = crate::transaction::apply_tx_payload(store.as_ref(), tx) {
+                    log::warn!("BFT: tx {} payload rejected: {e}", tx.id);
+                    committed_tx.state = "invalid_payload".to_string();
+                }
+                let _ = store.write_transaction(&committed_tx);
             }
             log::info!("BFT: committed block {} with QC", block.height);
             let node = node.clone();

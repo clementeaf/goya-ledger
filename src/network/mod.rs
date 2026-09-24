@@ -1337,8 +1337,12 @@ impl Node {
                     if let Some(s) = &store {
                         let _ = s.write_block(&block);
                         for tx in &block.transaction_data {
-                            let _ = crate::transaction::apply_tx_payload(s.as_ref(), tx);
-                            let _ = s.write_transaction(tx);
+                            let mut committed_tx = tx.clone();
+                            if let Err(e) = crate::transaction::apply_tx_payload(s.as_ref(), tx) {
+                                log::warn!("tx {} payload rejected: {e}", tx.id);
+                                committed_tx.state = "invalid_payload".to_string();
+                            }
+                            let _ = s.write_transaction(&committed_tx);
                         }
                         for entry in &block.embedded_entries {
                             let _ = s.write_notarization(entry);
