@@ -556,6 +556,16 @@ async fn async_main_inner() -> std::io::Result<()> {
                     }
                     _ => {}
                 }
+                match crate::identity::migration::migrate_legacy_dids(&store) {
+                    Ok(r) if r.migrated > 0 => {
+                        log::info!("Migrated {} legacy DID(s) to SHA3-512", r.migrated);
+                    }
+                    Ok(r) if !r.errors.is_empty() => {
+                        log::warn!("DID migration: {} error(s)", r.errors.len());
+                    }
+                    Err(e) => log::warn!("DID migration skipped: {e}"),
+                    _ => {}
+                }
                 log::info!("Storage backend: RocksDB at {path}");
                 Some(Arc::new(store))
             }
