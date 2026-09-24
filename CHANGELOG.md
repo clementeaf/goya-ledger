@@ -52,9 +52,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 - Skips if new DID already exists, reports errors for empty public keys
 - Historical data (transactions, credentials, blocks) left intact
 
+### Deployment
+- Auto-migrate legacy DIDs at boot (`main.rs`, RocksDB path)
+- `STORAGE_BACKEND=rocksdb` enabled on VPS `162.254.32.12`
+- PM2 ecosystem config updated, process saved for reboot recovery
+- 3 E2E federation tests: cross-node replication, dedup, state sync replay
+
 ### Stats
 - `hash_sha3_512` added to crypto hasher (FIPS 202)
-- 2849 tests pass, clippy clean
+- 2849 lib + 6 integration tests pass, clippy clean
 - 6 commit paths wired to `apply_tx_payload`: mining, BFT, OrderedBlock, 2x state sync, API
 
 ---
