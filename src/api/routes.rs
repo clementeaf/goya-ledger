@@ -50,6 +50,10 @@ impl ApiRoutes {
     fn register_store_handlers(cfg: &mut web::ServiceConfig) {
         cfg.service(transactions::store_write_transaction)
             .service(transactions::store_get_transaction)
+            .service(identity::create_identity)
+            .service(identity::resolve_by_document)
+            .service(identity::revoke_identity)
+            .service(identity::get_identity_methods)
             .service(identity::store_write_identity)
             .service(identity::store_list_identities)
             .service(identity::store_get_identity)

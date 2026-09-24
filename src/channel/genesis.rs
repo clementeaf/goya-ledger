@@ -38,6 +38,7 @@ pub fn create_genesis_block(channel_id: &str, config: &ChannelConfig) -> Block {
         orderer_signature: None,
         commit_qc: None,
         embedded_entries: Vec::new(),
+        transaction_data: vec![],
     }
 }
 

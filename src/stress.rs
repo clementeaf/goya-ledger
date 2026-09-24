@@ -72,6 +72,7 @@ pub fn stress_storage(ops: u64) -> ModuleStressResult {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
 
         let op_start = Instant::now();
@@ -476,6 +477,7 @@ pub fn stress_identity(ops: u64) -> ModuleStressResult {
             status: "active".into(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         };
 
         if store.write_identity(&record).is_err() {
@@ -529,6 +531,7 @@ pub fn stress_credential(ops: u64) -> ModuleStressResult {
             status: "active".into(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         })
         .unwrap();
 
@@ -764,6 +767,7 @@ mod tests {
                             status: "active".into(),
                             migrated_from: None,
                             signature_algorithm: None,
+                            civil_anchor: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             errors += 1;
@@ -821,6 +825,7 @@ mod tests {
                 status: "active".into(),
                 migrated_from: None,
                 signature_algorithm: None,
+                civil_anchor: None,
             })
             .unwrap();
 
@@ -971,6 +976,7 @@ mod tests {
                             orderer_signature: None,
                             commit_qc: None,
                             embedded_entries: Vec::new(),
+                            transaction_data: vec![],
                         };
                         if s.write_block(&block).is_err() {
                             errs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1077,6 +1083,7 @@ mod tests {
                             status: "active".into(),
                             migrated_from: None,
                             signature_algorithm: None,
+                            civil_anchor: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1491,6 +1498,7 @@ mod tests {
                             status: "active".into(),
                             migrated_from: None,
                             signature_algorithm: None,
+                            civil_anchor: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             errors += 1;
@@ -1534,6 +1542,7 @@ mod tests {
                 status: "active".into(),
                 migrated_from: None,
                 signature_algorithm: None,
+                civil_anchor: None,
             })
             .unwrap();
 
@@ -1610,6 +1619,7 @@ mod tests {
                             orderer_signature: None,
                             commit_qc: None,
                             embedded_entries: Vec::new(),
+                            transaction_data: vec![],
                         };
                         if s.write_block(&block).is_err() {
                             errs.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1660,6 +1670,7 @@ mod tests {
                             status: "active".into(),
                             migrated_from: None,
                             signature_algorithm: None,
+                            civil_anchor: None,
                         };
                         if s.write_identity(&rec).is_err() {
                             e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1719,6 +1730,7 @@ mod tests {
                         orderer_signature: None,
                         commit_qc: None,
                         embedded_entries: Vec::new(),
+                        transaction_data: vec![],
                     };
                     if s.write_block(&block).is_err() {
                         e.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

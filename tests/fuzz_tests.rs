@@ -69,6 +69,7 @@ proptest! {
             amount,
             fee: 0,
             state,
+            payload: None,
         };
         let _ = rust_bc::api::handlers::validation::validate_store_transaction(&tx);
     }
@@ -169,6 +170,7 @@ proptest! {
             amount,
             fee: 0,
             state: "pending".to_string(),
+            payload: None,
         };
         prop_assert_eq!(tx.amount, amount);
         prop_assert!(!tx.id.is_empty());
@@ -194,6 +196,7 @@ proptest! {
             amount,
             fee: 0,
             state: "pending".to_string(),
+            payload: None,
         };
 
         let config = ValidationConfig {
@@ -260,7 +263,7 @@ proptest! {
             secondary_signature: None,
             secondary_signature_algorithm: None,
             hash_algorithm: Default::default(),
-            orderer_signature: None, commit_qc: None, embedded_entries: Vec::new(),
+            orderer_signature: None, commit_qc: None, embedded_entries: Vec::new(), transaction_data: vec![],
         };
 
         let write_result = store.write_block(&block);
@@ -292,6 +295,7 @@ proptest! {
             amount,
             fee: 0,
             state: "committed".to_string(),
+            payload: None,
         };
 
         let write_result = store.write_transaction(&tx);

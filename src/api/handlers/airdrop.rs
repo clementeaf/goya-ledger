@@ -94,6 +94,7 @@ pub async fn claim_airdrop(
             amount: airdrop_amount,
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         };
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
         let _ = pool.add(store_tx);

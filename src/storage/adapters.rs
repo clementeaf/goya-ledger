@@ -89,6 +89,7 @@ const CF_NOTARIZATIONS: &str = "notarizations";
 /// Ownership transfers: key = `{content_hash}:{timestamp}`, value = JSON OwnershipTransfer
 const CF_OWNERSHIP_TRANSFERS: &str = "ownership_transfers";
 const CF_LEXCONTRACTS: &str = "lexcontracts";
+const CF_CIVIL_ANCHORS: &str = "civil_anchors";
 
 const META_LATEST_HEIGHT: &[u8] = b"latest_height";
 
@@ -132,6 +133,7 @@ const ALL_CFS: &[&str] = &[
     CF_NOTARIZATIONS,
     CF_OWNERSHIP_TRANSFERS,
     CF_LEXCONTRACTS,
+    CF_CIVIL_ANCHORS,
 ];
 
 /// RocksDB-backed block store using Column Families for data isolation
@@ -225,6 +227,12 @@ impl RocksDbBlockStore {
         self.db
             .cf_handle(CF_IDENTITIES)
             .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_IDENTITIES.to_string()))
+    }
+
+    fn cf_civil_anchors(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
+        self.db
+            .cf_handle(CF_CIVIL_ANCHORS)
+            .ok_or_else(|| StorageError::ColumnFamilyNotFound(CF_CIVIL_ANCHORS.to_string()))
     }
 
     fn cf_credentials(&self) -> StorageResult<Arc<rocksdb::BoundColumnFamily<'_>>> {
@@ -544,6 +552,30 @@ impl BlockStore for RocksDbBlockStore {
             results.push(rec);
         }
         Ok(results)
+    }
+
+    fn write_civil_anchor(&self, anchor_hash: &str, did: &str) -> StorageResult<()> {
+        self.db
+            .put_cf(
+                &self.cf_civil_anchors()?,
+                anchor_hash.as_bytes(),
+                did.as_bytes(),
+            )
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))
+    }
+
+    fn resolve_by_civil_anchor(&self, anchor_hash: &str) -> StorageResult<String> {
+        match self
+            .db
+            .get_cf(&self.cf_civil_anchors()?, anchor_hash.as_bytes())
+            .map_err(|e| StorageError::RocksDbError(e.to_string()))?
+        {
+            Some(bytes) => String::from_utf8(bytes)
+                .map_err(|e| StorageError::DeserializationError(e.to_string())),
+            None => Err(StorageError::KeyNotFound(format!(
+                "civil_anchor:{anchor_hash}"
+            ))),
+        }
     }
 
     fn write_credential(&self, credential: &Credential) -> StorageResult<()> {
@@ -2569,6 +2601,7 @@ mod tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         }
     }
 
@@ -2582,6 +2615,7 @@ mod tests {
             amount: 100,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         }
     }
 
@@ -2697,6 +2731,7 @@ mod tests {
             status: "active".to_string(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         };
         store.write_identity(&identity).unwrap();
         let loaded = store.read_identity("did:goya:123").unwrap();
@@ -2783,6 +2818,7 @@ mod tests {
             amount: 1,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         }
     }
 

@@ -59,6 +59,7 @@ pub async fn create_transaction(
         amount: req.amount,
         state: "pending".to_string(),
         fee: 0,
+        payload: None,
     };
 
     // Nonce replay protection for non-coinbase transactions

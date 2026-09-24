@@ -44,6 +44,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -60,6 +61,7 @@ mod comprehensive_storage_tests {
             amount: 100,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -75,6 +77,7 @@ mod comprehensive_storage_tests {
             status: "active".to_string(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -145,6 +148,7 @@ mod comprehensive_storage_tests {
                 orderer_signature: None,
                 commit_qc: None,
                 embedded_entries: Vec::new(),
+                transaction_data: vec![],
             };
             assert!(store.write_block(&block).is_ok());
         }
@@ -164,6 +168,7 @@ mod comprehensive_storage_tests {
             status: "active".to_string(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         };
         assert!(store.write_identity(&identity).is_ok());
         identity.status = "revoked".to_string();
@@ -191,6 +196,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_batch(&[block], &[]).is_ok());
     }
@@ -207,6 +213,7 @@ mod comprehensive_storage_tests {
             amount: 100,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         };
         assert!(store.write_batch(&[], &[tx]).is_ok());
     }
@@ -230,6 +237,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         let tx = Transaction {
             id: "tx1".to_string(),
@@ -240,6 +248,7 @@ mod comprehensive_storage_tests {
             amount: 100,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         };
         assert!(store.write_batch(&[block], &[tx]).is_ok());
     }
@@ -270,6 +279,7 @@ mod comprehensive_storage_tests {
                 orderer_signature: None,
                 commit_qc: None,
                 embedded_entries: Vec::new(),
+                transaction_data: vec![],
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&blocks, &[]).is_ok());
@@ -288,6 +298,7 @@ mod comprehensive_storage_tests {
                 amount: 100 * i as u64,
                 state: "confirmed".to_string(),
                 fee: 0,
+                payload: None,
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&[], &txs).is_ok());
@@ -313,6 +324,7 @@ mod comprehensive_storage_tests {
                 orderer_signature: None,
                 commit_qc: None,
                 embedded_entries: Vec::new(),
+                transaction_data: vec![],
             })
             .collect::<Vec<_>>();
         assert!(store.write_batch(&blocks, &[]).is_ok());
@@ -337,6 +349,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         }];
         let txs = vec![Transaction {
             id: "tx1".to_string(),
@@ -347,6 +360,7 @@ mod comprehensive_storage_tests {
             amount: 100,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         }];
         assert!(store.write_batch(&blocks, &txs).is_ok());
     }
@@ -371,6 +385,7 @@ mod comprehensive_storage_tests {
                 orderer_signature: None,
                 commit_qc: None,
                 embedded_entries: Vec::new(),
+                transaction_data: vec![],
             };
             assert!(store.write_batch(&[block], &[]).is_ok());
         }
@@ -420,6 +435,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         let block2 = Block {
             height: 2,
@@ -437,6 +453,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_batch(&[block1, block2], &[]).is_ok());
     }
@@ -462,6 +479,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -485,6 +503,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -508,6 +527,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -531,6 +551,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -547,6 +568,7 @@ mod comprehensive_storage_tests {
             status: "active".to_string(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -570,6 +592,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -593,6 +616,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -640,6 +664,7 @@ mod comprehensive_storage_tests {
             amount: 0,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -656,6 +681,7 @@ mod comprehensive_storage_tests {
             amount: u64::MAX,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -672,6 +698,7 @@ mod comprehensive_storage_tests {
             amount: 100,
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -688,6 +715,7 @@ mod comprehensive_storage_tests {
             amount: 100,
             state: "failed".to_string(),
             fee: 0,
+            payload: None,
         };
         assert!(store.write_transaction(&tx).is_ok());
     }
@@ -703,6 +731,7 @@ mod comprehensive_storage_tests {
             status: "suspended".to_string(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -718,6 +747,7 @@ mod comprehensive_storage_tests {
             status: "revoked".to_string(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         };
         assert!(store.write_identity(&identity).is_ok());
     }
@@ -743,6 +773,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -766,6 +797,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         assert!(store.write_block(&block).is_ok());
     }
@@ -809,6 +841,7 @@ mod comprehensive_storage_tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         let start = Instant::now();
         let _ = store.write_block(&block);
@@ -838,6 +871,7 @@ mod comprehensive_storage_tests {
                 orderer_signature: None,
                 commit_qc: None,
                 embedded_entries: Vec::new(),
+                transaction_data: vec![],
             };
             let _ = store.write_block(&block);
         }
@@ -859,6 +893,7 @@ mod comprehensive_storage_tests {
                 amount: 100,
                 state: "confirmed".to_string(),
                 fee: 0,
+                payload: None,
             };
             let _ = store.write_transaction(&tx);
         }

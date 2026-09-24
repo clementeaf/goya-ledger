@@ -18,6 +18,7 @@ pub struct MemoryStore {
     blocks: Mutex<HashMap<u64, Block>>,
     transactions: Mutex<HashMap<String, Transaction>>,
     identities: Mutex<HashMap<String, IdentityRecord>>,
+    civil_anchors: Mutex<HashMap<String, String>>,
     credentials: Mutex<HashMap<String, Credential>>,
     latest_height: Mutex<u64>,
     /// Governance proposals: id → Proposal
@@ -68,6 +69,7 @@ impl MemoryStore {
             blocks: Mutex::new(HashMap::new()),
             transactions: Mutex::new(HashMap::new()),
             identities: Mutex::new(HashMap::new()),
+            civil_anchors: Mutex::new(HashMap::new()),
             credentials: Mutex::new(HashMap::new()),
             latest_height: Mutex::new(0),
             proposals: Mutex::new(HashMap::new()),
@@ -169,6 +171,23 @@ impl BlockStore for MemoryStore {
             .values()
             .cloned()
             .collect())
+    }
+
+    fn write_civil_anchor(&self, anchor_hash: &str, did: &str) -> StorageResult<()> {
+        self.civil_anchors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(anchor_hash.to_string(), did.to_string());
+        Ok(())
+    }
+
+    fn resolve_by_civil_anchor(&self, anchor_hash: &str) -> StorageResult<String> {
+        self.civil_anchors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(anchor_hash)
+            .cloned()
+            .ok_or_else(|| StorageError::KeyNotFound(format!("civil_anchor:{anchor_hash}")))
     }
 
     fn write_credential(&self, credential: &Credential) -> StorageResult<()> {
@@ -897,6 +916,7 @@ mod tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         }
     }
 
@@ -910,6 +930,7 @@ mod tests {
             amount: 42,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         }
     }
 
@@ -973,6 +994,7 @@ mod tests {
             status: "active".to_string(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         };
         store.write_identity(&id).unwrap();
         let fetched = store.read_identity("did:goya:alice").unwrap();

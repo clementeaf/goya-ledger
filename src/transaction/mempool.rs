@@ -128,6 +128,7 @@ mod tests {
             amount,
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         }
     }
 

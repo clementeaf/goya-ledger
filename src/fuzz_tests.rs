@@ -39,7 +39,7 @@ mod tests {
                 secondary_signature: None,
                 secondary_signature_algorithm: None,
                 hash_algorithm: Default::default(),
-                orderer_signature: None, commit_qc: None, embedded_entries: Vec::new(),
+                orderer_signature: None, commit_qc: None, embedded_entries: Vec::new(), transaction_data: vec![],
             };
             // Serialize and deserialize roundtrip must not panic
             let json = serde_json::to_string(&block).unwrap();
@@ -284,6 +284,7 @@ mod tests {
                 orderer_signature: orderer_signature.clone(),
                 commit_qc: None,
                 embedded_entries: entries.clone(),
+                transaction_data: vec![],
             };
 
             let json = serde_json::to_string(&block).unwrap();
@@ -334,6 +335,7 @@ mod tests {
                 amount,
                 state: state.to_string(),
                 fee: 0,
+                payload: None,
             };
 
             let json = serde_json::to_string(&tx).unwrap();
@@ -373,6 +375,7 @@ mod tests {
                 status: status.to_string(),
                 migrated_from: migrated_from.clone(),
                 signature_algorithm: None,
+                civil_anchor: None,
             };
 
             let json = serde_json::to_string(&record).unwrap();
@@ -412,6 +415,7 @@ mod tests {
                 orderer_signature: None,
                 commit_qc: None,
                 embedded_entries: vec![],
+                transaction_data: vec![],
             };
 
             let json1 = serde_json::to_string(&block).unwrap();
@@ -540,6 +544,7 @@ mod tests {
                 orderer_signature: None,
                 commit_qc: None,
                 embedded_entries: vec![],
+                transaction_data: vec![],
             };
 
             let mut json: serde_json::Value = serde_json::to_value(&block).unwrap();
@@ -620,6 +625,7 @@ mod tests {
                 orderer_signature: Some(vec![]),
                 commit_qc: None,
                 embedded_entries: vec![],
+                transaction_data: vec![],
             };
             let json = serde_json::to_string(&block).unwrap();
             let back: crate::storage::traits::Block = serde_json::from_str(&json).unwrap();
@@ -677,6 +683,7 @@ mod tests {
                 orderer_signature: None,
                 commit_qc: Some(qc),
                 embedded_entries: vec![],
+                transaction_data: vec![],
             };
 
             let json = serde_json::to_string(&block).unwrap();

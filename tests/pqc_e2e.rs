@@ -42,6 +42,7 @@ fn pqc_block_sign_store_retrieve_verify() {
         orderer_signature: None,
         commit_qc: None,
         embedded_entries: Vec::new(),
+        transaction_data: vec![],
     };
 
     // Sign the block
@@ -131,6 +132,7 @@ fn pqc_block_tampered_payload_rejected() {
         orderer_signature: None,
         commit_qc: None,
         embedded_entries: Vec::new(),
+        transaction_data: vec![],
     };
 
     let payload = serde_json::to_vec(&block).unwrap();
@@ -184,6 +186,7 @@ fn pqc_block_signature_survives_json_roundtrip() {
         orderer_signature: None,
         commit_qc: None,
         embedded_entries: Vec::new(),
+        transaction_data: vec![],
     };
 
     let json = serde_json::to_string(&block).unwrap();

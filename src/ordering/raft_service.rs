@@ -126,20 +126,22 @@ impl RaftOrderingService {
 
         // Drain entries, collecting up to max_batch_size valid TXs.
         // Skip raft internal entries (empty data / non-TX).
-        let mut tx_ids: Vec<String> = Vec::new();
-        while !node.committed_entries.is_empty() && tx_ids.len() < self.max_batch_size {
+        let mut tx_data: Vec<Transaction> = Vec::new();
+        while !node.committed_entries.is_empty() && tx_data.len() < self.max_batch_size {
             let entry = node.committed_entries.remove(0);
             if entry.data.is_empty() {
                 continue;
             }
             if let Ok(tx) = serde_json::from_slice::<Transaction>(&entry.data) {
-                tx_ids.push(tx.id);
+                tx_data.push(tx);
             }
         }
 
-        if tx_ids.is_empty() {
+        if tx_data.is_empty() {
             return Ok(None);
         }
+
+        let tx_ids: Vec<String> = tx_data.iter().map(|tx| tx.id.clone()).collect();
 
         let mut block = Block {
             height,
@@ -160,6 +162,7 @@ impl RaftOrderingService {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: tx_data,
         };
 
         if let Some(provider) = &self.signing_provider {
@@ -200,6 +203,7 @@ mod tests {
             amount: 1,
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         }
     }
 

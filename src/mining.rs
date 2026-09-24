@@ -108,6 +108,7 @@ impl MiningService {
             amount: total_reward,
             state: "confirmed".to_string(),
             fee: 0,
+            payload: None,
         };
 
         // Get parent hash
@@ -125,7 +126,9 @@ impl MiningService {
         let mut all_tx_ids = vec![coinbase.id.clone()];
         all_tx_ids.extend(transactions.iter().map(|tx| tx.id.clone()));
 
-        // Build merkle root (simplified: hash of concatenated tx IDs)
+        let mut all_tx_data = vec![coinbase.clone()];
+        all_tx_data.extend(transactions.iter().cloned());
+
         let merkle_data: String = all_tx_ids.join(",");
         let merkle_root = hash(merkle_data.as_bytes());
 
@@ -145,6 +148,7 @@ impl MiningService {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: all_tx_data,
         };
 
         let signing_hash = block_hash_for_signing(&block);
@@ -173,10 +177,13 @@ impl MiningService {
             .write_transaction(&coinbase)
             .map_err(|e| format!("failed to write coinbase tx: {e}"))?;
 
-        // Write user transactions with block_height set
         for mut tx in transactions {
             tx.block_height = new_height;
             tx.state = "confirmed".to_string();
+            if let Err(e) = crate::transaction::apply_tx_payload(self.store.as_ref(), &tx) {
+                log::warn!("tx {} payload rejected: {e}", tx.id);
+                tx.state = "invalid_payload".to_string();
+            }
             self.store
                 .write_transaction(&tx)
                 .map_err(|e| format!("failed to write tx: {e}"))?;
@@ -268,6 +275,7 @@ mod tests {
             amount: 10,
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         };
 
         let height = service.mine_block("miner1", vec![tx]).unwrap();

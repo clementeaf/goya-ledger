@@ -1336,6 +1336,10 @@ impl Node {
                 if matches!(role, NodeRole::Peer | NodeRole::PeerAndOrderer) {
                     if let Some(s) = &store {
                         let _ = s.write_block(&block);
+                        for tx in &block.transaction_data {
+                            let _ = crate::transaction::apply_tx_payload(s.as_ref(), tx);
+                            let _ = s.write_transaction(tx);
+                        }
                         for entry in &block.embedded_entries {
                             let _ = s.write_notarization(entry);
                         }
@@ -2905,6 +2909,7 @@ mod tests {
             amount: 10,
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         }
     }
 
@@ -2997,6 +3002,7 @@ mod tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
 
         Node::process_message(
@@ -3049,6 +3055,7 @@ mod tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         let msg = Message::OrderedBlock(block);
         let json = serde_json::to_string(&msg).unwrap();
@@ -3104,6 +3111,7 @@ mod tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         let msg = Message::StateResponse {
             blocks: vec![block],

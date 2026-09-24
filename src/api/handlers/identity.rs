@@ -10,9 +10,9 @@ use chrono::Utc;
 
 /// POST /identity/create - Create a new DID, generate Ed25519 keypair, persist to store.
 #[post("/identity/create")]
-async fn create_identity(
+pub async fn create_identity(
     state: web::Data<AppState>,
-    _body: web::Json<CreateIdentityRequest>,
+    body: web::Json<CreateIdentityRequest>,
     req: HttpRequest,
 ) -> ApiResult<HttpResponse> {
     let trace_id = uuid::Uuid::new_v4().to_string();
@@ -34,6 +34,13 @@ async fn create_identity(
     // Persist to store
     let _channel = channel_id_from_req(&req);
     let store = get_channel_store(&state, _channel)?;
+    let civil_anchor = match (&body.document_type, &body.document_number) {
+        (Some(doc_type), Some(doc_number)) => Some(crate::identity::did::civil_anchor_hash(
+            doc_type, doc_number,
+        )),
+        _ => None,
+    };
+
     let record = crate::storage::traits::IdentityRecord {
         did: did.clone(),
         public_key: public_key_hex.clone(),
@@ -42,9 +49,38 @@ async fn create_identity(
         status: "active".to_string(),
         migrated_from: None,
         signature_algorithm: Some(format!("{:?}", algorithm)),
+        civil_anchor: civil_anchor.clone(),
     };
+
+    let tx = crate::storage::traits::Transaction {
+        id: format!("identity-{}", uuid::Uuid::new_v4()),
+        block_height: 0,
+        timestamp: now,
+        input_did: did.clone(),
+        output_recipient: did.clone(),
+        amount: 0,
+        state: "pending".to_string(),
+        fee: 0,
+        payload: Some(crate::storage::traits::TxPayload::RegisterIdentity {
+            record,
+            civil_anchor: civil_anchor.clone(),
+        }),
+    };
+
+    crate::transaction::apply_tx_payload(store.as_ref(), &tx).map_err(|e| {
+        if e.to_string().contains("civil anchor already registered") {
+            ApiError::Conflict {
+                reason: "identity with document already exists".to_string(),
+            }
+        } else {
+            ApiError::StorageError {
+                reason: e.to_string(),
+            }
+        }
+    })?;
+
     store
-        .write_identity(&record)
+        .write_transaction(&tx)
         .map_err(|e| ApiError::StorageError {
             reason: e.to_string(),
         })?;
@@ -92,6 +128,102 @@ async fn get_identity(
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
 }
 
+#[get("/identity/resolve/{doc_type}/{doc_number}")]
+pub async fn resolve_by_document(
+    state: web::Data<AppState>,
+    path: web::Path<(String, String)>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let (doc_type, doc_number) = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let _channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, _channel)?;
+
+    enforce_acl(
+        state.acl_provider.as_deref(),
+        state.policy_store.as_deref(),
+        "peer/Identity",
+        &req,
+    )?;
+
+    let anchor = crate::identity::did::civil_anchor_hash(&doc_type, &doc_number);
+    let did = store
+        .resolve_by_civil_anchor(&anchor)
+        .map_err(|_| ApiError::NotFound {
+            resource: format!("identity for {doc_type}:{doc_number}"),
+        })?;
+
+    let record = store.read_identity(&did).map_err(|_| ApiError::NotFound {
+        resource: format!("identity {did}"),
+    })?;
+
+    let response = IdentityResponse {
+        did: record.did,
+        public_key: record.public_key,
+        created_at: chrono::DateTime::from_timestamp(record.created_at as i64, 0)
+            .unwrap_or_else(Utc::now),
+    };
+    Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
+}
+
+/// GET /identity/{did}/methods - List available auth methods for a DID.
+#[get("/identity/{did}/methods")]
+pub async fn get_identity_methods(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let did = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, channel)?;
+
+    store.read_identity(&did).map_err(|_| ApiError::NotFound {
+        resource: format!("identity {did}"),
+    })?;
+
+    let has_pin = state
+        .pin_store
+        .as_ref()
+        .and_then(|ps| ps.get_hash(&did).ok())
+        .flatten()
+        .is_some();
+
+    let has_vault = store.read_vault(&did).is_ok();
+
+    let credentials: Vec<_> = store
+        .credentials_by_subject_did(&did)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|c| {
+            serde_json::json!({
+                "id": c.id,
+                "type": c.cred_type,
+                "status": c.status,
+            })
+        })
+        .collect();
+
+    let mut methods = Vec::new();
+    methods.push("signature");
+    if has_pin {
+        methods.push("pin");
+    }
+    if has_vault {
+        methods.push("vault");
+    }
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        serde_json::json!({
+            "did": did,
+            "methods": methods,
+            "credentials": credentials,
+            "has_vault": has_vault,
+        }),
+        trace_id,
+    )))
+}
+
 /// POST /identity/{did}/rotate-key - Key rotation (generates new keypair).
 #[post("/identity/{did}/rotate-key")]
 async fn rotate_key(
@@ -129,6 +261,59 @@ async fn rotate_key(
         rotated_at: Utc::now(),
     };
     Ok(HttpResponse::Ok().json(ApiResponse::success(response, trace_id)))
+}
+
+/// POST /identity/{did}/revoke - Revoke a DID (mark as revoked, not deleted).
+#[post("/identity/{did}/revoke")]
+pub async fn revoke_identity(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> ApiResult<HttpResponse> {
+    let did = path.into_inner();
+    let trace_id = uuid::Uuid::new_v4().to_string();
+    let channel = channel_id_from_req(&req);
+    let store = get_channel_store(&state, channel)?;
+
+    let mut record = store.read_identity(&did).map_err(|_| ApiError::NotFound {
+        resource: format!("identity {did}"),
+    })?;
+
+    if record.status == "revoked" {
+        return Ok(HttpResponse::Ok().json(ApiResponse::success(
+            serde_json::json!({ "did": did, "status": "already_revoked" }),
+            trace_id,
+        )));
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    record.status = "revoked".to_string();
+    record.updated_at = now;
+
+    store
+        .write_identity(&record)
+        .map_err(|e| ApiError::StorageError {
+            reason: e.to_string(),
+        })?;
+
+    crate::audit::emit_if_present(
+        &state.audit_store,
+        crate::audit::AuditAction::DidRegistered,
+        req.headers()
+            .get("X-Org-Id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown"),
+        Some(format!("did={did} revoked")),
+    );
+
+    Ok(HttpResponse::Ok().json(ApiResponse::success(
+        serde_json::json!({ "did": did, "status": "revoked", "revoked_at": now }),
+        trace_id,
+    )))
 }
 
 /// POST /identity/{did}/verify-signature - Verify Ed25519 signature.

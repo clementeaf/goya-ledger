@@ -373,6 +373,10 @@ async fn commit_block(
     block.commit_qc = manager.highest_commit_qc().cloned();
     match store.write_block(&block) {
         Ok(()) => {
+            for tx in &block.transaction_data {
+                let _ = crate::transaction::apply_tx_payload(store.as_ref(), tx);
+                let _ = store.write_transaction(tx);
+            }
             log::info!("BFT: committed block {} with QC", block.height);
             let node = node.clone();
             let blk = block.clone();

@@ -609,6 +609,7 @@ mod tests {
             timestamp: now_secs(),
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         }
     }
 
@@ -656,6 +657,7 @@ mod tests {
             timestamp: now_secs(),
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         };
 
         let result = validator.validate(&tx);
@@ -693,6 +695,7 @@ mod tests {
             timestamp: now_secs(),
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         };
 
         let result = validator.validate(&tx);

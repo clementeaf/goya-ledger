@@ -282,6 +282,7 @@ pub fn archive(store: &LexChainStore, contract_id: &str) -> Result<LexContract, 
         amount: 0,
         state: "confirmed".to_string(),
         fee: 0,
+        payload: None,
     };
 
     backend
@@ -555,6 +556,7 @@ mod tests {
                 status: "active".to_string(),
                 migrated_from: None,
                 signature_algorithm: None,
+                civil_anchor: None,
             })
             .unwrap();
     }

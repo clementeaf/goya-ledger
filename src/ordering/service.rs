@@ -120,7 +120,8 @@ impl OrderingService {
         }
 
         let count = queue.len().min(self.max_batch_size);
-        let tx_ids: Vec<String> = queue.drain(..count).map(|tx| tx.id).collect();
+        let drained: Vec<Transaction> = queue.drain(..count).collect();
+        let tx_ids: Vec<String> = drained.iter().map(|tx| tx.id.clone()).collect();
 
         let mut block = Block {
             height,
@@ -141,6 +142,7 @@ impl OrderingService {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: drained,
         };
 
         if let Some(provider) = &self.signing_provider {
@@ -229,6 +231,7 @@ mod tests {
             amount: 1,
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         }
     }
 

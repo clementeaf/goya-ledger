@@ -92,6 +92,7 @@ pub async fn stake(
         amount: body.amount,
         state: "pending".to_string(),
         fee: 0,
+        payload: None,
     };
     {
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());
@@ -180,6 +181,7 @@ pub async fn complete_unstake(
         amount,
         state: "pending".to_string(),
         fee: 0,
+        payload: None,
     };
     {
         let mut pool = state.tx_pool.lock().unwrap_or_else(|e| e.into_inner());

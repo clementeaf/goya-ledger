@@ -712,7 +712,8 @@ mod tests {
         use crate::identity::signing::SoftwareSigningProvider;
 
         let provider = SoftwareSigningProvider::generate();
-        let iss_did = format!("did:goya:{}", &hex::encode(provider.public_key())[..16]);
+        let iss_did =
+            crate::identity::did::did_from_pubkey_hex(&hex::encode(provider.public_key()));
 
         let store = make_store();
         register_test_rp(&store, "v.example.com");

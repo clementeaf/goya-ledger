@@ -31,6 +31,7 @@ fn make_tx(label: &str) -> Transaction {
         amount: 0,
         fee: 0,
         state: "pending".to_string(),
+        payload: None,
     }
 }
 
@@ -65,6 +66,7 @@ fn register_did(store: &dyn BlockStore, id: &Identity) {
             status: "active".to_string(),
             migrated_from: None,
             signature_algorithm: None,
+            civil_anchor: None,
         })
         .unwrap();
 }
@@ -1342,6 +1344,7 @@ fn phase7_migration_during_partition_then_rejoin() {
                 status: "active".to_string(),
                 migrated_from: None,
                 signature_algorithm: None,
+                civil_anchor: None,
             })
             .unwrap();
     }

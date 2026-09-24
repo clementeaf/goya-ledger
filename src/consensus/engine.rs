@@ -259,6 +259,7 @@ impl ConsensusEngine {
                 orderer_signature: None,
                 commit_qc: None,
                 embedded_entries: Vec::new(),
+                transaction_data: vec![],
             };
             store
                 .write_block(&storage_block)

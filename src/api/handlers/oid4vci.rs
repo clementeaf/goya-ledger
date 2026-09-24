@@ -1439,7 +1439,7 @@ pub async fn credential_endpoint(
         body.proof.is_some(),
         body.proofs.is_some(),
     );
-    let issuer_did = format!("did:goya:{}", &hex::encode(provider.public_key())[..16]);
+    let issuer_did = crate::identity::did::did_from_pubkey_hex(&hex::encode(provider.public_key()));
     let claims_json = body.claims.clone().unwrap_or(serde_json::json!({}));
 
     // Attestation type authorization (if registry is configured)
@@ -2921,7 +2921,8 @@ mod tests {
         use crate::identity::signing::EcdsaP256SigningProvider;
 
         let es256 = EcdsaP256SigningProvider::generate();
-        let issuer_did = format!("did:goya:{}", &hex::encode(es256.public_key())[..16]);
+        let issuer_did =
+            crate::identity::did::did_from_pubkey_hex(&hex::encode(es256.public_key()));
 
         let mut app_state = AppState::test_default();
         app_state.signing_provider =

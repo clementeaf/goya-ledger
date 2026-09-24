@@ -401,6 +401,7 @@ fn block_stores_hash_algorithm_field() {
         orderer_signature: None,
         commit_qc: None,
         embedded_entries: Vec::new(),
+        transaction_data: vec![],
     };
 
     // Serialize and deserialize — hash_algorithm must survive
@@ -431,6 +432,7 @@ fn legacy_block_without_hash_algorithm_defaults_to_sha256() {
         orderer_signature: None,
         commit_qc: None,
         embedded_entries: Vec::new(),
+        transaction_data: vec![],
     };
     let full_json = serde_json::to_string(&block).unwrap();
     // Strip the hash_algorithm field to simulate a legacy block

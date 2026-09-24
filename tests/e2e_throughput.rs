@@ -64,6 +64,7 @@ fn make_endorsed_with_sig(
                 amount: 1,
                 fee: 0,
                 state: "pending".into(),
+                payload: None,
             },
             creator_did: "did:goya:creator".into(),
             creator_signature: sig,

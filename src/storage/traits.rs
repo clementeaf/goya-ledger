@@ -53,6 +53,8 @@ pub struct Block {
     /// Notarization entries embedded in this block for cross-node replication.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub embedded_entries: Vec<NotarizationEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transaction_data: Vec<Transaction>,
 }
 
 mod vec_hex {
@@ -90,6 +92,20 @@ mod opt_vec_hex {
     }
 }
 
+/// Typed transaction payload — extends Transaction beyond value transfers.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type")]
+pub enum TxPayload {
+    Transfer {
+        amount: u64,
+    },
+    RegisterIdentity {
+        record: IdentityRecord,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        civil_anchor: Option<String>,
+    },
+}
+
 /// Transaction structure
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Transaction {
@@ -102,10 +118,12 @@ pub struct Transaction {
     pub state: String,
     #[serde(default)]
     pub fee: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload: Option<TxPayload>,
 }
 
 /// Identity record structure
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct IdentityRecord {
     pub did: String,
     #[serde(default)]
@@ -117,6 +135,8 @@ pub struct IdentityRecord {
     pub migrated_from: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature_algorithm: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub civil_anchor: Option<String>,
 }
 
 /// Credential structure
@@ -547,6 +567,10 @@ pub trait BlockStore: Send + Sync {
 
     /// List all identity records
     fn list_identities(&self) -> StorageResult<Vec<IdentityRecord>>;
+
+    fn write_civil_anchor(&self, anchor_hash: &str, did: &str) -> StorageResult<()>;
+
+    fn resolve_by_civil_anchor(&self, anchor_hash: &str) -> StorageResult<String>;
 
     /// Write a credential
     fn write_credential(&self, credential: &Credential) -> StorageResult<()>;
@@ -1067,6 +1091,12 @@ impl<T: BlockStore> BlockStore for Arc<T> {
     fn list_identities(&self) -> StorageResult<Vec<IdentityRecord>> {
         (**self).list_identities()
     }
+    fn write_civil_anchor(&self, anchor_hash: &str, did: &str) -> StorageResult<()> {
+        (**self).write_civil_anchor(anchor_hash, did)
+    }
+    fn resolve_by_civil_anchor(&self, anchor_hash: &str) -> StorageResult<String> {
+        (**self).resolve_by_civil_anchor(anchor_hash)
+    }
     fn write_credential(&self, credential: &Credential) -> StorageResult<()> {
         (**self).write_credential(credential)
     }
@@ -1207,6 +1237,7 @@ mod tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         }
     }
 
@@ -1246,6 +1277,7 @@ mod tests {
             orderer_signature: None,
             commit_qc: None,
             embedded_entries: Vec::new(),
+            transaction_data: vec![],
         };
         let json = serde_json::to_string(&block).unwrap();
         let decoded: Block = serde_json::from_str(&json).unwrap();
@@ -1307,10 +1339,93 @@ mod tests {
     #[test]
     fn arc_store_passed_as_box_dyn() {
         let store: Arc<MemoryStore> = Arc::new(MemoryStore::new());
-        // Verify it can be coerced into Box<dyn BlockStore>
         let boxed: Box<dyn BlockStore> = Box::new(Arc::clone(&store));
         boxed.write_block(&sample_block(3)).unwrap();
-        // The original Arc sees the write
         assert!(store.block_exists(3).unwrap());
+    }
+
+    #[test]
+    fn tx_serde_roundtrip_without_payload() {
+        let tx = Transaction {
+            id: "tx-1".into(),
+            block_height: 0,
+            timestamp: 1000,
+            input_did: "did:goya:a".into(),
+            output_recipient: "did:goya:b".into(),
+            amount: 100,
+            state: "valid".into(),
+            fee: 0,
+            payload: None,
+        };
+        let json = serde_json::to_string(&tx).unwrap();
+        assert!(!json.contains("payload"));
+        let decoded: Transaction = serde_json::from_str(&json).unwrap();
+        assert!(decoded.payload.is_none());
+    }
+
+    #[test]
+    fn tx_serde_roundtrip_with_register_identity() {
+        let record = IdentityRecord {
+            did: "did:goya:abc123".into(),
+            public_key: "deadbeef".into(),
+            created_at: 1000,
+            updated_at: 1000,
+            status: "active".into(),
+            migrated_from: None,
+            signature_algorithm: None,
+            civil_anchor: Some("cafebabe".into()),
+        };
+        let tx = Transaction {
+            id: "tx-id-1".into(),
+            block_height: 0,
+            timestamp: 1000,
+            input_did: "did:goya:a".into(),
+            output_recipient: "did:goya:b".into(),
+            amount: 0,
+            state: "valid".into(),
+            fee: 0,
+            payload: Some(TxPayload::RegisterIdentity {
+                record: record.clone(),
+                civil_anchor: Some("cafebabe".into()),
+            }),
+        };
+        let json = serde_json::to_string(&tx).unwrap();
+        let decoded: Transaction = serde_json::from_str(&json).unwrap();
+        match decoded.payload.unwrap() {
+            TxPayload::RegisterIdentity {
+                record: r,
+                civil_anchor,
+            } => {
+                assert_eq!(r.did, record.did);
+                assert_eq!(civil_anchor, Some("cafebabe".into()));
+            }
+            _ => panic!("wrong payload variant"),
+        }
+    }
+
+    #[test]
+    fn tx_serde_roundtrip_with_transfer() {
+        let tx = Transaction {
+            id: "tx-xfer".into(),
+            block_height: 1,
+            timestamp: 2000,
+            input_did: "did:goya:sender".into(),
+            output_recipient: "did:goya:recv".into(),
+            amount: 500,
+            state: "valid".into(),
+            fee: 10,
+            payload: Some(TxPayload::Transfer { amount: 500 }),
+        };
+        let json = serde_json::to_string(&tx).unwrap();
+        let decoded: Transaction = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.payload, Some(TxPayload::Transfer { amount: 500 }));
+    }
+
+    #[test]
+    fn legacy_tx_json_deserializes_with_payload_none() {
+        let legacy = r#"{"id":"old","block_height":0,"timestamp":0,"input_did":"a","output_recipient":"b","amount":0,"state":"valid"}"#;
+        let decoded: Transaction = serde_json::from_str(legacy).unwrap();
+        assert!(decoded.payload.is_none());
+        assert_eq!(decoded.fee, 0);
     }
 }

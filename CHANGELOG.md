@@ -4,6 +4,46 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) · Versioning: 
 
 ---
 
+## [0.18.0] — 2026-09-24
+
+### Changed — DID Hardening + Identity Federation (P0–P3)
+
+#### P0: DID derivation hardened
+- `did_from_pubkey_hex` upgraded from truncated `pubkey_hex[..16]` (64-bit) to SHA3-512 (512-bit, 256-bit quantum security)
+- DID format: `did:goya:{128 hex chars}` — birthday bound at 2²⁵⁶
+- `civil_anchor_hash(doc_type, doc_number)` — SHA3-512 lookup index for civil document dedup
+- `IdentityRecord.civil_anchor` field (optional, backwards-compatible)
+- `write_civil_anchor` / `resolve_by_civil_anchor` on MemoryStore + RocksDB (`civil_anchors` column family)
+- `GET /identity/resolve/{doc_type}/{doc_number}` — resolve DID from civil document, ACL-protected
+- `CreateIdentityRequest` accepts optional `document_type` + `document_number`
+- 3 inline DID bypasses (OID4VCI/OID4VP) consolidated to canonical `did_from_pubkey_hex`
+
+#### P1: Typed transaction payload
+- `TxPayload` enum: `Transfer { amount }`, `RegisterIdentity { record, civil_anchor }`
+- `Transaction.payload: Option<TxPayload>` — `serde(default)`, backwards-compatible with legacy JSON
+- All ~100 Transaction/Block struct literals updated
+
+#### P2: Identity as transaction
+- `apply_tx_payload(store, tx)` — centralized dispatcher for payload side-effects
+- `create_identity` handler builds a Transaction with `RegisterIdentity` payload instead of direct store write
+- Civil anchor dedup: duplicate anchor → `409 Conflict`
+- Mining commit path wires `apply_tx_payload` for each tx
+
+#### P3: Block carries full transaction data
+- `Block.transaction_data: Vec<Transaction>` — blocks are self-contained (like Fabric/Ethereum)
+- `OrderingService.cut_block` and `RaftService.cut_block` preserve full tx objects in block
+- `MiningService.mine_block` populates `transaction_data`
+- `OrderedBlock` handler: peers apply payloads + persist tx from `block.transaction_data`
+- BFT `commit_block` applies payloads at commit time
+- State sync automatic — `StateResponse` blocks carry tx data
+
+### Stats
+- `hash_sha3_512` added to crypto hasher (FIPS 202)
+- 2843 tests pass, clippy clean
+- 4 commit paths wired to `apply_tx_payload`: mining, BFT, network, API
+
+---
+
 ## [0.17.6] — 2026-09-15
 
 ### Added — OID4VCI Credential Offer by Reference + Partisia Interop

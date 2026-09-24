@@ -46,6 +46,7 @@ fn empty_block(height: u64) -> Block {
         orderer_signature: None,
         commit_qc: None,
         embedded_entries: Vec::new(),
+        transaction_data: vec![],
     }
 }
 
@@ -59,6 +60,7 @@ fn stored_tx(id: &str, from: &str, to: &str, amount: u64, height: u64) -> Transa
         amount,
         fee: 0,
         state: "confirmed".to_string(),
+        payload: None,
     }
 }
 

@@ -25,6 +25,7 @@ fn make_tx(id: usize) -> Transaction {
         amount: 1,
         state: "endorsed".to_string(),
         fee: 0,
+        payload: None,
     }
 }
 
@@ -216,6 +217,7 @@ fn make_block(height: u64) -> Block {
         orderer_signature: None,
         commit_qc: None,
         embedded_entries: Vec::new(),
+        transaction_data: vec![],
     }
 }
 

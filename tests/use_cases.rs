@@ -356,6 +356,7 @@ async fn uc_credential_lifecycle() {
                 status: "active".to_string(),
                 migrated_from: None,
                 signature_algorithm: None,
+                civil_anchor: None,
             })
             .unwrap();
     }

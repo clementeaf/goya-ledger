@@ -115,6 +115,7 @@ fn make_pqc_block(height: u64, signer: &MlDsaSigningProvider) -> Block {
         orderer_signature: None,
         commit_qc: None,
         embedded_entries: Vec::new(),
+        transaction_data: vec![],
     }
 }
 

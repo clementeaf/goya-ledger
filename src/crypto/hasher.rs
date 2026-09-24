@@ -56,6 +56,10 @@ pub fn hash(data: &[u8]) -> [u8; 32] {
     hash_with(configured_algorithm(), data)
 }
 
+pub fn hash_sha3_512(data: &[u8]) -> [u8; 64] {
+    sha3::Sha3_512::digest(data).into()
+}
+
 /// Run KAT (Known Answer Test) for both hash algorithms.
 pub fn run_hash_self_tests() -> Result<(), String> {
     // SHA-256 KAT
@@ -222,6 +226,22 @@ mod tests {
             hex::encode(h),
             "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
         );
+    }
+
+    #[test]
+    fn sha3_512_produces_64_bytes() {
+        let h = hash_sha3_512(b"hello");
+        assert_eq!(h.len(), 64);
+    }
+
+    #[test]
+    fn cavp_sha3_512_empty() {
+        let h = hash_sha3_512(b"");
+        assert_eq!(h.len(), 64);
+        let h2 = hash_sha3_512(b"");
+        assert_eq!(h, h2);
+        let sha256 = hash_with(HashAlgorithm::Sha256, b"");
+        assert_ne!(&h[..32], &sha256[..]);
     }
 
     #[test]

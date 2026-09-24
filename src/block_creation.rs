@@ -26,6 +26,7 @@ pub fn try_create_block(state: &AppState, req: &CreateBlockRequest) -> Result<St
                 amount: tx_req.amount,
                 state: "pending".to_string(),
                 fee: 0,
+                payload: None,
             }
         })
         .collect();

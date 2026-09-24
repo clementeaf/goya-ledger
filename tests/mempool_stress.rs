@@ -14,6 +14,7 @@ fn make_tx(id: &str, from: &str, to: &str, amount: u64) -> Transaction {
         amount,
         fee: 0,
         state: "pending".to_string(),
+        payload: None,
     }
 }
 

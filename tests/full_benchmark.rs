@@ -49,6 +49,7 @@ fn make_endorsed(id: &str, key: &str, version: u64) -> EndorsedTransaction {
                 amount: 1,
                 fee: 0,
                 state: "pending".into(),
+                payload: None,
             },
             creator_did: "did:bc:creator".into(),
             creator_signature: vec![0u8; 64],

@@ -286,6 +286,7 @@ impl Gateway {
                     amount: tx.amount,
                     state: "committed".to_string(),
                     fee: 0,
+                    payload: None,
                 }
             } else {
                 Transaction {
@@ -297,6 +298,7 @@ impl Gateway {
                     amount: 0,
                     state: "committed".to_string(),
                     fee: 0,
+                    payload: None,
                 }
             };
             let _ = self.store.write_transaction(&indexed_tx);
@@ -472,6 +474,7 @@ impl Gateway {
                         amount: 0,
                         state: String::new(),
                         fee: 0,
+                        payload: None,
                     },
                     creator_did: String::new(),
                     creator_signature: vec![0u8; 64],
@@ -610,6 +613,7 @@ mod tests {
             amount: 10,
             state: "pending".to_string(),
             fee: 0,
+            payload: None,
         }
     }
 
